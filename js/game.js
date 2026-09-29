@@ -337,21 +337,28 @@ Game.startMission = function (cfg) {
   const P = Game.player = new G.Player();
   P.setupWeapons([cfg.primary, cfg.secondary].filter(Boolean));
   P.pos.set(...M.player.pos); P.yaw = M.player.yaw; P.pitch = 0; P.hp = 100; P.alive = true; P.armorState = G.newArmorState();
+  const test = !!cfg.test; // weapon-test mode: respawns both sides, unlimited ammo, no hostages, no fail
+  if (test) for (const w of P.weapons) w.reserve = 9999;
   Game.bots = [];
   const R = G.rng(cfg.mission.length * 97 + (cfg.seed || Date.now() % 1000));
+  const roles = G.dealRoles(M, R), pick = l => l[Math.floor(R() * l.length)];
   M.guards.forEach((g, i) => {
-    const tier = cfg.tier === 'mixed' ? G.TIERS[Math.min(3, Math.floor(R() * 4))].id : cfg.tier;
-    const wid = G.TERROR_WEAPONS[Math.floor(R() * G.TERROR_WEAPONS.length)], wp = G.WEAPON[wid] || G.WEAPON.akm;
-    const kit = G.TERROR_KITS[Math.floor(R() * G.TERROR_KITS.length)];
-    const b = new G.Bot(Game, 1, tier, 'mod', i, { wp, kit, look: 'mod', name: G.TERROR_NAMES[i % G.TERROR_NAMES.length] });
-    b.guard = { pos: V3(g[0], g[1], g[2]), yaw: g[3], crouch: !!g[4] };
+    const role = roles[i];
+    let ti = cfg.tier === 'mixed' ? Math.min(3, Math.floor(R() * 4)) : Math.max(0, G.TIERS.findIndex(t => t.id === cfg.tier));
+    if (role.tierUp) ti = Math.min(3, ti + 1);
+    const wl = role.weapons.filter(id => G.WEAPON[id]), wp = G.WEAPON[pick(wl.length ? wl : G.TERROR_WEAPONS)] || G.WEAPON.akm;
+    let kit = pick(role.kits);
+    if (role.id === 'leader' && cfg.tod === 'night') kit = Object.assign({}, kit, { nvg: kit.helmet === 'h_fast' ? 'n_pvs31' : 'n_1pn138' });
+    const b = new G.Bot(Game, 1, G.TIERS[ti].id, 'mod', i, { wp, kit, look: 'mod', name: G.TERROR_NAMES[i % G.TERROR_NAMES.length] });
+    b.role = role; b.kit = kit; b.armorState = G.newArmorState();
+    b.guard = { pos: V3(g[0], g[1], g[2]), yaw: g[3], crouch: !!g[4] || !!role.crouch, leash: role.rush || 0 };
     b.spawn(V3(g[0], g[1] + .05, g[2])); b.yaw = g[3]; b.spawnProt = 0;
     Game.bots.push(b);
   });
   Game.agents = [P, ...Game.bots];
   // hostages: civilians kneeling with their hands behind their heads — hitting one fails the mission
   const civ = ['u_civ_suit', 'u_civ_crew', 'u_civ_jeans', 'u_civ_hoodie'];
-  M.hostages.forEach((h, i) => {
+  if (!test) M.hostages.forEach((h, i) => {
     const kit = Object.assign({}, G.KIT_DEFAULT, { uniform: M.id === 'ship' ? 'u_civ_crew' : civ[i % civ.length], helmet: 'h_none', face: 'f_none', nvg: 'n_none', armor: 'a_none', plates: 'p_none', gloves: 'g_none', boots: 'b_combat', pack: 'k_none' });
     const S = G.buildSoldier({ era: 'mod', team: 0, tier: 'regular', weapon: null, kit });
     S.root.position.set(h[0], h[1], h[2]); S.root.rotation.y = h[3]; G.animateSoldier(S, { dt: 1, speed: 0 }); G.poseHostage(S);
@@ -363,11 +370,13 @@ Game.startMission = function (cfg) {
     };
     G.E.world.group.add(S.root); Game.targets.push(T);
   });
-  Game.mission = { cfg, M, total: Game.bots.length, killed: 0, heads: 0, t: 0, dmgTaken: 0, hostages: M.hostages.length, hostagesLost: 0, done: false };
+  Game.mission = { cfg, M, test, total: Game.bots.length, killed: 0, heads: 0, deaths: 0, t: 0, dmgTaken: 0, hostages: test ? 0 : M.hostages.length, hostagesLost: 0, done: false,
+    roles: roles.reduce((o, r) => (o[r.n] = (o[r.n] || 0) + 1, o), {}) };
   Game.stats = { shots: 0, hits: 0 };
   Game.cfg = cfg; Game.map = map; Game.killfeed = [];
   G.UI.showHUD('mission');
-  Game.toast(`${M.name} · ${tod.n} — ${Game.bots.length} hostiles, ${M.hostages.length} hostages. Clear the structure.`, 5);
+  const mix = Object.entries(Game.mission.roles).map(([n, c]) => `${c} ${n.toLowerCase()}${c > 1 ? 's' : ''}`).join(', ');
+  Game.toast(test ? `Weapon test · ${M.name} · ${tod.n} — hostiles re-man their posts, you respawn. Esc to end the session.` : `${M.name} · ${tod.n} — ${mix}; ${M.hostages.length} hostages. Clear the structure.`, 6);
 };
 Game.endMission = function (ok, reason) {
   const Ms = Game.mission; if (!Ms || Ms.done) return; Ms.done = true; Ms.ok = ok; Ms.reason = reason;
@@ -390,11 +399,14 @@ Game.onKill = function (killer, victim, weapon, head) {
   if (Game.mode === 'mission') {
     const Ms = Game.mission;
     Game.killfeed.unshift({ k: killer ? killer.name : '—', kt: killer ? killer.team : -1, v: victim.name, vt: victim.team, w: weapon ? weapon.n : '', head, t: 5 }); if (Game.killfeed.length > 6) Game.killfeed.pop();
-    if (victim === Game.player) { Game.endMission(false, `Killed by ${killer ? killer.name : 'enemy fire'}.`); return; }
+    if (victim === Game.player) {
+      if (Ms.test) { Ms.deaths++; Game.respawnT = 3; Game.deathBy = killer; G.UI.dirty = true; return; }
+      Game.endMission(false, `Killed by ${killer ? killer.name : 'enemy fire'}.`); return; }
     Ms.killed++; if (head) Ms.heads++;
-    if (killer === Game.player) { G.UI.hitmarker(true, head); G.Audio.hit(head, true); Game.toast(`${head ? 'Headshot' : 'Hostile down'} · ${Ms.total - Ms.killed} left`, 1.4); }
+    const rn = victim.role ? victim.role.n : 'Hostile';
+    if (killer === Game.player) { G.UI.hitmarker(true, head); G.Audio.hit(head, true); Game.toast(Ms.test ? `${head ? 'Headshot' : 'Kill'} · ${rn}` : `${head ? 'Headshot' : rn + ' down'} · ${Ms.total - Ms.killed} left`, 1.4); }
     G.UI.dirty = true;
-    if (Ms.killed >= Ms.total) Game.endMission(true, 'Structure clear. All hostiles neutralised.');
+    if (!Ms.test && Ms.killed >= Ms.total) Game.endMission(true, 'Structure clear. All hostiles neutralised.');
     return;
   }
 };
@@ -451,7 +463,12 @@ Game.update = function (dt, now) {
       P.hideVM = true;
       Game.respawnT -= dt;
       const cam = G.E.camera; cam.position.y = Math.max(P.pos.y + .3, cam.position.y - dt * 2); cam.rotation.z += dt * .3;
-      if (Game.respawnT <= 0 && Game.state === 'play' && Game.mode !== 'mission') { const s = Game.spawnPoint(0); P.pos.copy(s); P.hp = 100; P.alive = true; P.armorState = G.newArmorState(); P.hideVM = false; P.yaw = 0; P.pitch = 0; P.stance = 0; for (const w of P.weapons) { w.mag = w.S.mag; w.reserve = w.S.mag * 6; } P.hudDirty = true; }
+      const Ms = Game.mission, testRs = Game.mode === 'mission' && Ms && Ms.test;
+      if (Game.respawnT <= 0 && Game.state === 'play' && (Game.mode !== 'mission' || testRs)) {
+        const s = testRs ? V3(...Ms.M.player.pos) : Game.spawnPoint(0); P.pos.copy(s); P.hp = 100; P.alive = true; P.armorState = G.newArmorState(); P.hideVM = false; P.yaw = testRs ? Ms.M.player.yaw : 0; P.pitch = 0; P.stance = 0;
+        for (const w of P.weapons) { w.mag = w.S.mag; w.reserve = testRs ? 9999 : w.S.mag * 6; } P.hudDirty = true; G.E.camera.rotation.z = 0;
+        if (testRs) for (const b of Game.bots) if (b.alive) { b.target = null; b.lastHeard = null; b.lastSeen = null; } // let the cell settle back on its posts
+      }
       G.Input.lastDx = 0;
     }
     for (const b of Game.bots) b.update(dt, now);

@@ -68,7 +68,7 @@ class Bot {
   }
   get eye() { return V3(this.pos.x, this.pos.y + (this.crouch ? 1.1 : 1.58), this.pos.z); }
   spawn(p) {
-    this.pos.copy(p); this.vel.set(0, 0, 0); this.hp = this.tier.hp; this.alive = true; this.mag = this.S.mag; this.reloadT = 0; this.target = null; this.path = [];
+    this.pos.copy(p); this.vel.set(0, 0, 0); this.hp = this.tier.hp * (this.role && this.role.hpK || 1); this.alive = true; if (this.kit) this.armorState = G.newArmorState(); this.mag = this.S.mag; this.reloadT = 0; this.target = null; this.path = [];
     this.yaw = this.team === 0 ? 0 : PI; G.resetSoldier(this.model); this.model.root.rotation.set(0, 0, 0); this.model.root.visible = true;
     this.spawnProt = 1.5;
   }
@@ -78,7 +78,13 @@ class Bot {
     if (this.spawnProt > 0) return { dmg: 0 };
     let d = b.dmg * energy * (G.ZONE_MUL[zone] || 1);
     let armorStop = false;
-    if ((zone === 'chest' || zone === 'stomach') && this.tier.armor < 1 && G.ERA[this.era].ord >= 3) { const m = b.pen >= 4 ? .95 : b.pen >= 3 ? this.tier.armor + .15 : this.tier.armor; d *= m; armorStop = m < .8; }
+    if (this.kit && p) { // the hostile's actual kit: plates, soft armour, helmet and visor resolved like the player's
+      const bone = zone === 'head' ? this.model.head : this.model.chest; bone.updateWorldMatrix(true, false);
+      const loc = bone.worldToLocal(p.clone()); if (zone === 'head') loc.y += .026;
+      const r = G.armorHit(this.kit, zone === 'neck' ? 'chest' : zone, loc, b, (b.v0 || 1) * Math.pow(Math.max(0, energy), 1 / 1.5), this.armorState);
+      d *= r.mult; armorStop = r.stopped;
+      if (r.stopped) { G.Audio.impact(p, 'metal', false); G.FX.impact(p, dir.clone().negate(), dir, 'metal', .6); if (b.owner === this.game.player && this.game.mode === 'mission') this.game.toast(r.info.replace('STOPPED', 'Hostile armour stopped it —'), 1.1); }
+    } else if ((zone === 'chest' || zone === 'stomach') && this.tier.armor < 1 && G.ERA[this.era].ord >= 3) { const m = b.pen >= 4 ? .95 : b.pen >= 3 ? this.tier.armor + .15 : this.tier.armor; d *= m; armorStop = m < .8; }
     this.hp -= d;
     this.model.flinch = Math.min(1.2, this.model.flinch + .7 + d / 60); this.model.flinchDir = Math.sign(Math.random() - .5);
     this.model.headshot = zone === 'head';
@@ -90,7 +96,7 @@ class Bot {
       // convert world fall direction to local
       const inv = -this.yaw; const dx = this.model.deathDir.x, dz = this.model.deathDir.z;
       this.model.deathDir.set(dx * Math.cos(inv) + dz * Math.sin(inv), 0, -dx * Math.sin(inv) + dz * Math.cos(inv)).multiplyScalar(-1);
-      this.respawnT = this.game.mode === 'mission' ? 1e9 : 4.5;
+      this.respawnT = this.game.mode === 'mission' ? (this.game.mission && this.game.mission.test ? 6 + Math.random() * 4 : 1e9) : 4.5;
       this.game.onKill(b.owner, this, b.weapon, zone === 'head');
       return { dmg: d, killed: true, armorStop };
     }
@@ -103,7 +109,7 @@ class Bot {
       if (M.dead > 0) G.animateSoldier(M, { dt, dead: true });
       this.respawnT -= dt;
       if (this.respawnT <= 1 && M.root.visible) { M.root.position.y -= dt * .6; }
-      if (this.respawnT <= 0 && this.game.state === 'play') this.spawn(this.game.spawnPoint(this.team));
+      if (this.respawnT <= 0 && this.game.state === 'play') { if (this.guard) { this.spawn(this.guard.pos.clone().setY(this.guard.pos.y + .05)); this.yaw = this.guard.yaw; this.lastHeard = null; } else this.spawn(this.game.spawnPoint(this.team)); }
       return;
     }
     this.spawnProt -= dt;
@@ -122,7 +128,7 @@ class Bot {
         if (!W.los(eye, tp)) { if (!W.los(eye, e.eye)) continue; }
         // concealment: prone/crouched targets farther away are harder to spot
         const vis = e.stance === 2 ? .45 : e.stance === 1 ? .7 : 1;
-        if (d > 60 * vis + 25) continue;
+        if (d > (60 * vis + 25) * (this.role && this.role.sight || 1)) continue;
         if (d < bd) { bd = d; best = e; }
       }
       const was = this.targetVisible;
@@ -172,7 +178,7 @@ class Bot {
     if (visible && this.reactT <= 0 && onTarget && this.reloadT <= 0 && this.mag > 0 && this.fireCD <= 0 && this.cycleT <= 0 && dist < effRange && this.spawnProt < 1) {
       const mode = this.S.modes[0];
       if (mode === 'auto') {
-        if (this.burstLeft <= 0) this.burstLeft = Math.round(T.burst[0] + Math.random() * (T.burst[1] - T.burst[0])) * (dist < 15 ? 2 : 1);
+        if (this.burstLeft <= 0) this.burstLeft = Math.round((T.burst[0] + Math.random() * (T.burst[1] - T.burst[0])) * (this.role && this.role.burstK || 1)) * (dist < 15 ? 2 : 1);
         this.shoot(); this.burstLeft--; this.fireCD = 60 / this.S.rpm;
         if (this.burstLeft <= 0) this.fireCD += .25 + Math.random() * .4 * (dist / 40);
       } else {
@@ -217,14 +223,22 @@ class Bot {
       }
     }
     if (this.guard) { // sentries hold their post: small side-steps while engaged, drift back to the post, never step off a ledge
-      move = visible ? move.setY(0).multiplyScalar(.5) : V3();
-      const home = V3(this.guard.pos.x - this.pos.x, 0, this.guard.pos.z - this.pos.z);
-      if (home.length() > 2.5 || (!visible && home.length() > .4)) move.copy(home.normalize().multiplyScalar(.7));
+      const leash = this.guard.leash || 0, home = V3(this.guard.pos.x - this.pos.x, 0, this.guard.pos.z - this.pos.z);
+      const chase = leash ? (visible ? tgt.pos : this.lastHeard) : null;
+      if (chase && Math.abs(chase.y - this.pos.y) < 1.2 && home.length() < leash) { // breachers close the distance, straight at you
+        const to = V3(chase.x - this.pos.x, 0, chase.z - this.pos.z); const dd = to.length();
+        move = dd > (visible ? 3.5 : 1.5) ? to.normalize().add(visible ? move.setY(0).multiplyScalar(.35) : V3()) : (visible ? move.setY(0).multiplyScalar(.5) : V3());
+        if (!visible && dd < 1.5) this.lastHeard = null;
+        this.crouch = 0;
+      } else {
+        move = visible ? move.setY(0).multiplyScalar(.5) : V3();
+        if (home.length() > Math.max(2.5, chase ? leash : 0) || (!visible && home.length() > .4)) move.copy(home.normalize().multiplyScalar(.7));
+      }
       const ahead = this.pos.clone().addScaledVector(move.clone().normalize(), .6);
       if (move.lengthSq() > 0 && W.groundAt(ahead.x, ahead.z, this.pos.y + .45, .1) < this.pos.y - .35) move.set(0, 0, 0);
       if (visible && this.guard.crouch) this.crouch = 1;
     }
-    const speed = (this.crouch ? 1.8 : visible ? 2.6 : 3.8) * (this.wp.heavy ? .85 : 1) * W.slowAt(this.pos);
+    const speed = (this.crouch ? 1.8 : visible ? 2.6 : 3.8) * (this.wp.heavy ? .85 : 1) * (this.role && this.role.speedK || 1) * W.slowAt(this.pos);
     if (move.lengthSq() > 0) move.normalize().multiplyScalar(speed);
     this.vel.x += (move.x - this.vel.x) * Math.min(1, dt * 8); this.vel.z += (move.z - this.vel.z) * Math.min(1, dt * 8);
     const before = this.pos.clone();

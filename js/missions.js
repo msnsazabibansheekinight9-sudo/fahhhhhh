@@ -254,6 +254,44 @@ G.TERROR_KITS = [
   { uniform: 'u_civ_track', helmet: 'h_none', face: 'f_balaclava', nvg: 'n_none', armor: 'a_none', plates: 'p_none', gloves: 'g_none', boots: 'b_combat', pack: 'k_none' },
   { uniform: 'u_us_m81', helmet: 'h_none', face: 'f_shemagh', nvg: 'n_none', armor: 'a_ephod', plates: 'p_none', gloves: 'g_none', boots: 'b_desert', pack: 'k_hydro' },
 ];
+// hostile roles: each has its own kit, weapons, armour and behaviour
+//   hpK: toughness, speedK: movement, rush: leaves its post to close in (leash metres), high: prefers elevated posts,
+//   crouch: fights from a crouch, burstK: longer bursts, tierUp: one tier better than the cell
+const K = (o) => Object.assign({ uniform: 'u_civ_jeans', helmet: 'h_none', face: 'f_none', nvg: 'n_none', comms: 'c_none', armor: 'a_none', plates: 'p_none', gloves: 'g_none', boots: 'b_combat', pack: 'k_none' }, o);
+G.HOSTILE_ROLES = [
+  { id: 'rifleman', n: 'Rifleman', w: 38, d: 'Militia with an assault rifle and a chest rig. Holds its post.',
+    weapons: ['akm', 'ak74', 'ak47', 'type56', 'vz58', 'galil', 'g3', 'm16a1', 'fal', 'sks'],
+    kits: [K({ uniform: 'u_civ_jeans', face: 'f_balaclava', armor: 'a_type56' }), K({ uniform: 'u_civ_hoodie', face: 'f_shemagh', armor: 'a_type56', gloves: 'g_black', boots: 'b_desert' }),
+      K({ uniform: 'u_us_m81', face: 'f_shemagh', armor: 'a_ephod', boots: 'b_desert', pack: 'k_hydro' }), K({ uniform: 'u_civ_track', face: 'f_balaclava' }), K({ uniform: 'u_ru_flora', helmet: 'h_cap', armor: 'a_type56' })] },
+  { id: 'gunner', n: 'Machine gunner', w: 14, d: 'Belt-fed or drum-fed LMG, long bursts from a crouch, steel helmet.', crouch: true, burstK: 2, speedK: .8,
+    weapons: ['pkm', 'rpk', 'rpd', 'm60', 'mg3', 'm249', 'negev'],
+    kits: [K({ uniform: 'u_ru_gorka', helmet: 'h_ssh68', armor: 'a_type56', gloves: 'g_black' }), K({ uniform: 'u_us_m81', helmet: 'h_pasgt', face: 'f_balaclava', armor: 'a_ephod' })] },
+  { id: 'marksman', n: 'Marksman', w: 12, d: 'Designated marksman rifle from a high or distant post. Sees you first.', high: true, crouch: true, sight: 1.4,
+    weapons: ['svd', 'g3sg1', 'm21', 'svch', 'm24', 'sv98'],
+    kits: [K({ uniform: 'u_ru_flora', helmet: 'h_boonie', face: 'f_shemagh', armor: 'a_type56', boots: 'b_desert' }), K({ uniform: 'u_civ_hoodie', face: 'f_shemagh', gloves: 'g_black' })] },
+  { id: 'breacher', n: 'Breacher', w: 18, d: 'Shotgun or SMG. Leaves its post and rushes you once it hears you.', rush: 14, speedK: 1.15,
+    weapons: ['r870', 'saiga12', 'spas12', 'uzi', 'mac10', 'skorpion', 'mp5', 'aks74u', 'vityaz'],
+    kits: [K({ uniform: 'u_civ_track', face: 'f_skull', gloves: 'g_black' }), K({ uniform: 'u_black', face: 'f_balaclava', armor: 'a_none', gloves: 'g_black' }), K({ uniform: 'u_civ_hoodie', face: 'f_balaclava' })] },
+  { id: 'heavy', n: 'Juggernaut', w: 7, max: 2, d: 'Russian heavy armour with Granit plates and an Altyn visor. Rifle rounds bounce off the front.', hpK: 1.2, speedK: .7, crouch: false, burstK: 1.5,
+    weapons: ['pkm', 'rpk', 'akm', 'saiga12'],
+    kits: [K({ uniform: 'u_black', helmet: 'h_altyn', armor: 'a_6b43', plates: 'p_granit', gloves: 'g_black', boots: 'b_combat' }), K({ uniform: 'u_ru_gorka', helmet: 'h_lshz', armor: 'a_6b45', plates: 'p_granit', gloves: 'g_black' })] },
+  { id: 'leader', n: 'Cell leader', w: 0, d: 'One per cell: ex-military, plate carrier, rifle plates, better trained.', tierUp: true,
+    weapons: ['ak74m', 'ak12', 'm4a1', 'hk416', 'scarl', 'scarh', 'ak103'],
+    kits: [K({ uniform: 'u_multicam', helmet: 'h_fast', face: 'f_glasses', comms: 'c_comtac', armor: 'a_jpc', plates: 'p_rf2', gloves: 'g_mechanix', boots: 'b_salomon' }),
+      K({ uniform: 'u_ru_emr', helmet: 'h_6b47', comms: 'c_gssh', armor: 'a_6b45', plates: 'p_granit', gloves: 'g_black' })] },
+];
+G.HOSTILE_ROLE = Object.fromEntries(G.HOSTILE_ROLES.map(r => [r.id, r]));
+// deal roles for a mission's posts: one leader, marksmen on the highest posts, the rest weighted at random
+G.dealRoles = function (M, R) {
+  const n = M.guards.length, out = new Array(n).fill(null), cnt = {};
+  const order = M.guards.map((g, i) => i).sort((a, b) => M.guards[b][1] - M.guards[a][1] || Math.hypot(M.guards[b][0] - M.player.pos[0], M.guards[b][2] - M.player.pos[2]) - Math.hypot(M.guards[a][0] - M.player.pos[0], M.guards[a][2] - M.player.pos[2]));
+  const nm = Math.max(1, Math.round(n * .14)); for (let k = 0; k < nm; k++) out[order[k]] = 'marksman';
+  const free = () => out.map((v, i) => v ? -1 : i).filter(i => i >= 0);
+  const f = free(); out[f[Math.floor(R() * f.length)]] = 'leader';
+  const pool = G.HOSTILE_ROLES.filter(r => r.w > 0 && r.id !== 'marksman'), tw = pool.reduce((s, r) => s + r.w, 0);
+  for (const i of free()) { let x = R() * tw, r = pool[0]; for (const q of pool) { x -= q.w; if (x <= 0) { r = q; break; } } if (r.max && (cnt[r.id] || 0) >= r.max) r = G.HOSTILE_ROLE.rifleman; cnt[r.id] = (cnt[r.id] || 0) + 1; out[i] = r.id; }
+  return out.map(id => G.HOSTILE_ROLE[id]);
+};
 G.TERROR_WEAPONS = ['akm', 'ak74', 'ak47', 'type56', 'aks74u', 'rpk', 'pkm', 'uzi', 'mac10', 'r870', 'svd', 'vz58', 'galil', 'g3', 'mp5', 'm16a1', 'skorpion'];
 G.TERROR_NAMES = ['Viper', 'Jackal', 'Ghoul', 'Scorpion', 'Raven', 'Hyena', 'Cobra', 'Wolf', 'Crow', 'Mamba', 'Fox', 'Kestrel', 'Shade', 'Hound', 'Spider', 'Rat'];
 })();
