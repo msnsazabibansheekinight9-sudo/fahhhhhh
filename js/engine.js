@@ -167,11 +167,24 @@ const GRAV = 9.81;
 // o: { pos, dir, v, k, dmg, pen, team, owner, tracer, streak, cal, weapon, pellets..., aim (for range stats) }
 B.fire = function (o) {
   const b = { p: o.pos.clone(), v: o.dir.clone().multiplyScalar(o.v), v0: o.v, k: o.k, dmg: o.dmg, pen: o.pen, team: o.team, owner: o.owner, t: 0, dist: 0,
-    gyro: o.gyro || null, ap: !!o.ap, tracer: o.tracer || (o.gyro ? 'red' : null), streak: o.streak, cal: o.cal, weapon: o.weapon, start: o.pos.clone(), vis: o.vis ? o.vis.clone() : null, aim: o.aim, snapped: false, inc: o.inc, ammo: o.ammo, hp: o.hp, player: o.player, alive: true, hits: 0, pellet: o.pellet, pierced: 0 };
+    gyro: o.gyro || null, ap: !!o.ap, tracer: o.tracer || (o.gyro ? 'red' : null), streak: o.streak, cal: o.cal, weapon: o.weapon, start: o.pos.clone(), vis: o.vis ? o.vis.clone() : null, aim: o.aim, snapped: false, inc: o.inc, ammo: o.ammo, hp: o.hp, player: o.player, alive: true, hits: 0, pellet: o.pellet, pierced: 0, he: o.he || null, homing: o.homing || 0 };
   B.list.push(b);
   return b;
 };
-const tmpA = V3(), tmpB = V3(), tmpD = V3(), rel = V3();
+const tmpA = V3(), tmpB = V3(), tmpD = V3(), rel = V3(), hA = V3(), hB = V3();
+// explosive projectiles detonate once where they stop
+function boom(b, p) { if (b.he && !b.boomed) { b.boomed = true; G.Game && G.Game.explode && G.Game.explode(p.clone(), b.owner, { r: b.he.r, dmg: b.he.dmg, name: b.weapon ? b.weapon.n : 'HE' }); } }
+// seeker rounds: steer toward the nearest enemy (or range target) inside a ~35° cone ahead
+function steer(b, h, ctx) {
+  const sp = b.v.length(); if (sp < 1) return;
+  hA.copy(b.v).divideScalar(sp);
+  let best = null, bd = 1e9;
+  const test = (x, y, z) => { hB.set(x, y, z).sub(b.p); const d = hB.length(); if (d < .5 || d > 150) return; if (hB.dot(hA) / d < .82) return; if (d < bd) { bd = d; best = hB.clone().divideScalar(d); } };
+  if (ctx.soldiers) for (const S of ctx.soldiers) if (S.alive && S !== b.owner && S.team !== b.team) test(S.pos.x, S.pos.y + 1.25, S.pos.z);
+  if (ctx.targets) for (const T of ctx.targets) { if (T.S && T.S.dead > 0) continue; const f = T.focus || (T.g && T.g.position); if (f && (T.type === 'dummy' || T.type === 'walker' || T.type === 'vehicle')) test(f.x, (T.focus ? f.y : f.y + 1.2), f.z); }
+  if (!best) return;
+  hA.lerp(best, Math.min(1, b.homing * h)).normalize(); b.v.copy(hA).multiplyScalar(sp);
+}
 B.update = function (dt, ctx) {
   const sub = 3, h = dt / sub;
   for (let s = 0; s < sub; s++) {
@@ -182,6 +195,7 @@ B.update = function (dt, ctx) {
       rel.copy(b.v).sub(B.wind); const sp = rel.length();
       b.v.addScaledVector(rel, -b.k * sp * h);
       b.v.y -= GRAV * h;
+      if (b.homing && b.t > .04) steer(b, h, ctx);
       if (b.gyro && b.t < b.gyro.burn) { // rocket motor still burning: accelerate along the flight path
         const sp2 = b.v.length(); b.v.multiplyScalar((sp2 + (b.gyro.v - b.v0) / b.gyro.burn * h) / (sp2 || 1));
         if (Math.random() < .5) G.FX.smoke.spawn({ x: b.p.x, y: b.p.y, z: b.p.z, life: .8, s0: .03, s1: .25, r: .9, g: .88, b: .85, a: .35, drag: .3 });
@@ -255,7 +269,7 @@ function trace(b, a, c, len, ctx) {
       b.v.reflect(hit.n).multiplyScalar(.45); b.p.copy(p).addScaledVector(hit.n, .02); b.dmg *= .4;
       return;
     }
-    b.alive = false; b.p.copy(p);
+    b.alive = false; b.p.copy(p); boom(b, p);
     ctx.onWorldHit && ctx.onWorldHit(b, p, hit);
   } else if (best.kind === 'soldier') {
     const S = best.S;
@@ -263,6 +277,7 @@ function trace(b, a, c, len, ctx) {
     G.FX.impact(p, dir.clone().negate(), dir, 'flesh', 1);
     G.Audio.impact(p, 'flesh', true);
     ctx.onSoldierHit && ctx.onSoldierHit(b, S, best.zone, res, p);
+    if (b.he) { b.alive = false; b.p.copy(p); boom(b, p); return; }
     if (b.pen >= 3 && best.zone !== 'head' && b.pierced < 1 && !res.armorStop) { b.pierced++; (b.skipS || (b.skipS = new Set())).add(S); b.v.multiplyScalar(.5); b.dmg *= .5; b.p.copy(p).addScaledVector(dir, .5); return; }
     b.alive = false; b.p.copy(p);
   } else if (best.kind === 'target') {
@@ -274,7 +289,7 @@ function trace(b, a, c, len, ctx) {
       if (!r.keep) (b.skipT || (b.skipT = new Set())).add(best.T); // multi-part targets track their own parts
       return;
     }
-    b.alive = false; b.p.copy(p);
+    b.alive = false; b.p.copy(p); boom(b, p);
   }
 }
 // quick flat-fire simulation to find the elevation that zeros the sight at distance d

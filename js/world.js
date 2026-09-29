@@ -625,6 +625,59 @@ MAPS.push({ id: 'arctic', era: 'now', name: 'Svalbard Station', blurb: 'A polar 
     W.edgeRow((x, z) => { if (R() < .6) W.tree(x, z, 8 + R() * 4, 'snowpine'); else W.box(x, 0, z, 5, 2 + R() * 3, 5, surf('snow', 1), 'snow'); }, 5);
   } });
 
+// ----------------------------------------------------------------- PSYCHO ARSENAL
+const glowM = (col, k = 2) => G.mat({ color: col, emissive: col, emissiveIntensity: k, roughness: .5 });
+MAPS.push({ id: 'foundry', era: 'psycho', name: 'Foundry Nine', blurb: 'A derelict steel foundry at night: glowing slag pits, catwalks, furnaces and a crane gantry.', env: 'night', ground: 'concrete', weather: 'ash', amb: 'wind', reverb: 'industrial',
+  build(W) {
+    const R = G.rng(9009);
+    // main casting hall with open ends
+    W.house(0, 0, 22, 16, 9, { mat: 'corrugated', surf: 'metal', doors: ['n', 's', 'e', 'w'], roof: 'flat', rep: 3 });
+    // blast furnaces: towers with glowing tap holes and slag pits in front
+    for (const [x, z] of [[-26, -8], [26, 8]]) {
+      const t = new THREE.Mesh(gCylY(4, 4.6, 14, 20), surf('rust')); t.position.set(x, 7, z); t.castShadow = true; W.static.add(t); W.addCol(V3(x - 4.4, 0, z - 4.4), V3(x + 4.4, 14, z + 4.4), 'metal');
+      W.box(x, 3, z + (z < 0 ? 4.6 : -4.6), 1.6, 1.2, .3, glowM('#ff6a14', 3), 'metal', { noCol: true });
+      const pit = new THREE.Mesh(new THREE.CircleGeometry(2.4, 24), glowM('#ff5010', 2.4)); pit.rotation.x = -PI / 2; pit.position.set(x + (x < 0 ? 7 : -7), .04, z); W.static.add(pit);
+      const l = new THREE.PointLight(G.col('#ff6a20'), 3, 26, 2); l.position.set(x + (x < 0 ? 7 : -7), 2, z); W.group.add(l);
+    }
+    // catwalks on stilts along both sides of the hall
+    for (const sx of [-1, 1]) { for (let z = -30; z <= 30; z += 6) W.box(sx * 16, 0, z, .3, 3.2, .3, surf('darkmetal'), 'metal'); W.box(sx * 16, 3.2, 0, 3, .2, 64, surf('metal', 6), 'metal'); for (let z = -30; z <= 30; z += 12) W.box(sx * 17.4, 3.4, z, .1, 1, 12, surf('darkmetal'), 'metal', { noCol: true }); }
+    // crane gantry
+    for (const x of [-10, 10]) for (const z of [-36, 36]) W.box(x, 0, z, 1, 16, 1, surf('yellow'), 'metal');
+    for (const z of [-36, 36]) W.box(0, 15, z, 22, 1.4, 1.4, surf('yellow'), 'metal', { noCol: true });
+    // ingot stacks, ladles, conveyors
+    for (let i = 0; i < 14; i++) W.box((R() - .5) * 70, 0, (R() - .5) * 70, 2.4, .8 + R() * .8, 1.4, surf('darkmetal'), 'metal');
+    for (let i = 0; i < 4; i++) { const x = (R() - .5) * 60, z = (R() - .5) * 60; const lad = new THREE.Mesh(gCylY(1.3, 1, 2, 16), surf('rust')); lad.position.set(x, 1, z); lad.castShadow = true; W.static.add(lad); W.addCol(V3(x - 1.3, 0, z - 1.3), V3(x + 1.3, 2, z + 1.3), 'metal'); }
+    for (const z of [-18, 18]) W.box(0, 0, z, 30, 1.1, 1.6, surf('darkmetal'), 'metal');
+    for (let i = 0; i < 10; i++) W.container((R() - .5) * 80, (R() - .5) * 80, R() < .5 ? 0 : PI / 2, ['container_r', 'container_b', 'container_g'][Math.floor(R() * 3)]);
+    for (let i = 0; i < 12; i++) W.barrel((R() - .5) * 70, (R() - .5) * 70);
+    for (const [x, z] of [[-40, -40], [40, -40], [-40, 40], [40, 40], [0, 0]]) { W.pole(x, z, 10); const l = new THREE.PointLight(G.col('#ffb070'), 1.3, 26, 2); l.position.set(x, 9.5, z); W.group.add(l); }
+    W.spawns[0].push(...[-24, -12, 0, 12, 24].map(x => V3(x, 0, 41)));
+    W.spawns[1].push(...[-24, -12, 0, 12, 24].map(x => V3(x, 0, -41)));
+    W.edgeRow((x, z) => W.box(x, 0, z, 6, 6 + R() * 6, 6, surf('corrugated', 2), 'metal'), 6);
+  } });
+MAPS.push({ id: 'omega', era: 'psycho', name: 'Blacksite Omega', blurb: 'A desert weapons-test range: blast bunkers, a coilgun test rig, cratered target lanes and wrecked armour.', env: 'dusk', ground: 'sand', weather: 'dust', amb: 'wind', reverb: 'open',
+  build(W) {
+    const R = G.rng(6660);
+    // concrete blast bunkers with viewing slits
+    for (const [x, z, ry] of [[-22, -14, 0], [22, 14, 0], [-24, 20, 1], [24, -20, 1], [0, -28, 0], [0, 28, 0]]) W.house(x, z, ry ? 6 : 10, ry ? 10 : 6, 3, { mat: 'concrete', surf: 'concrete', doors: ry ? ['e', 'w'] : ['n', 's'], roof: 'flat', rep: 2 });
+    // coilgun test rig: a long rail on pylons with glowing coil rings, aimed down the range
+    for (let x = -18; x <= 18; x += 6) W.box(x, 0, 0, .8, 2.6, .8, surf('darkmetal'), 'metal');
+    W.box(0, 2.6, 0, 40, .5, 1.2, surf('metal', 8), 'metal');
+    for (let x = -16; x <= 16; x += 4) { const ring = new THREE.Mesh(new THREE.TorusGeometry(.9, .14, 8, 24), glowM('#20c8ff', 2.2)); ring.position.set(x, 3.2, 0); ring.rotation.y = PI / 2; W.static.add(ring); }
+    { const l = new THREE.PointLight(G.col('#40d0ff'), 2, 30, 2); l.position.set(0, 4, 0); W.group.add(l); }
+    // target lanes: craters, steel plates, wrecked armour
+    for (let i = 0; i < 12; i++) W.crater((R() - .5) * 80, (R() - .5) * 80, 2 + R() * 3);
+    for (let i = 0; i < 8; i++) W.box((R() - .5) * 70, 0, (R() - .5) * 70, 2, 2, .2, surf('rust'), 'metal');
+    for (let i = 0; i < 5; i++) W.vehicle((R() - .5) * 70, (R() - .5) * 70, R() * 3, R() < .6 ? 'burnt' : 'apc');
+    for (let i = 0; i < 10; i++) W.barrier((R() - .5) * 70, (R() - .5) * 70, 6, R() < .5 ? 'x' : 'z');
+    for (let i = 0; i < 8; i++) W.sandbags((R() - .5) * 70, (R() - .5) * 70, 4, 1.1, R() < .5 ? 'x' : 'z');
+    // warning beacons
+    for (const [x, z] of [[-38, -38], [38, -38], [-38, 38], [38, 38]]) { W.pole(x, z, 6); W.box(x, 6, z, .5, .5, .5, glowM('#ff2a10', 3), 'metal', { noCol: true }); }
+    W.spawns[0].push(...[-24, -12, 0, 12, 24].map(x => V3(x, 0, 41)));
+    W.spawns[1].push(...[-24, -12, 0, 12, 24].map(x => V3(x, 0, -41)));
+    W.edgeRow((x, z) => W.box(x, 0, z, 6, 3 + R() * 5, 6, surf('adobe', 2), 'brick'), 6);
+  } });
+
 // ----------------------------------------------------------------- RANGE
 G.RANGE_MAP = { id: 'range', era: null, name: 'Long Range', env: 'range', ground: 'grass', weather: null, amb: null, reverb: 'range',
   build(W) {

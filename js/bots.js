@@ -17,6 +17,7 @@ const NAMES = {
   cold: [['Pfc. Walker', 'Sp4 Garza', 'Sgt. Brooks', 'Pvt. Tanaka', 'Cpl. Ortiz', 'Sp4 Bell', 'Pfc. Rhodes'], ['Ryad. Ivanov', 'Efr. Petrov', 'Serzh. Volkov', 'Ryad. Sokolov', 'ML Serzh. Orlov', 'Ryad. Popov', 'Efr. Lebedev']],
   mod: [['SPC Duncan', 'Cpl. Ramos', 'Sgt. Price', 'LCpl. Hart', 'PFC Nguyen', 'SSgt. Cole', 'Cpl. Burke'], ['Hamid', 'Yusuf', 'Karim', 'Tariq', 'Faisal', 'Omar', 'Nabil']],
   now: [['Cpl. Lindqvist', 'Sgt. Okafor', 'Spc. Moreau', 'Pte. Novak', 'Cpl. Brandt', 'Sgt. Silva', 'Spc. Kerr'], ['Mayor Gromov', 'Sgt. Belov', 'Ryad. Zaitsev', 'Efr. Morozov', 'Sgt. Kozlov', 'Ryad. Fedorov', 'Kpt. Egorov']],
+  psycho: [['Op. Vesper', 'Op. Kade', 'Lead Halloran', 'Op. Ryker', 'Op. Mercer', 'Op. Sable', 'Op. Voss'], ['Scrap', 'Gutter', 'Hex', 'Rivet', 'Cinder', 'Mange', 'Grinder']]
 };
 // weighted weapon picks per era and team role
 G.eraWeapons = function (era, cls) { return G.WEAPONS.filter(w => w.e === era && (!cls || cls.includes(w.c))); };
@@ -27,6 +28,7 @@ const ARSENAL = {
   cold: [{ eras: ['cold'], co: ['United States', 'Belgium / UK', 'West Germany', 'Israel', 'Italy', 'Belgium', 'United Kingdom', 'Austria', 'Switzerland', 'Sweden', 'France', 'South Korea'] }, { eras: ['cold', 'ww2'], co: ['Soviet Union', 'Czechoslovakia', 'China'] }],
   mod: [{ eras: ['mod'], co: ['United States', 'United Kingdom', 'Germany', 'Belgium', 'Italy', 'France', 'Israel / US', 'Switzerland', 'Austria'] }, { eras: ['cold', 'mod'], co: ['Soviet Union', 'Russia', 'China', 'Czechoslovakia'] }],
   now: [{ eras: ['now', 'mod'], co: ['United States', 'Germany', 'United Kingdom', 'Belgium', 'Czech Republic', 'Israel', 'Switzerland', 'Italy', 'Austria', 'Japan'] }, { eras: ['now', 'mod'], co: ['Russia', 'China'] }],
+  psycho: [{ eras: ['psycho'], co: ['Blackline Armory', 'Orbital Arms', 'Kessler Dynamics'] }, { eras: ['psycho'], co: ['Rustworks Collective', 'Kessler Dynamics', 'Holloway & Sons', 'Orbital Arms'] }],
 };
 function pickLoadout(era, role, team) {
   const pools = { rifleman: ['RIF', 'AR', 'BR', 'CAR'], assault: ['SMG', 'SG', 'CAR', 'AR'], gunner: ['LMG'], marksman: ['DMR', 'SR', 'RIF'] };
@@ -244,7 +246,7 @@ class Bot {
       d.x += (Math.random() - .5) * spread; d.y += (Math.random() - .5) * spread; d.z += (Math.random() - .5) * spread; d.normalize();
       // compensate drop for the target distance
       if (this.target) { const dd = this.target.pos.distanceTo(this.pos); const fl = G.Ballistics.flight(this.S.v, this.S.k, dd); d.y += .5 * 9.81 * fl.t * fl.t / Math.max(5, dd) * (this.tier.id === 'recruit' ? .6 : 1); d.normalize(); }
-      G.Ballistics.fire({ pos: eye.clone().addScaledVector(d, .4), dir: d, v: this.S.v, k: this.S.k, dmg: this.S.dmg, pen: this.S.pen, team: this.team, owner: this, tracer: (this.wp.c === 'LMG' && Math.random() < .25) ? (this.team === 1 && G.ERA[this.era].ord >= 2 && this.era !== 'mod' ? 'green' : 'red') : null, streak: false, cal: this.wp.cal, weapon: this.wp, vis: muzzle, pellet: pellets > 1 && !this.wp.salvo && !this.wp.duplex, gyro: this.wp.gyro });
+      G.Ballistics.fire({ pos: eye.clone().addScaledVector(d, .4), dir: d, v: this.S.v, k: this.S.k, dmg: this.S.dmg, pen: this.S.pen, team: this.team, owner: this, tracer: (this.wp.c === 'LMG' && Math.random() < .25) ? (this.team === 1 && G.ERA[this.era].ord >= 2 && this.era !== 'mod' ? 'green' : 'red') : null, streak: false, cal: this.wp.cal, weapon: this.wp, vis: muzzle, pellet: pellets > 1 && !this.wp.salvo && !this.wp.duplex, gyro: this.wp.gyro, he: this.S.he, homing: this.S.homing });
     }
     const fwd = dir;
     G.FX.muzzle(muzzle, fwd, { scale: .5 + cal.cs[0] * 8, sup: this.S.sup, flash: this.S.flash, world: true });

@@ -131,9 +131,9 @@ function renderArmory(root) {
   </section>`;
   const list = $('#wlist');
   const groups = {};
-  for (const w of G.WEAPONS.filter(w => w.e === era)) { const k = w.proto ? 'PROTO' : w.c; (groups[k] = groups[k] || []).push(w); }
-  const order = ['AR', 'BR', 'CAR', 'RIF', 'SMG', 'LMG', 'DMR', 'SR', 'SG', 'PST', 'PROTO'];
-  list.innerHTML = order.filter(c => groups[c]).map(c => `<div class="wgroup">${c === 'PROTO' ? 'Prototype & experimental' : G.CLASS_NAMES[c]}</div>` + groups[c].map(w => `<button class="witem ${w.id === wp.id ? 'on' : ''}" data-wp="${w.id}"><b>${esc(w.n)}</b><em>${w.y}</em><span>${w.proto ? G.CLASS_NAMES[w.c] + ' · ' : ''}${esc(w.co)} · ${esc(w.cal)}</span></button>`).join('')).join('');
+  for (const w of G.WEAPONS.filter(w => w.e === era)) { const k = w.psy ? 'PSY_' + w.psy : w.proto ? 'PROTO' : w.c; (groups[k] = groups[k] || []).push(w); }
+  const order = ['PSY_feasible', 'PSY_overkill', 'AR', 'BR', 'CAR', 'RIF', 'SMG', 'LMG', 'DMR', 'SR', 'SG', 'PST', 'PROTO'];
+  list.innerHTML = order.filter(c => groups[c]).map(c => `<div class="wgroup">${c === 'PROTO' ? 'Prototype & experimental' : c.startsWith('PSY_') ? G.PSY_TIERS[c.slice(4)] : G.CLASS_NAMES[c]}</div>` + groups[c].map(w => `<button class="witem ${w.id === wp.id ? 'on' : ''}" data-wp="${w.id}"><b>${esc(w.n)}</b><em>${w.y}</em><span>${w.proto || w.psy ? G.CLASS_NAMES[w.c] + ' · ' : ''}${esc(w.co)} · ${esc(w.cal)}</span></button>`).join('')).join('');
   list.querySelectorAll('[data-wp]').forEach(b => b.onclick = () => { UI.sel.wp = b.dataset.wp; store.set('sel', UI.sel); G.Audio.ui(); renderArmory(root); });
   root.querySelectorAll('[data-era]').forEach(b => b.onclick = () => { UI.sel.era = b.dataset.era; UI.sel.wp = null; store.set('sel', UI.sel); G.Audio.ui(); renderArmory(root); });
   const on = list.querySelector('.on'); if (on) on.scrollIntoView({ block: 'center' });
@@ -146,12 +146,13 @@ function renderArmory(root) {
   function refresh() {
     const L = UI.loadoutFor(wp), S = G.resolveStats(wp, L), S0 = G.resolveStats(wp, G.defaultLoadout(wp));
     SR.show(wp, L);
-    $('#wera').textContent = `${G.ERA[wp.e].name} · ${G.CLASS_NAMES[wp.c]}${wp.proto ? ' · Prototype' : ''}`;
+    $('#wera').textContent = `${G.ERA[wp.e].name} · ${G.CLASS_NAMES[wp.c]}${wp.proto ? ' · Prototype' : ''}${wp.psy ? (wp.psy === 'feasible' ? ' · Feasible' : ' · Overkill') : ''}`;
     $('#wname').textContent = wp.n;
     $('#wsub').textContent = `${wp.co} · adopted ${wp.y} · ${wp.cal} · ${{ bolt: 'bolt action', semi: 'semi-automatic', auto: 'selective fire', auto_ob: 'open bolt', pump: 'pump action', lever: 'lever action', rev: 'double-action revolver' }[wp.act] || wp.act}`;
     const b = statBars(wp, S), b0 = statBars(wp, S0);
     const blen = Math.round(wp.m.B[0] * S.blen * 1000);
     const spec = [['Rate of fire', S.modes.includes('bolt') ? `~${wp.rpm} rpm (aimed)` : `${S.rpm} rpm`], ['Capacity', `${S.mag} rds`], ['Muzzle velocity', `${Math.round(S.v)} m/s`], ['Weight (empty)', `${wp.wt.toFixed(2)} kg`], ['Barrel', `${blen} mm`], ['Fire modes', S.modes.map(m => ({ semi: 'Semi', auto: 'Auto', burst3: '3-rd', burst2: '2-rd', bolt: 'Bolt', pump: 'Pump', lever: 'Lever' }[m])).join(' / ')], ['Dispersion', `${S.acc.toFixed(1)} MOA`], ['Energy @ muzzle', `${Math.round(.5 * ((G.MASS || {})[wp.cal] || massOf(wp.cal)) / 1000 * S.v * S.v)} J`]];
+    { const sp = []; if (S.he) sp.push(`explosive rounds (${S.he.r} m blast)`); if (S.homing) sp.push('seeker rounds'); if (wp.spin) sp.push(`rotary, ${wp.spin}s spin-up`); if (wp.charge) sp.push(`hold to charge (${wp.charge}s)`); if (wp.salvo) sp.push(`${wp.salvo}-barrel salvo`); if (wp.gyro) sp.push('rocket-propelled'); if (wp.caseless) sp.push('caseless'); if (wp.duplex) sp.push('duplex rounds'); if (wp.intSup) sp.push('integral suppressor'); if (S.inc) sp.push('incendiary'); if (sp.length) spec.push(['Special', sp.join(' · ')]); }
     $('#specs').innerHTML = `${wp.blurb ? `<p class="blurb">${esc(wp.blurb)}</p>` : ''}<dl class="spec">${spec.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
       <div class="bars">${Object.keys(b).map(k => { const d = b[k] - b0[k]; return `<div class="bar">${k}<i class="${d > 1 ? 'up' : d < -1 ? 'down' : ''}" style="--v:${Math.max(2, b[k]).toFixed(0)}%"></i><s>${Math.round(b[k])}</s></div>`; }).join('')}</div>
       ${G.SLOTS.map(([s, name]) => { const opts = G.attachFor(wp, s); const cur = G.ATT[L[s]]; return `<div class="slot"><button data-slot="${s}"><span class="sn">${name}</span><span class="sv">${esc(cur ? cur.n : '—')}</span><span class="sc">${opts.length}</span></button>${open === s ? `<div class="opts">${opts.map(o => `<button class="opt ${o.id === L[s] ? 'on' : ''}" data-att="${o.id}"><b>${esc(o.n)}</b>${o.d ? `<span>${esc(o.d)}</span>` : ''}</button>`).join('')}</div>` : ''}</div>`; }).join('')}`;

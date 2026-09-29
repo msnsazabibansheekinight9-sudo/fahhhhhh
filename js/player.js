@@ -50,7 +50,7 @@ class Player {
   }
   buildArms(era) {
     if (this.vm && this.vm.arms) for (const a of this.vm.arms) { G.E.vmScene.remove(a.upper); G.E.vmScene.remove(a.fore); G.E.vmScene.remove(a.hand); G.E.vmScene.remove(a.cuff); }
-    const sleeveCol = { ww1: '#6e6040', ww2: '#5f5a3e', cold: '#4b5638', mod: '#b09f7c', now: '#7d7658' }[era];
+    const sleeveCol = { ww1: '#6e6040', ww2: '#5f5a3e', cold: '#4b5638', mod: '#b09f7c', now: '#7d7658', psycho: '#26282c' }[era];
     const gloves = era === 'mod' || era === 'now';
     const sleeve = G.mat({ color: sleeveCol, roughness: 1 });
     if (era === 'now') { sleeve.map = G.texCamo('multicam'); sleeve.color.set('#ffffff'); }
@@ -379,6 +379,7 @@ class Player {
   tryFire(now, pressed) {
     const w = this.W, S = w.S, mode = S.modes[w.mode] || 'semi';
     if (!this.canFire()) return;
+    if (w.wp.spin && (w.spin || 0) < 1) return; // still spinning up
     if (w.cycleNeeded) { if (pressed && !this.action) this.startAction('cycle'); return; }
     const interval = 60 / (mode === 'burst2' && w.wp.burstRpm ? w.wp.burstRpm : S.rpm);
     if (now - this.lastShot < interval) return;
@@ -420,7 +421,7 @@ class Player {
       d.applyAxisAngle(V3(0, 1, 0), -offX + Math.cos(a1) * sprd + Math.cos(pa) * pr);
       d.applyQuaternion(q).normalize();
       const start = eye.clone().addScaledVector(V3(0, 1, 0).applyQuaternion(q), -Math.max(.02, rig.sightH) * ads);
-      G.Ballistics.fire({ pos: start, dir: d, v: S.v * (pellets > 1 ? .95 + Math.random() * .1 : 1), k: S.k, dmg: S.dmg, pen: S.pen, team: 0, owner: this, tracer: tracerOn ? 'red' : null, streak: !tracerOn && i === 0 && Math.random() < .4, cal: wp.cal, weapon: wp, vis, aim: { eye: eye.clone(), dir: V3(0, 0, -1).applyQuaternion(q) }, inc: S.inc, player: true, pellet: pellets > 1 && !wp.salvo && !wp.duplex, gyro: wp.gyro, hp: L_HP(w), ap: w.L.ammo === 'am_ap' || w.L.ammo === 'am_inc' });
+      G.Ballistics.fire({ pos: start, dir: d, v: S.v * (pellets > 1 ? .95 + Math.random() * .1 : 1), k: S.k, dmg: S.dmg, pen: S.pen, team: 0, owner: this, tracer: tracerOn ? 'red' : null, streak: !tracerOn && i === 0 && Math.random() < .4, cal: wp.cal, weapon: wp, vis, aim: { eye: eye.clone(), dir: V3(0, 0, -1).applyQuaternion(q) }, inc: S.inc, player: true, pellet: pellets > 1 && !wp.salvo && !wp.duplex, gyro: wp.gyro, hp: L_HP(w), ap: w.L.ammo === 'am_ap' || w.L.ammo === 'am_inc' || w.L.ammo === 'am_psy_du', he: S.he, homing: S.homing });
     }
     // recoil
     let stanceK = (this.stance === 1 ? .82 : this.stance === 2 ? .6 : 1) * (this.bipod ? .38 : 1) * lerp(1.15, 1, ads) * Math.sqrt(salvo);
@@ -450,6 +451,7 @@ class Player {
       if (w.mag === 0 && (wp.c === 'PST' || rig.boltType === 'reciprocate') && wp.act !== 'auto_ob') w.slideLock = true;
       if (wp.enbloc && w.mag === 0) { G.Audio.mech('ping'); w.slideLock = true; }
       if (rig.cyl) rig.cyl.userData.turn = (rig.cyl.userData.turn || 0) + 1;
+      if (rig.bigcyl) rig.bigcyl.userData.turn = (rig.bigcyl.userData.turn || 0) + 1;
       if (rig.panSpin) rig.mag.rotation.y += 2 * PI / S.mag;
     }
     if (w.mag === 0 && G.Game && G.Game.autoReload && w.reserve > 0 && !w.cycleNeeded) setTimeout(() => { if (this.W === w && w.mag === 0 && !this.action) this.reload(); }, 350);
@@ -578,7 +580,19 @@ class Player {
     // fire
     this.fireHeld = input.fire;
     const hyper = w && w.wp.hyper && this.burst > 0; // a hyperburst always completes once started
-    if (input.fire || hyper) this.tryFire(now, input.firePressed);
+    const pw = w && w.wp;
+    if (pw && pw.spin) { // rotary barrels spin up while the trigger is held, then fire; they coast down on release
+      const want = input.fire && !this.action && this.alive !== false;
+      w.spin = Math.max(0, Math.min(1, (w.spin || 0) + (want ? dt / pw.spin : -dt / (pw.spin * 1.8))));
+      if (want && (w.spin || 0) < 1 && Math.random() < dt * 14) G.Audio.mech('belt');
+    }
+    if (pw && pw.charge) { // coilgun: hold to charge the capacitor banks, the shot fires itself at full charge
+      if (input.fire && !this.action && w.mag > 0) {
+        w.charge = Math.min(1, (w.charge || 0) + dt / pw.charge);
+        if (Math.random() < dt * 10) G.Audio.mech('ping');
+        if (w.charge >= 1) { const before = this.lastShot; this.tryFire(now, true); if (this.lastShot !== before) w.charge = 0; }
+      } else { w.charge = Math.max(0, (w.charge || 0) - dt * 1.5); if (input.firePressed && w.mag <= 0) this.tryFire(now, true); }
+    } else if (input.fire || hyper) this.tryFire(now, input.firePressed);
     if (!input.fire && !hyper) this.burst = 0;
     // action timeline
     if (this.action) {
@@ -693,6 +707,12 @@ class Player {
     if (rig.trigger) rig.trigger.rotation.x = this.fireHeld ? .35 : 0;
     if (rig.hammer) rig.hammer.rotation.x = (this.fireHeld && bt > 0) ? .2 : -.6 * (1 - bt);
     if (rig.cyl && rig.cyl.userData.turn) { const tgt = rig.cyl.userData.turn * PI / 3; rig.cyl.rotation.z += (tgt - rig.cyl.rotation.z) * Math.min(1, dt * 20); }
+    // psycho-arsenal moving parts: rotor spin, revolving 20 mm cylinder, coil/sensor glow, heat glow, chainsaw
+    if (rig.rotor) rig.rotor.rotation.z += (w.spin || 0) * dt * 45;
+    if (rig.bigcyl && rig.bigcyl.userData.turn) { const tgt = rig.bigcyl.userData.turn * PI / 3; rig.bigcyl.rotation.z += (tgt - rig.bigcyl.rotation.z) * Math.min(1, dt * 12); }
+    if (rig.coilMat) rig.coilMat.emissiveIntensity = .5 + (w.charge || 0) * 5 + Math.max(0, .25 - (now - this.lastShot)) * 24;
+    if (rig.heatMat) rig.heatMat.emissiveIntensity = Math.max(0, w.heat - .15) * 3;
+    if (rig.saw) rig.saw.position.z = -.02 - ((now * (this.action && this.action.name === 'melee' ? 9 : .6)) % 1) * .0115;
     if (rig.bipodLegs) for (const L of rig.bipodLegs) L.rotation.x = lerp(L.rotation.x, this.bipod ? -1.45 : 0, Math.min(1, dt * 10));
     // muzzle flash
     const fl = vm.flash;

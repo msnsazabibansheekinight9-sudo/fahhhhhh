@@ -61,6 +61,14 @@ function gProf(pts, w, bev = .003, smooth = false, key) {
 G.geo = { gBox, gCyl, gCylY, gCylX, gSph, gTor, gRBox, gProf };
 
 // ---------------------------------------------------------------- materials
+G.texHazard = function () {
+  if (G._haz) return G._haz;
+  const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
+  x.fillStyle = '#e8b818'; x.fillRect(0, 0, 64, 64); x.fillStyle = '#141414';
+  for (let i = -64; i < 128; i += 22) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i + 11, 0); x.lineTo(i + 11 - 64, 64); x.lineTo(i - 64, 64); x.fill(); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(3, 3); t.encoding = THREE.sRGBEncoding;
+  return (G._haz = t);
+};
 G.gunMaterials = function (wp, S) {
   const m = wp.m, fin = S.fin;
   const CAMOS = ['woodland', 'desert', 'multicam', 'tiger', 'digital', 'splinter'];
@@ -75,6 +83,10 @@ G.gunMaterials = function (wp, S) {
   if (fin === 'fde' || fin === 'odc' || fin === 'tungsten') { metalRough = .6; metalMet = .4; }
   if (fin === 'engraved') { metalMap = G.texEngraved(); metalCol = '#ffffff'; metalRough = .35; }
   if (fin === 'whitewash') { metalRough = .9; metalMet = .1; }
+  if (fin === 'chrome') { metalCol = '#d8dbe0'; metalRough = .06; metalMet = 1; }
+  if (fin === 'crimson') { metalCol = '#5a0c10'; metalRough = .3; }
+  if (fin === 'hazard') { metalCol = '#141414'; metalRough = .5; }
+  if (fin === 'rust') { metalCol = '#6a3a22'; metalRough = .85; metalMet = .4; }
   const camo = CAMOS.includes(fin) ? G.texCamo(fin) : null;
   const metal = new THREE.MeshStandardMaterial({ color: camo ? '#ffffff' : metalCol, map: camo || metalMap, metalness: camo ? .3 : metalMet, roughness: camo ? .7 : metalRough, roughnessMap: camo ? null : brushed, bumpMap: brushed, bumpScale: .00018 });
   const steel = new THREE.MeshStandardMaterial({ color: fin === 'gold' ? '#caa040' : '#3b3f44', metalness: .92, roughness: .3, roughnessMap: brushed });
@@ -84,11 +96,14 @@ G.gunMaterials = function (wp, S) {
     const wt = G.texWood(m.wd).clone(); wt.needsUpdate = true; wt.repeat.set(2.5, 2.5);
     wood = new THREE.MeshStandardMaterial({ color: fin === 'whitewash' ? '#e0ddd5' : '#ffffff', map: camo || (fin === 'whitewash' ? null : wt), roughness: .52, metalness: 0, bumpMap: wt, bumpScale: .00035 });
   }
-  const polyCols = { black: '#1d1e1f', tan: '#a08c68', od: '#4f5638', plum: '#5e2a28', bakelite: '#4a2418', g36: '#2a2c2c', fde: '#8b7454', coyote: '#806a4a', ral8000: '#86704f', green: '#3d4a2e' };
+  const polyCols = { bone: '#cfc6ae', crimson: '#6a1418', hazard: '#ffffff', black: '#1d1e1f', tan: '#a08c68', od: '#4f5638', plum: '#5e2a28', bakelite: '#4a2418', g36: '#2a2c2c', fde: '#8b7454', coyote: '#806a4a', ral8000: '#86704f', green: '#3d4a2e' };
   let polyCol = polyCols[m.pl] || polyCols.black;
   if (fin === 'fde') polyCol = '#8b7454'; if (fin === 'odc') polyCol = '#4f553b'; if (fin === 'tungsten') polyCol = '#4d545c';
   if (fin === 'whitewash') polyCol = '#dedad0'; if (fin === 'gold') polyCol = '#1d1e1f';
-  const poly = new THREE.MeshStandardMaterial({ color: camo ? '#ffffff' : polyCol, map: camo, roughness: m.pl === 'bakelite' ? .45 : .78, metalness: .02, bumpMap: G.texStipple(), bumpScale: .0006 });
+  if (fin === 'chrome') polyCol = '#1d1e1f'; if (fin === 'crimson') polyCol = '#6a1418'; if (fin === 'rust') polyCol = '#5a3a26';
+  const hazardPoly = !camo && (fin === 'hazard' || (m.pl === 'hazard' && !fin));
+  if (!hazardPoly && polyCol === '#ffffff') polyCol = '#1d1e1f';
+  const poly = new THREE.MeshStandardMaterial({ color: camo || hazardPoly ? '#ffffff' : polyCol, map: camo || (hazardPoly ? G.texHazard() : null), roughness: m.pl === 'bakelite' ? .45 : .78, metalness: .02, bumpMap: G.texStipple(), bumpScale: .0006 });
   const rubber = new THREE.MeshStandardMaterial({ color: '#151515', roughness: .95, metalness: 0 });
   const brass = new THREE.MeshStandardMaterial({ color: '#b98e3c', metalness: 1, roughness: .28 });
   const copper = new THREE.MeshStandardMaterial({ color: '#b26a3c', metalness: 1, roughness: .3 });
@@ -102,7 +117,10 @@ G.gunMaterials = function (wp, S) {
   const glow = new THREE.MeshBasicMaterial({ color: '#ff3020' });
   const tritium = new THREE.MeshBasicMaterial({ color: '#6aff7a' });
   const cloth = new THREE.MeshStandardMaterial({ color: '#6b6448', roughness: 1 });
-  const out = { metal, steel, bright, wood: wood || poly, poly, rubber, brass, copper, glass, lensRed, lensClear, inner, clearPoly, red, shell, glow, tritium, cloth };
+  const glowC = new THREE.MeshStandardMaterial({ color: '#1ac8ff', emissive: '#18b8ff', emissiveIntensity: .6, roughness: .3 }); // coil / sensor glow (driven by charge)
+  const heat = new THREE.MeshStandardMaterial({ color: '#2b2b2b', emissive: '#ff4a10', emissiveIntensity: 0, metalness: .8, roughness: .45 }); // barrel shroud that glows with heat
+  const hazard = new THREE.MeshStandardMaterial({ map: G.texHazard(), roughness: .6 });
+  const out = { metal, steel, bright, wood: wood || poly, poly, rubber, brass, copper, glass, lensRed, lensClear, inner, clearPoly, red, shell, glow, tritium, cloth, glowC, heat, hazard };
   for (const k in out) G.linMat(out[k]);
   out.hasWood = !!m.wd;
   return out;
@@ -694,7 +712,7 @@ G.buildGun = function (wp, L, opt = {}) {
     let type = mg[0], len = mg[1] || .15, curve = mg[2] || 0, mz = mg[3] !== undefined ? mg[3] : -.06, ang = mg[4] || 0;
     // loadout overrides
     const Lm = L.mag;
-    const ext = Lm === 'mag_ext' || Lm === 'smle_20' || Lm === 'glock33' ? 1.5 : 1;
+    const ext = Lm === 'mag_ext' || Lm === 'smle_20' || Lm === 'glock33' || Lm === 'psy_quad' ? 1.5 : 1;
     if (Lm === 'mag_drum' || Lm === 'thompson50' || Lm === 'rpk75') type = 'drum';
     if (Lm === 'ppsh35') { type = 'curve'; len = .2; curve = .3; }
     if (Lm === 'mp18box') { type = 'sidebox_l'; len = .16; }
@@ -1154,6 +1172,10 @@ G.buildGun = function (wp, L, opt = {}) {
       } else if (L0 === 'brake') {
         len = .07; add(gRBox(d * 2.2, d * 1.4, len, .004), MT.metal, 0, 0, -len / 2);
         if (small) for (let i = 0; i < 3; i++) for (const s of [-1, 1]) add(gBox(.002, d * 1.1, .01), MT.rubber, s * d * 1.1, 0, -.015 - i * .018);
+      } else if (L0 === 'psy_maw') { // four-chamber brake with big side ports
+        len = .1; add(gRBox(d * 2.6, d * 2, len, .006), MT.metal, 0, 0, -len / 2);
+        for (let i = 0; i < 4; i++) for (const s of [-1, 1]) add(gBox(.003, d * 1.5, .014), MT.rubber, s * d * 1.31, 0, -.015 - i * .022);
+        if (small) add(gBox(d * 1.2, .003, .05), MT.rubber, 0, d * 1.01, -len * .5);
       } else if (L0 === 'flash') {
         len = .05; add(gCyl(d * .8, d * .7, len, 12), MT.metal, 0, 0, -len / 2);
         if (small) for (let i = 0; i < 4; i++) { const a = i * PI / 2; add(gBox(.002, .004, len * .6), MT.rubber, Math.cos(a) * d * .75, Math.sin(a) * d * .75, -len * .6); }
@@ -1246,7 +1268,7 @@ G.buildGun = function (wp, L, opt = {}) {
     if (has('triple')) for (const [x, y] of [[-br * 2.3, -br * 1.4], [br * 2.3, -br * 1.4]]) add(gCyl(br * 1.1, br * .95, bl, 14), MT.steel, x, y, zf - bl / 2);
     if (has('triple')) add(gRBox(br * 7, br * 4, .03, br), MT.metal, 0, -br * .8, zf - bl + .015);
     if (has('twin_side')) { // Villar-Perosa: a second complete gun alongside the first
-      const twin = new THREE.Group(); twin.position.x = .052;
+      const twin = new THREE.Group(); twin.position.x = Math.max(.052, RW * 1.2);
       const src = root.children.slice();
       for (const o of src) { if (o === rig.mag || o === rig.bipod || o.isSprite) continue; const c = o.clone(true); twin.add(c); }
       const m2 = rig.mag.clone(true); twin.add(m2);
@@ -1259,6 +1281,89 @@ G.buildGun = function (wp, L, opt = {}) {
       add(gCyl(.02, .02, .04, 16), MT.metal, 0, gy, (zr + zf) / 2 - .1 - gl / 2 - .02);
       add(gRBox(.05, .05, .15, .012), MT.poly, 0, gy + .045, zr - .1);
       add(gCyl(.017, .017, .003, 16), MT.glass, 0, gy + .045, zr - .1 - .076);
+    }
+    // ---------------- psycho-arsenal parts
+    if (has('vents') && small) for (const sx of [-1, 1]) for (let i = 0; i < 5; i++) add(gBox(.002, RH * .35, .008), MT.rubber, sx * (RW * .5 + .001), RH * .05, zf + .03 + i * .016);
+    if (has('hazard')) for (const sx of [-1, 1]) add(gRBox(.003, RH * .3, RL * .3, .001), MT.hazard, sx * (RW * .5 + .002), -RH * .15, zr - RL * .3);
+    if (has('heatsink')) { // finned shroud; the fins glow orange as the barrel heats
+      const hl = Math.min(bl * .6, .3), r0 = br * 2.6;
+      add(gCyl(br * 1.6, br * 1.6, hl, 14), MT.metal, 0, 0, zf - hl / 2 - .01);
+      for (let i = 0; i < Math.floor(hl / .016); i++) add(gCyl(r0, r0, .005, 18), MT.heat, 0, 0, zf - .015 - i * .016);
+      for (const a of [0, PI]) add(gBox(.004, .004, hl), MT.metal, Math.cos(a) * r0, Math.sin(a) * r0, zf - hl / 2 - .01);
+      rig.heatMat = MT.heat;
+    }
+    if (has('integral_sup')) { // full-length integral suppressor around the barrel
+      const len = bl + .06, r = Math.max(.022, br * 2.6);
+      add(gCyl(r, r, len, 24), MT.metal, 0, 0, zf - len / 2);
+      add(gCyl(r * 1.04, r * 1.04, .01, 24), MT.steel, 0, 0, zf - len + .005);
+      if (small) for (let i = 0; i < 8; i++) add(gCyl(r * 1.03, r * 1.03, .003, 24), MT.rubber, 0, 0, zf - .05 - i * len / 9);
+      add(gCyl(br * .6, br * .6, .003, 12), MT.rubber, 0, 0, zf - len - .001);
+      rig.muzzleZ = muzzleZ = zf - len - .002;
+    }
+    if (has('shellsaddle')) { // side-saddle shell carrier on the receiver
+      add(gRBox(.01, .04, .12, .003), MT.poly, -(RW * .5 + .005), -.01, zr - RL * .45);
+      for (let i = 0; i < 6; i++) { add(gCylY(.0105, .0105, .05, 10), MT.shell, -(RW * .5 + .016), -.01, zr - RL * .45 - .05 + i * .02); add(gCylY(.011, .011, .01, 10), MT.brass, -(RW * .5 + .016), -.036, zr - RL * .45 - .05 + i * .02); }
+    }
+    if (has('smartpod')) { // target-designator pod: laser emitter + sensor window + status screen
+      const px = RW * .5 + .022, pz = zf + .05;
+      add(gRBox(.03, .036, .08, .008), MT.poly, px, .0, pz);
+      add(gCyl(.008, .008, .004, 14), MT.glow, px, .006, pz - .041);
+      add(gRBox(.018, .012, .003, .002), MT.glowC, px, -.008, pz - .041);
+      add(gRBox(.002, .018, .03, .001), MT.glowC, px + .016, .004, pz + .01);
+      rig.coilMat = rig.coilMat || MT.glowC;
+    }
+    if (has('rotor6')) { // six rotating barrels, clamps and a drive motor
+      const R6 = rig.rotor = grp(0, 0, zf);
+      const rr = .018, br6 = .0062;
+      for (let i = 0; i < 6; i++) { const a = i * PI / 3; add(gCyl(br6, br6 * .9, bl, 12), MT.steel, Math.cos(a) * rr, Math.sin(a) * rr, -bl / 2, R6); add(gCyl(br6 * .45, br6 * .45, .003, 8), MT.rubber, Math.cos(a) * rr, Math.sin(a) * rr, -bl - .001, R6); }
+      for (const f of [.02, .45, .93]) add(gCyl(rr + .011, rr + .011, .014, 20), MT.metal, 0, 0, -bl * f, R6);
+      add(gCyl(rr + .016, rr + .014, .07, 20), MT.metal, 0, 0, .03, R6); // rotor housing
+      add(gRBox(.05, .05, .13, .01), MT.metal, 0, -RH * .55, zf + .1); // drive motor
+      add(gCyl(.018, .018, .02, 16), MT.steel, 0, -RH * .55, zf + .03);
+      if (small) for (let i = 0; i < 4; i++) add(gBox(.052, .003, .01), MT.rubber, 0, -RH * .55 + .026, zf + .06 + i * .022);
+      rig.muzzleZ = muzzleZ = zf - bl - .002;
+    }
+    if (has('backfeed')) { // flexible feed chute running back to the backpack ammo can
+      for (let i = 0; i < 9; i++) { const u = i / 8; const c = add(gRBox(.034, .02, .03, .005), MT.metal, -(RW * .5 + .02) - u * .04, -RH * .35 - u * u * .25, zr - RL * .3 + u * .22); c.rotation.x = -u * 1.1; }
+    }
+    if (has('coil')) { // twelve copper coil stages with glowing field rings, twin rails, capacitor banks
+      const n = 12, step = Math.min(bl * .9, .72) / n;
+      add(gRBox(.01, .007, bl * .95, .002), MT.steel, 0, .03, zf - bl * .48);
+      add(gRBox(.01, .007, bl * .95, .002), MT.steel, 0, -.03, zf - bl * .48);
+      for (let i = 0; i < n; i++) { const z = zf - .03 - i * step; add(gCyl(.024, .024, step * .6, 18), MT.copper, 0, 0, z); add(gCyl(.0262, .0262, step * .12, 18), MT.glowC, 0, 0, z - step * .38); }
+      for (const sx of [-1, 1]) for (let k = 0; k < 3; k++) { add(gCyl(.013, .013, .15, 14), MT.metal, sx * (RW * .5 + .014), -RH * .25 + k * .028, zr - RL * .45); add(gCyl(.0132, .0132, .004, 14), MT.glowC, sx * (RW * .5 + .014), -RH * .25 + k * .028, zr - RL * .45 - .076); }
+      if (small) for (let i = 0; i < 6; i++) add(gBox(RW * .9, .012, .004), MT.metal, 0, RH * .45, zr - .06 - i * .018); // cooling fins
+      add(gRBox(.05, .05, .02, .01), MT.metal, 0, 0, zf - bl - .005); // muzzle crown plate
+      rig.coilMat = MT.glowC;
+    }
+    if (has('pepper7')) { // seven-barrel cluster: centre barrel plus six around it
+      const rr = br * 2.3;
+      for (let i = 0; i < 6; i++) { const a = i * PI / 3; add(gCyl(br * 1.05, br * 1.05, bl, 12), MT.steel, Math.cos(a) * rr, Math.sin(a) * rr, zf - bl / 2); add(gCyl(br * .8, br * .8, .003, 10), MT.rubber, Math.cos(a) * rr, Math.sin(a) * rr, zf - bl - .001); }
+      for (const f of [.05, .55, .97]) add(gCyl(rr + br * 1.6, rr + br * 1.6, .018, 20), MT.metal, 0, 0, zf - bl * f);
+      add(gCyl(rr + br * 1.8, rr + br * 1.8, .05, 20), MT.metal, 0, 0, zf + .02); // breech block
+    }
+    if (has('bigcyl')) { // six-shot revolving cylinder for 20 mm shells
+      const cr = .062, cl = .14, cz = zr - RL * .5, cy = -cr * .68;
+      const C = rig.bigcyl = grp(0, cy, cz);
+      add(gCyl(cr, cr, cl, 30), MT.metal, 0, 0, 0, C);
+      for (let i = 0; i < 6; i++) { const a = PI / 2 + i * PI / 3, x = Math.cos(a) * cr * .68, y = Math.sin(a) * cr * .68; add(gCyl(.017, .017, cl + .002, 14), MT.rubber, x, y, 0, C); add(gCyl(.0165, .0165, .006, 14), MT.brass, x, y, cl / 2 + .002, C); if (small) add(gBox(.006, .004, cl * .8), MT.steel, Math.cos(a + PI / 6) * cr, Math.sin(a + PI / 6) * cr, 0, C); }
+      add(gCyl(.012, .012, cl + .04, 12), MT.steel, 0, cy, cz); // arbor pin
+      add(gRBox(RW * 1.05, .04, .04, .008), MT.metal, 0, cy - cr - .01, cz); // frame bottom strap
+    }
+    if (has('rocketpod')) { // twelve seeker-rocket tubes in a 3 x 4 block
+      const len = .32;
+      add(gRBox(.11, .11, .03, .01), MT.poly, 0, -.028, zf + .01);
+      for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) { const x = (c - 1) * .032, y = -.068 + r * .027; add(gCyl(.0125, .0125, len, 14, true), MT.poly, x, y, zf - len / 2); add(gCyl(.0105, .0105, .004, 14), MT.rubber, x, y, zf - .03); add(gSph(.009, 10), MT.red, x, y, zf - .04); }
+      for (const f of [.2, .6, .95]) add(gRBox(.108, .11, .012, .008), MT.metal, 0, -.028, zf - len * f);
+      rig.muzzleZ = muzzleZ = zf - len - .002;
+    }
+    if (has('dbl')) { // side-by-side double rifle: second barrel, rib and forend loop
+      const dx = br * 2.2;
+      add(gCyl(br * 1.25, br * .95, bl, 16), MT.steel, dx, 0, zf - bl / 2);
+      add(gCyl(br * .45, br * .45, .004, 12), MT.rubber, dx, 0, zf - bl - .001);
+      add(gRBox(dx * .6, .006, bl * .98, .002), MT.metal, dx / 2, br * .9, zf - bl / 2);
+      add(gRBox(dx * 2.4, br * 2.4, .02, .004), MT.metal, dx / 2, 0, zf - bl + .02);
+      add(gRBox(.008, .02, .04, .003), MT.bright, 0, RH * .45, zr - .01); // top lever
     }
     if (has('gyro')) for (let i = 0; i < 4; i++) { const a = i * PI / 2 + PI / 4; add(gCyl(.0016, .0016, .004, 6), MT.rubber, Math.cos(a) * .006, Math.sin(a) * .006, muzzleZ - .001); }
   }
@@ -1309,6 +1414,14 @@ G.buildGun = function (wp, L, opt = {}) {
         } else if (O === 'holo_mag') {
           axis = .038; add(gRBox(.044, .02, .1, .006), MT.poly, 0, .01, -.03); frame(.034, .026, axis, -.03, .1, MT.poly); lens(.013, axis, -.07, 0, MT.lensRed);
           openTube(.015, .015, .09, axis, .07); lens(.013, axis, .115, 0, MT.glass); ocZ = .12; lensZ = -.06;
+        } else if (O === 'psy_oracle') { // digital ballistic-computer scope: armoured body, rangefinder, live side display
+          axis = .046; add(gRBox(.05, .052, .2, .012), MT.poly, 0, .026, 0);
+          openTube(.024, .024, .06, axis, -.12); lens(.023, axis, -.15, 0, MT.glass);
+          openTube(.017, .02, .04, axis, .12); lens(.016, axis, .14, 0, MT.glass); add(gCyl(.02, .02, .02, 20, true), MT.rubber, 0, axis, .15);
+          add(gRBox(.026, .02, .05, .006), MT.metal, .03, .06, -.03); add(gCyl(.007, .007, .003, 12), MT.glowC, .03, .062, -.056); // laser rangefinder
+          add(gRBox(.002, .03, .08, .001), MT.glowC, .026, .03, .01); // side display
+          for (const z of [-.06, .06]) add(gRBox(.03, .012, .02, .004), MT.metal, 0, .006, z);
+          rig.coilMat = rig.coilMat || MT.glowC; ocZ = .16; lensZ = -.15;
         } else if (O === 'g36_dual' || O === 'aug_scope') {
           axis = rig.sightH - ry; ocZ = rig.sightZ - rz; lensZ = -.08;
         } else {
@@ -1414,6 +1527,14 @@ G.buildGun = function (wp, L, opt = {}) {
       if (Sd === 'bayonet') { const bl = add(gProf([[0, .006], [-blade, .002], [-blade - .02, -.004], [0, -.01]], .004, .0008), MT.bright, 0, 0, -.005, bgp); }
       else { add(gBox(.02, .03, .05), MT.steel, 0, .01, -.03, bgp); }
       if (Sd === 'bayonet' && blade < .3) add(gRBox(.016, .02, .1, .006), MT.poly, 0, -.002, .06, bgp);
+    }
+    if (Sd === 'psy_saw') { // chainsaw bayonet: motor housing, guide bar and a chain of teeth
+      const sg = grp(0, -br * 2.4 - .018, rig.muzzleZ + .12);
+      add(gRBox(.03, .04, .09, .008), MT.hazard, 0, 0, .02, sg);
+      add(gCyl(.012, .012, .03, 12), MT.metal, 0, -.005, -.03, sg).rotation.x = PI / 2;
+      add(gProf([[0, .012], [-.2, .008], [-.215, 0], [-.2, -.008], [0, -.012]], .004, .001), MT.bright, 0, 0, -.02, sg);
+      const chain = rig.saw = grp(0, 0, -.02, sg);
+      for (let i = 0; i < 18; i++) { const z = -i * .0115; add(gBox(.006, .006, .006), MT.steel, 0, .014 - i * .0002, z, chain); add(gBox(.006, .006, .006), MT.steel, 0, -.014 + i * .0002, z, chain); }
     }
     if (Sd === 'laser' || Sd === 'dbal' || Sd === 'light') {
       const sz = zf - Math.min(hgL || .12, blen) * .5;

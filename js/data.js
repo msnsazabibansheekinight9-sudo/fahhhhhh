@@ -495,6 +495,7 @@ G.isAK = (wp) => wp.m.t === 'ak';
 
 G.attachOK = function (wp, at) {
   const eo = G.ERA[wp.e].ord;
+  if (at.psy && wp.e !== 'psycho') return false; // psycho-arsenal attachments fit only psycho weapons
   if (at.e0 !== undefined && eo < at.e0) return false;
   if (at.e1 !== undefined && eo > at.e1) return false;
   if (at.only && !at.only.includes(wp.id)) {
@@ -525,7 +526,9 @@ G.resolveStats = function (wp, L) {
   const S = { acc: wp.acc, rv: wp.rec[0], rh: wp.rec[1], ads: .22 + wp.wt * .045, mob: 0, v: wp.v, mag: wp.mag, rl: wp.rl.slice(),
     dmg: wp.dmg, pen: G.CAL[wp.cal].pen, k: G.CAL[wp.cal].k, flash: 1, loud: 1, sup: 0, zoom: 1, ret: 'irons', tracer: 0, hip: 1,
     blen: 1, bthick: 1, bip: !!wp.m.bip, gl: 0, light: 0, melee: 1, semiConv: 0, subsonic: 0, slug: 0, flech: 0, dragon: 0, inc: 0,
-    stock: null, fin: null, rpm: wp.rpm, modes: wp.modes.slice(), pellets: wp.pellets || 1 };
+    stock: null, fin: null, rpm: wp.rpm, modes: wp.modes.slice(), pellets: wp.pellets || 1, he: wp.he || null, homing: wp.homing || 0 };
+  if (wp.inc) S.inc = 1;
+  if (wp.intSup) { S.sup = 1; S.flash = .1; S.loud = .35; }
   if (wp.c === 'PST') S.ads = .14 + wp.wt * .05;
   if (wp.c === 'SR') S.ads += .08;
   const mob0 = { PST: 10, SMG: 8, SG: 6, CAR: 7, AR: 6, BR: 4, RIF: 5, DMR: 4, SR: 3, LMG: 2 }[wp.c] || 5;
@@ -550,6 +553,9 @@ G.resolveStats = function (wp, L) {
     if (s.flech) { S.flech = 1; S.pellets = 20; S.dmg = 8; S.acc *= .7; S.k = .0015; S.pen += 1; }
     if (s.dragon) { S.dragon = 1; }
     if (s.inc) S.inc = 1;
+    if (s.he) S.he = S.he ? { r: Math.max(S.he.r, s.he.r), dmg: S.he.dmg + s.he.dmg * .5 } : s.he;
+    if (s.homing) S.homing = Math.max(S.homing, s.homing);
+    if (s.rpmMul) S.rpm *= s.rpmMul;
     if (s.stock) S.stock = s.stock; if (s.fin) S.fin = s.fin;
   }
   if (S.sup && S.subsonic) S.loud *= .5;

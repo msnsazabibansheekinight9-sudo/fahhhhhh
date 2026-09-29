@@ -391,18 +391,21 @@ Game.launchGrenade = function (p, v, owner) {
   m.position.copy(p); G.E.scene.add(m);
   Game.grenades.push({ m, v, owner, t: 0 });
 };
-function explode(p, owner) {
-  G.FX.explosion(p, 4); G.Audio.explosion(p);
-  const P = Game.player; const dP = P.pos.distanceTo(p); if (dP < 25) P.shake = Math.min(1, P.shake + (1 - dP / 25));
+function explode(p, owner) { Game.explode(p, owner, { r: 9, dmg: 180, name: '40 mm HE' }); }
+// blast with radius r (m) and peak damage dmg; teammates of the shooter are spared, the shooter is not
+Game.explode = function (p, owner, o = {}) {
+  const R = o.r || 9, D = o.dmg || 180;
+  G.FX.explosion(p, Math.max(1.2, R * .45)); G.Audio.explosion(p);
+  const P = Game.player; if (P) { const dP = P.pos.distanceTo(p); if (dP < R * 3) P.shake = Math.min(1, P.shake + (1 - dP / (R * 3)) * Math.min(1, R / 5)); }
+  const team = owner ? owner.team : -1;
   for (const a of Game.agents) {
-    if (!a.alive) continue; const d = a.pos.distanceTo(p); if (d > 9) continue;
+    if (!a.alive || (a.team === team && a !== owner)) continue; const d = a.pos.distanceTo(p); if (d > R) continue;
     if (!G.E.world.los(p.clone().setY(p.y + .5), a.eye)) continue;
-    const dmg = 180 * Math.pow(1 - d / 9, 1.5);
     if (a === P && P.god) continue;
-    a.damage({ dmg, pen: 1, owner, weapon: { n: '40 mm HE' }, team: owner.team }, 'chest', 1, a.pos.clone().sub(p).normalize(), a.pos);
+    a.damage({ dmg: D * Math.pow(1 - d / R, 1.5), pen: 1, owner, weapon: { n: o.name || 'HE' }, team }, 'chest', 1, a.pos.clone().sub(p).normalize(), a.pos);
   }
-  for (const T of Game.targets) if (T.type === 'dummy' && T.g.position.distanceTo(p) < 8) T.onHit({ dmg: 200, pen: 1 }, T.g.position.clone(), V3(0, 0, -1), 1);
-}
+  for (const T of Game.targets) if ((T.type === 'dummy' || T.type === 'walker') && T.S && !(T.S.dead > 0)) { const q = T.g.position, d = Math.hypot(q.x - p.x, q.z - p.z); if (d < R) { T._zone = 'chest'; T.onHit({ dmg: D * Math.pow(1 - d / R, 1.5), pen: 1 }, q.clone().setY(q.y + 1), V3(0, 0, -1), 1); } }
+};
 
 // ======================================================= UPDATE
 Game.update = function (dt, now) {
