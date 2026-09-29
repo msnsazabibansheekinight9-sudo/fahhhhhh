@@ -107,11 +107,18 @@ G.buildSoldier = function (opts) {
     S.gun = { holder, rig, obj: merged };
     S.muzzleLocal = new THREE.Vector3(0, 0, rig.muzzleZ).add(merged.position);
     S.gripLocal = rig.gripPos.clone().add(merged.position);
+    S.magLocal = (rig.magPos || rig.hgPos).clone().add(merged.position).add(new THREE.Vector3(0, -.06, 0));
     S.hgLocal = (opts.weapon.c === 'PST' ? rig.gripPos.clone().add(new THREE.Vector3(-.01, -.02, .01)) : rig.hgPos.clone()).add(merged.position);
   }
   root.traverse(o => { if (o.isMesh) o.userData.soldier = true; });
   S.walkPhase = Math.random() * 6;
-  S.aimPitch = 0; S.crouch = 0; S.dead = 0; S.deathDir = new THREE.Vector3();
+  S.aimPitch = 0; S.crouch = 0; S.dead = 0; S.deathDir = new THREE.Vector3(); S.flinch = 0; S.flinchDir = 0; S.breath = Math.random() * 6;
+  // face and kit details
+  const dark = M.dark;
+  for (const sx of [-1, 1]) { add(gBox(.035, .008, .01), mat(opts.hair || '#3a2a1e', .9), sx * .036, .05, -.098, S.head); add(gBox(.008, .08, .008), dark, sx * .1, -.03, -.03, S.head).rotation.x = .25; } // brows, chin strap
+  add(gBox(.035, .005, .006), mat('#7a4a3a', .8), 0, -.04, -.1, S.head); // mouth
+  add(gBox(.045, .035, .012), M.metal, 0, -.02, -.13, S.spine); // belt buckle
+  if (era === 'mod' || era === 'now') for (const L of S.legs) add(gRBox(.1, .09, .05, .02), dark, 0, 0, -.06, L.knee); // knee pads
   return S;
 };
 
@@ -195,50 +202,81 @@ function solveArm(arm, target, pole, root) {
   arm.elbow.position.copy(elbow); arm.hand.position.copy(t); arm.hand.quaternion.copy(arm.fore.quaternion);
 }
 
-// Animate: state = { speed (m/s), crouch 0..1, aimPitch rad, firing, dt, dead }
+// Animate: state = { speed (m/s), crouch 0..1, aimPitch rad, recoil, reload 0..1 (or <0), sprint, dt }
 G.animateSoldier = function (S, st) {
   const dt = st.dt;
   if (S.dead > 0) { deathAnim(S, dt); return; }
   S.crouch += ((st.crouch || 0) - S.crouch) * Math.min(1, dt * 8);
   const spd = st.speed || 0;
   S.walkPhase += dt * (spd > .1 ? 4 + spd * 1.6 : 0);
+  S.breath += dt * 1.6;
   const ph = S.walkPhase, amp = Math.min(1, spd / 4) * (1 - S.crouch * .5);
-  const c = S.crouch;
-  S.hips.position.y = .96 - c * .38 + Math.abs(Math.sin(ph)) * .04 * amp;
+  const c = S.crouch, idle = 1 - Math.min(1, spd / 1.5);
+  S.flinch = Math.max(0, S.flinch - dt * 4);
+  const fl = Math.sin(Math.min(1, S.flinch) * PI) * S.flinch;
+  S.hips.position.y = .96 - c * .38 + Math.abs(Math.sin(ph)) * .04 * amp + Math.sin(S.breath * .5) * .004 * idle;
+  S.hips.position.x = Math.sin(S.breath * .25) * .015 * idle; // weight shift
   for (const L of S.legs) {
     const p = ph + (L.side > 0 ? PI : 0);
-    L.hip.rotation.x = Math.sin(p) * .7 * amp - c * 1.2;
-    L.knee.rotation.x = Math.max(0, -Math.cos(p)) * 1.1 * amp + c * 2.0;
+    L.hip.rotation.x = Math.sin(p) * .7 * amp - c * 1.2 - (L.side > 0 ? c * .2 : 0);
+    L.knee.rotation.x = Math.max(0, -Math.cos(p)) * 1.1 * amp + c * (L.side > 0 ? 2.2 : 1.6);
     L.ankle.rotation.x = -c * .8 + Math.sin(p) * .2 * amp;
+    L.hip.rotation.z = -L.side * .04 * idle;
   }
-  S.spine.rotation.x = -.08 * amp + c * .25;
-  S.spine.rotation.y = Math.sin(ph) * .06 * amp;
-  // aim: pitch the chest (weapon attached to chest)
+  S.spine.rotation.x = -.08 * amp + c * .25 - fl * .25;
+  S.spine.rotation.y = Math.sin(ph) * .06 * amp + fl * .3 * S.flinchDir;
+  S.spine.rotation.z = fl * .15 * S.flinchDir;
+  // breathing: chest rises; aim pitch drives the chest (weapon is attached to it)
   S.aimPitch += ((st.aimPitch || 0) - S.aimPitch) * Math.min(1, dt * 10);
-  S.chest.rotation.x = S.aimPitch - c * .25 + (st.recoil || 0) * .05;
-  S.neck.rotation.x = -S.aimPitch * .3;
-  if (st.sprint && S.gun) { S.gun.holder.rotation.set(.5, .6, .2); } else if (S.gun) S.gun.holder.rotation.set(0, 0, 0);
-  // IK arms to the gun
+  S.chest.rotation.x = S.aimPitch - c * .25 + (st.recoil || 0) * .06 + Math.sin(S.breath) * .012 * idle;
+  S.neck.rotation.x = -S.aimPitch * .3 + fl * .3;
+  S.neck.rotation.y = Math.sin(S.breath * .3) * .1 * idle * (st.aimPitch ? .2 : 1);
+  const rl = st.reload !== undefined && st.reload >= 0 ? st.reload : -1;
+  if (S.gun) {
+    const H = S.gun.holder;
+    if (st.sprint) H.rotation.set(.5, .6, .2);
+    else if (rl >= 0) { const k = Math.sin(Math.min(1, rl) * PI); H.rotation.set(.25 * k, -.2 * k, .5 * k); }
+    else H.rotation.set(-(st.recoil || 0) * .12, 0, 0);
+    H.position.z = -.12 + (st.recoil || 0) * .04;
+  }
+  // IK arms to the gun (support hand goes to the magazine while reloading)
   S.root.updateMatrixWorld(true);
   if (S.gun) {
     const grip = S.gun.holder.localToWorld(S.gripLocal.clone()); S.root.worldToLocal(grip);
-    const hg = S.gun.holder.localToWorld(S.hgLocal.clone()); S.root.worldToLocal(hg);
+    let hgL = S.hgLocal.clone();
+    if (rl >= 0 && S.magLocal) { const mo = rl < .35 ? rl / .35 : rl > .7 ? 1 - (rl - .7) / .3 : 1; const pouch = rl > .35 && rl < .55; hgL.lerp(S.magLocal, mo); if (pouch) hgL.add(new THREE.Vector3(-.1, -.2, .25)); }
+    const hg = S.gun.holder.localToWorld(hgL); S.root.worldToLocal(hg);
     solveArm(S.arms[1], grip, tD.set(.3, -1, .4).normalize(), S.root);
     solveArm(S.arms[0], hg, tD.set(-.6, -1, -.2).normalize(), S.root);
+    if (S.gun.rig.mag && S.magMesh === undefined) S.magMesh = null;
   } else {
     for (const a of S.arms) { const s = a.sh.getWorldPosition(tA); S.root.worldToLocal(s); solveArm(a, s.clone().add(new THREE.Vector3(a.side * .05, -.5, 0)), tD.set(0, 0, -1), S.root); }
   }
 };
+// three death styles: fall with the bullet, topple backwards, or crumple to the knees first
 function deathAnim(S, dt) {
   S.dead += dt;
-  const t = Math.min(1, S.dead / .7), e = t * t * (3 - 2 * t);
-  const dir = S.deathDir;
-  S.root.rotation.x = e * (PI / 2 - .1) * dir.z;
-  S.root.rotation.z = -e * (PI / 2 - .1) * dir.x;
-  S.hips.position.y = .96 - e * .7;
-  for (const L of S.legs) { L.knee.rotation.x = e * .8 * (L.side > 0 ? 1 : .4); L.hip.rotation.x = -e * .3 * L.side; }
-  S.chest.rotation.x = e * .3; S.neck.rotation.x = e * .5;
-  if (S.gun && S.dead < .8) { S.gun.holder.rotation.z = e * 1.2; S.gun.holder.position.y = .06 - e * .3; }
+  if (!S.deathKind) S.deathKind = S.headshot ? 'limp' : ['fall', 'fall', 'knees', 'back'][Math.floor(Math.random() * 4)];
+  const k = S.deathKind, dir = S.deathDir;
+  const ease = t => t * t * (3 - 2 * t);
+  if (k === 'knees') {
+    const a = ease(Math.min(1, S.dead / .45)), b = ease(Math.max(0, Math.min(1, (S.dead - .45) / .55)));
+    S.hips.position.y = .96 - a * .5 - b * .3;
+    for (const L of S.legs) { L.knee.rotation.x = a * 1.7; L.hip.rotation.x = -a * .2 + b * .6; }
+    S.root.rotation.x = b * (PI / 2 - .25);
+    S.chest.rotation.x = a * .35; S.neck.rotation.x = a * .6;
+  } else {
+    const t = Math.min(1, S.dead / (k === 'limp' ? .5 : .75)), e = ease(t);
+    const sx = k === 'back' ? -1 : dir.z, sz = k === 'back' ? 0 : dir.x;
+    S.root.rotation.x = e * (PI / 2 - .1) * (sx || -1);
+    S.root.rotation.z = -e * (PI / 2 - .1) * sz;
+    S.hips.position.y = .96 - e * .7;
+    for (const L of S.legs) { L.knee.rotation.x = e * (k === 'limp' ? 1.2 : .8) * (L.side > 0 ? 1 : .4); L.hip.rotation.x = -e * .3 * L.side; }
+    S.chest.rotation.x = e * .3; S.neck.rotation.x = e * (k === 'limp' ? .9 : .5); S.neck.rotation.z = e * .4;
+    // small bounce on impact with the ground
+    if (t >= 1 && S.dead < 1.1) S.hips.position.y += Math.sin((S.dead - .75) * 18) * .015 * Math.max(0, 1.1 - S.dead);
+  }
+  if (S.gun && S.dead < .9) { const e = ease(Math.min(1, S.dead / .6)); S.gun.holder.rotation.z = e * 1.3; S.gun.holder.rotation.x = -e * .4; S.gun.holder.position.y = .06 - e * .32; }
 }
 
 // ------------------------------------------------------------------ hitboxes

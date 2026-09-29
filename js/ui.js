@@ -323,7 +323,7 @@ UI.showHUD = function (mode) {
     <div id="hit"><i></i><i></i><i></i><i></i></div><div id="dmgdir"></div>
     <div class="hudbox" id="ammo"><div class="wn"></div><div id="rounds"></div><div class="mag"></div><div class="md"></div></div>
     <div class="hudbox" id="hp"><div class="v">100</div><div class="b"><i></i></div><div class="st"></div></div>
-    ${mode === 'battle' ? '<div class="hudbox" id="score"><span class="a">0</span><span class="t">10:00</span><span class="e">0</span></div><canvas class="hudbox" id="mini" width="168" height="168"></canvas><div class="hudbox" id="feed"></div>' : '<div class="hudbox" id="rstats"></div><div class="hudbox" id="rhint">T targets & wind · N fly · Y reset · [ ] zero · H controls</div>'}
+    ${mode === 'battle' ? '<div class="hudbox" id="score"><span class="a">0</span><span class="t">10:00</span><span class="e">0</span></div><canvas class="hudbox" id="mini" width="168" height="168"></canvas><div class="hudbox" id="feed"></div>' : '<div class="hudbox" id="tcam" hidden><b></b></div><div class="hudbox" id="rstats"></div><div class="hudbox" id="rhint">T targets & wind · N fly · Y reset · [ ] zero · H controls</div>'}
     <div class="hudbox" id="compass"><div class="strip"></div></div>
     <div class="hudbox" id="toast"></div><div class="hudbox" id="center"></div><div class="hudbox" id="board" hidden></div>`;
   const strip = $('#compass .strip'); let s = '';
@@ -522,6 +522,23 @@ function computeHold(w, d) {
   return -y / d * 1000;
 }
 
+// ------------------------------------------------------------ TARGET CAMERA (range)
+const TCAM = { cam: new THREE.PerspectiveCamera(28, 300 / 180, .05, 200) };
+function renderTargetCam(R, Gm) {
+  const el = $('#tcam');
+  const T = Gm.mode === 'range' && Gm.camTarget && Gm.targets.includes(Gm.camTarget) ? Gm.camTarget : null;
+  if (el) el.hidden = !T;
+  if (!T || !el) return;
+  const W = 300, H = 180, x = 20, y = window.innerWidth < 900 ? 90 : 118;
+  const f = T.focus, d = Math.max(1.8, (T.w || .5) * 2.8);
+  TCAM.cam.position.set(f.x + .15, f.y + .08, f.z + d); TCAM.cam.lookAt(f.x, f.y, f.z);
+  R.setScissorTest(true); R.setScissor(x, y, W, H); R.setViewport(x, y, W, H);
+  R.clear(); R.render(G.E.scene, TCAM.cam);
+  R.setScissorTest(false); R.setViewport(0, 0, G.E.W, G.E.H);
+  el.style.left = x + 'px'; el.style.bottom = y + 'px';
+  const lab = el.querySelector('b'); const txt = `TARGET CAM · ${T.dist} M · ${T.type.toUpperCase()}`; if (lab.textContent !== txt) lab.textContent = txt;
+}
+
 // ============================================================ MAIN LOOP
 function boot() {
   const canvas = $('#c');
@@ -547,6 +564,7 @@ function boot() {
     R.clear();
     R.render(G.E.scene, G.E.camera);
     if (Gm.player && Gm.player.vm.pivot.visible) { R.clearDepth(); R.render(G.E.vmScene, G.E.vmCam); }
+    renderTargetCam(R, Gm);
   }
   requestAnimationFrame(loop);
   window.G_READY = true;

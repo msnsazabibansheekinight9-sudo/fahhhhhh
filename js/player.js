@@ -49,28 +49,62 @@ class Player {
     return vm;
   }
   buildArms(era) {
-    if (this.vm && this.vm.arms) for (const a of this.vm.arms) { G.E.vmScene.remove(a.upper); G.E.vmScene.remove(a.fore); G.E.vmScene.remove(a.hand); }
-    const U = G.UNIFORMS[era][0];
+    if (this.vm && this.vm.arms) for (const a of this.vm.arms) { G.E.vmScene.remove(a.upper); G.E.vmScene.remove(a.fore); G.E.vmScene.remove(a.hand); G.E.vmScene.remove(a.cuff); }
     const sleeveCol = { ww1: '#6e6040', ww2: '#5f5a3e', cold: '#4b5638', mod: '#b09f7c', now: '#7d7658' }[era];
     const gloves = era === 'mod' || era === 'now';
-    const sleeve = G.mat({ color: sleeveCol, roughness: 1, map: null });
+    const sleeve = G.mat({ color: sleeveCol, roughness: 1 });
     if (era === 'now') { sleeve.map = G.texCamo('multicam'); sleeve.color.set('#ffffff'); }
     if (era === 'mod') { sleeve.map = G.texCamo('desert'); sleeve.color.set('#ffffff'); }
-    const skin = G.mat({ color: gloves ? '#2a2826' : '#c9987a', roughness: gloves ? .85 : .6 });
-    const cuff = G.mat({ color: '#3a3528', roughness: 1 });
+    const skin = G.mat({ color: gloves ? '#2c2a27' : '#c4937a', roughness: gloves ? .9 : .55 });
+    const knuckle = G.mat({ color: gloves ? '#1d1c1a' : '#b98670', roughness: .7 });
+    const cuffM = G.mat({ color: gloves ? '#2c2a27' : '#3a3528', roughness: 1 });
     const arms = [];
     for (const side of [1, -1]) {
-      const upper = new THREE.Mesh(gCylY(.052, .046, 1, 12), sleeve), fore = new THREE.Mesh(gCylY(.046, .036, 1, 12), sleeve);
-      const hand = new THREE.Group();
-      const palm = new THREE.Mesh(gRBox(.05, .085, .095, .018), skin); palm.position.set(0, 0, 0); hand.add(palm);
-      for (let f = 0; f < 4; f++) { const fg = new THREE.Mesh(gRBox(.018, .018, .06, .008), skin); fg.position.set(-side * .026, -.028 + f * .02, -.035); fg.rotation.y = side * .9; hand.add(fg); }
-      const th = new THREE.Mesh(gRBox(.018, .018, .055, .008), skin); th.position.set(side * .02, .03, -.03); th.rotation.set(-.3, -side * .5, 0); hand.add(th);
-      const cf = new THREE.Mesh(gCylY(.034, .034, .025, 12), gloves ? skin : cuff); cf.rotation.x = PI / 2; cf.position.z = .055; hand.add(cf); hand.scale.setScalar(.88);
-      for (const m of [upper, fore]) { m.frustumCulled = false; }
-      G.E.vmScene.add(upper); G.E.vmScene.add(fore); G.E.vmScene.add(hand);
-      arms.push({ side, upper, fore, hand, sh: side > 0 ? V3(.17, -.3, .06) : V3(-.19, -.31, .0) });
+      const upper = new THREE.Mesh(gCylY(.055, .047, 1, 14), sleeve), fore = new THREE.Mesh(gCylY(.047, .036, 1, 14), sleeve);
+      const cuff = new THREE.Mesh(gCylY(.037, .034, 1, 12), cuffM);
+      const hand = this.buildHand(side, skin, knuckle);
+      for (const m of [upper, fore, cuff]) m.frustumCulled = false;
+      G.E.vmScene.add(upper); G.E.vmScene.add(fore); G.E.vmScene.add(hand); G.E.vmScene.add(cuff);
+      arms.push({ side, upper, fore, hand, cuff, sh: side > 0 ? V3(.17, -.3, .06) : V3(-.19, -.31, .0) });
     }
     return arms;
+  }
+  // Articulated hand in gun space: the right hand wraps the pistol grip with the index finger on the
+  // trigger; the left hand cups the handguard from below with fingers curled up the far side.
+  buildHand(side, skin, knuckle) {
+    const h = new THREE.Group();
+    const seg = (L, w = .0165) => { const m = new THREE.Mesh(gRBox(w, w * .92, L, w * .45), skin); m.frustumCulled = false; return m; };
+    const bone = (from, to, w, parent = h) => { const m = seg(from.distanceTo(to), w); m.position.copy(from).add(to).multiplyScalar(.5); m.lookAt(to.x, to.y, to.z); parent.add(m); return m; };
+    const joint = (p, r = .009, parent = h) => { const m = new THREE.Mesh(gSph(r, 8), knuckle); m.position.copy(p); m.frustumCulled = false; parent.add(m); };
+    h.userData.fingers = [];
+    if (side > 0) {
+      const palm = new THREE.Mesh(gRBox(.022, .08, .085, .011), skin); palm.position.set(.026, -.008, .018); palm.rotation.x = -.3; h.add(palm);
+      const heel = new THREE.Mesh(gRBox(.03, .04, .05, .012), skin); heel.position.set(.02, -.03, .045); h.add(heel);
+      // middle, ring, little fingers wrap around the front of the grip
+      for (let i = 0; i < 3; i++) {
+        const y = .004 - i * .022, rz = -.024 + i * .007;
+        const a = V3(.024, y, rz), b2 = V3(-.008, y - .002, rz - .012), c = V3(-.024, y - .004, rz + .012);
+        bone(a, b2, .017 - i * .001); joint(b2); bone(b2, c, .016 - i * .001);
+      }
+      // index finger to the trigger (moves when firing)
+      const ix = new THREE.Group(); h.add(ix); h.userData.index = ix;
+      const i0 = V3(.02, .03, -.02), i1 = V3(.006, .036, -.052), i2 = V3(-.002, .03, -.07);
+      bone(i0, i1, .016, ix); joint(i1, .0085, ix); bone(i1, i2, .015, ix);
+      ix.userData.pivot = i0;
+      // thumb over the top, on the far side of the grip
+      const t0 = V3(.024, .026, .03), t1 = V3(.004, .045, .004), t2 = V3(-.018, .042, -.018);
+      bone(t0, t1, .019); joint(t1); bone(t1, t2, .017);
+    } else {
+      const palm = new THREE.Mesh(gRBox(.02, .085, .08, .011), skin); palm.position.set(-.024, -.03, 0); palm.rotation.z = -.9; h.add(palm);
+      for (let i = 0; i < 4; i++) {
+        const z = -.03 + i * .02, L = i === 3 ? .8 : 1;
+        const a = V3(-.012, -.045, z), b2 = V3(.018 * L, -.036, z - .002), c = V3(.03 * L, -.012, z - .004), d = V3(.028 * L, .008, z - .004);
+        bone(a, b2, .017); joint(b2); bone(b2, c, .016); joint(c, .008); bone(c, d, .015);
+      }
+      const t0 = V3(-.034, -.022, .03), t1 = V3(-.032, -.004, -.004), t2 = V3(-.026, .006, -.036);
+      bone(t0, t1, .019); joint(t1); bone(t1, t2, .017);
+    }
+    return h;
   }
   setupWeapons(list) { // list: [{wp, L}]
     for (const w of this.weapons) if (w.rig) this.vm.holder.remove(w.rig.root);
@@ -458,7 +492,7 @@ class Player {
       W.move(this.pos, this.vel.x * dt, this.vel.z * dt, .33, this.stanceH + .15);
       this.pos.y += this.vel.y * dt;
       const g = W.groundAt(this.pos.x, this.pos.z, this.pos.y + .45, .2);
-      if (this.pos.y <= g) { if (!this.onGround && this.vel.y < -4) G.Audio.step(G.E.groundKind, null, true); this.pos.y = g; this.vel.y = 0; this.onGround = true; }
+      if (this.pos.y <= g) { if (!this.onGround && this.vel.y < -4) G.Audio.step(G.E.groundKind, null, true); if (!this.onGround) this.landDip = Math.min(1, Math.max(this.landDip || 0, -this.vel.y / 8)); this.pos.y = g; this.vel.y = 0; this.onGround = true; }
       else if (this.pos.y > g + .05) this.onGround = false;
       // footsteps
       const hs = Math.hypot(this.vel.x, this.vel.z);
@@ -485,7 +519,7 @@ class Player {
     this.adsHeld = input.ads && !this.sprinting && (!this.action || this.action.keepAds || this.action.name === 'cycle');
     const adsSpeed = 1 / Math.max(.08, S ? S.ads : .3);
     this.ads = clamp(this.ads + (this.adsHeld ? 1 : -1.4) * adsSpeed * dt, 0, 1);
-    this.scoped = S && S.zoom > 1.6 && this.ads > .94;
+    this.scoped = S && S.zoom >= 1.2 && this.ads > .9;
     // breath hold for scopes
     this.holding = this.scoped && input.sprint && this.breath > 0;
     if (this.holding) this.breath = Math.max(0, this.breath - dt / 5); else this.breath = Math.min(1, this.breath + dt / (this.breath <= 0 ? 7 : 4));
@@ -539,7 +573,7 @@ class Player {
     const base = G.settings.fov;
     let fov = base;
     if (S) {
-      const z = this.scoped ? S.zoom : lerp(1, S.zoom > 1.6 ? 1.35 : w.wp.c === 'PST' ? 1.12 : 1.22, ss(this.ads));
+      const z = this.scoped ? S.zoom : lerp(1, S.zoom >= 1.2 ? 1.35 : w.wp.c === 'PST' ? 1.12 : 1.22, ss(this.ads));
       fov = 2 * Math.atan(Math.tan(base * PI / 360) / z) * 180 / PI;
     }
     if (this.sprinting) fov += 4;
@@ -553,7 +587,7 @@ class Player {
     const vm = this.vm, w = this.W; if (!w) return;
     const S = w.S, rig = w.rig, wp = w.wp;
     vm.pivot.visible = !this.scoped && this.alive && !this.hideVM;
-    for (const a of vm.arms) { a.upper.visible = a.fore.visible = a.hand.visible = vm.pivot.visible; }
+    for (const a of vm.arms) { a.upper.visible = a.fore.visible = a.hand.visible = a.cuff.visible = vm.pivot.visible; }
     // mouse-lag sway
     const inp = G.Input;
     this.swayL.x += (clamp(-inp.lastDx * .0009, -.06, .06) - this.swayL.x) * Math.min(1, dt * 7);
@@ -573,8 +607,19 @@ class Player {
     const K = this.kick; K.vz -= K.z * 260 * dt; K.vz *= Math.pow(.0005, dt); K.z += K.vz * dt;
     K.vrx -= K.rx * 300 * dt; K.vrx *= Math.pow(.0008, dt); K.rx += K.vrx * dt; K.ry *= Math.pow(.02, dt); K.rz *= Math.pow(.02, dt);
     const kz = K.z * .06 * (1 - a * .35), krx = K.rx * .03;
-    vm.offset.position.set(P.x + bx - spr * .06, P.y + by + idle - spr * .05 + (this.jumpOff || 0), P.z + kz + spr * .02);
-    vm.offset.rotation.set(krx + spr * -.35, spr * .8 + (1 - a) * .05, spr * .35 + K.rz + (1 - a) * -.03, 'YXZ');
+    // landing dip, airborne lag, stance tilt and wall pull-back
+    this.landDip = Math.max(0, (this.landDip || 0) - dt * 3.5);
+    const air = this.onGround ? 0 : clamp(this.vel.y * -.006, -.03, .03);
+    const cam = G.E.camera, fwd = V3(0, 0, -1).applyQuaternion(cam.quaternion);
+    this.wallT = (this.wallT || 0) - dt;
+    if (this.wallT <= 0) { this.wallT = .08; const hit = G.E.world.raycast(cam.position, fwd, 1.0); this.wallTarget = hit ? clamp((1 - hit.t) / .65, 0, 1) : 0; }
+    this.wall = lerp(this.wall || 0, this.wallTarget || 0, Math.min(1, dt * 10));
+    const dip = Math.sin(Math.min(1, this.landDip) * PI) * .03 * (1 - a * .6) + this.landDip * .02;
+    const tilt = this.stance === 1 ? .06 : this.stance === 2 ? .12 : 0;
+    this.tiltS = lerp(this.tiltS || 0, tilt * (1 - a), Math.min(1, dt * 6));
+    const wl = this.wall * (1 - a * .5);
+    vm.offset.position.set(P.x + bx - spr * .06 + wl * .03, P.y + by + idle - spr * .05 - dip + air - wl * .06, P.z + kz + spr * .02 + wl * .14);
+    vm.offset.rotation.set(krx + spr * -.35 - dip * 1.2 + wl * .55, spr * .8 + (1 - a) * .05 + wl * .35, spr * .35 + K.rz + (1 - a) * -.03 - this.tiltS, 'YXZ');
     // sway in pivot (so ADS sights move with the aim offset)
     vm.pivot.rotation.set(this.scoped ? 0 : this.aimOff.y, this.scoped ? 0 : -this.aimOff.x + K.ry, -this.lean * .05, 'YXZ');
     // animation additive
@@ -605,17 +650,42 @@ class Player {
     if (w.heat > .35 && Math.random() < dt * 20 * w.heat && !this.scoped) G.FX.wisp(this.vmToWorld(rig.muzzle.getWorldPosition(V3())), w.heat);
     // reticle for 1x optics fades in with ADS
     if (rig.dot) rig.dot.material.opacity = .3 + a * .7;
-    // arms IK
+    // arms IK: hands sit on their anchors in gun space, forearms end at the wrists
     vm.pivot.updateMatrixWorld(true);
-    const gripW = rig.root.localToWorld(rig.gripPos.clone().add(V3(0, .0, .01)));
-    let lhW = rig.root.localToWorld(rig.hgPos.clone());
-    if (this.lhOverride && this.lhOverride.w > 0) { const o = rig.root.localToWorld(this.lhOverride.p.clone()); lhW.lerp(o, this.lhOverride.w); }
-    if (wp.c === 'PST' && !(this.lhOverride && this.lhOverride.w > .5)) lhW = rig.root.localToWorld(rig.gripPos.clone().add(V3(-.02, -.02, -.005)));
     const qg = rig.root.getWorldQuaternion(new THREE.Quaternion());
-    this.solveArm(vm.arms[0], gripW, V3(.6, -1, .3), qg, 1);
-    this.solveArm(vm.arms[1], lhW, V3(-.8, -1, 0), qg, -1);
+    const rAnchor = rig.gripPos.clone();
+    let lAnchor = rig.hgPos.clone();
+    if (pst) lAnchor = rig.gripPos.clone().add(V3(-.018, -.012, -.012));
+    if (this.lhOverride && this.lhOverride.w > 0) lAnchor.lerp(this.lhOverride.p, this.lhOverride.w);
+    const R = vm.arms[0], Lh = vm.arms[1];
+    R.hand.position.copy(rig.root.localToWorld(rAnchor.clone())); R.hand.quaternion.copy(qg);
+    Lh.hand.position.copy(rig.root.localToWorld(lAnchor.clone())); Lh.hand.quaternion.copy(qg);
+    if (pst && !(this.lhOverride && this.lhOverride.w > .5)) Lh.hand.rotateZ(.5);
+    // trigger finger
+    const ix = R.hand.userData.index; if (ix) { const pull = this.fireHeld && this.canFire() ? .22 : 0; ix.rotation.x += ((pull) - ix.rotation.x) * Math.min(1, dt * 30); }
+    // held items: a shell for tube loading, a stripper clip for bolt actions
+    this.updateHeldItem(Lh.hand, w);
+    const rw = rig.root.localToWorld(rAnchor.clone().add(V3(.035, -.035, .085)));
+    const lw = rig.root.localToWorld(lAnchor.clone().add(pst ? V3(-.03, -.04, .07) : V3(-.035, -.06, .06)));
+    this.solveArm(R, rw, V3(.6, -1, .3));
+    this.solveArm(Lh, lw, V3(-.8, -1, 0));
+    orient(R.cuff, rw, R.hand.position.clone().lerp(rw, .45)); orient(Lh.cuff, lw, Lh.hand.position.clone().lerp(lw, .45));
   }
-  solveArm(arm, target, pole, qg, side) {
+  updateHeldItem(hand, w) {
+    const o = this.lhOverride, want = o && o.w > .5 ? (o.shell ? 'shell' : o.clip ? 'clip' : null) : null;
+    if (hand.userData.itemKind !== want) {
+      if (hand.userData.item) hand.remove(hand.userData.item);
+      hand.userData.item = null; hand.userData.itemKind = want;
+      if (want === 'shell' || want === 'clip') {
+        const c = G.CAL[w.wp.cal] || G.CAL['.303 British'];
+        const g = new THREE.Group();
+        if (want === 'shell') { const cs = G.makeCasing(w.wp.cal); cs.rotation.y = Math.PI / 2; g.add(cs); g.position.set(0, -.03, -.01); }
+        else { const n = 5; const clip = new THREE.Mesh(gBox(.012, .004, .05), G.mat({ color: '#b98e3c', metalness: 1, roughness: .3 })); g.add(clip); for (let i = 0; i < n; i++) { const r = G.makeCasing(w.wp.cal); r.rotation.x = -Math.PI / 2; r.position.set(0, c.cs[0] / 2, -.02 + i * .01); g.add(r); } g.position.set(0, .01, 0); }
+        g.traverse(m => { m.frustumCulled = false; }); hand.add(g); hand.userData.item = g;
+      }
+    }
+  }
+  solveArm(arm, target, pole) {
     const up = .34, lo = .32;
     const s = arm.sh.clone();
     const tB = target.clone().sub(s); let d = tB.length(); d = Math.min(d, up + lo - .002); tB.setLength(d);
@@ -626,10 +696,6 @@ class Player {
     const bend = V3().crossVectors(sideV, dir).normalize();
     const elbow = s.clone().addScaledVector(dir, Math.cos(a) * up).addScaledVector(bend, Math.sin(a) * up);
     orient(arm.upper, s, elbow); orient(arm.fore, elbow, t);
-    arm.hand.position.copy(t);
-    // hand orientation: follow the gun, rotated to grip
-    arm.hand.quaternion.copy(qg);
-    if (side > 0) arm.hand.rotateX(-.35); else arm.hand.rotateZ(.3);
   }
 }
 function RWx(rig) { return rig.wp.m.R[2] * .5; }

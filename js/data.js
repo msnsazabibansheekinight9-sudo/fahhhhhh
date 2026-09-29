@@ -178,7 +178,7 @@ w({ id:'g3', n:'H&K G3A3', e:'cold', c:'BR', y:1959, co:'West Germany', cal:'7.6
   m:{ t:'battle', R:[.33,.075,.045], B:[.45,.009], hg:['g3',.25], stk:'g3', grip:'hk', mag:['box',.14,.1,-.06], sgt:'drum_hk', bh:'hk', mz:'bird', pl:'black', mt:'black', x:['cocking_tube','claw'] }});
 w({ id:'galil', n:'IMI Galil ARM', e:'cold', c:'AR', y:1972, co:'Israel', cal:'5.56×45mm', act:'auto', modes:['auto','semi'], rpm:650, mag:35, v:950, dmg:30, rec:[.7,.45], rl:[2.5,3.1], acc:3.5, wt:4.35,
   m:{ t:'ak', R:[.30,.07,.045], B:[.46,.0085], hg:['galil',.21], stk:'side_fold', grip:'ak', mag:['curve',.21,.25,-.07], sgt:'ak', bh:'ak_up', mz:'bird', bip:1, wd:'wood', pl:'black', mt:'park', x:['gas','dust','carry_galil'] }});
-w({ id:'aug', n:'Steyr AUG A1', e:'cold', c:'AR', y:1978, co:'Austria', cal:'5.56×45mm', act:'auto', modes:['auto','semi'], rpm:680, mag:30, v:970, dmg:30, rec:[.55,.35], rl:[2.9,3.4], acc:3, wt:3.6,
+w({ id:'aug', n:'Steyr AUG A1', e:'cold', c:'AR', y:1978, co:'Austria', cal:'5.56×45mm', act:'auto', modes:['auto','semi'], rpm:680, mag:30, v:970, dmg:30, rec:[.55,.35], rl:[2.9,3.4], acc:3, wt:3.6, defOptic:'aug_scope',
   m:{ t:'bullpup', R:[.46,.09,.05], B:[.42,.0085], hg:['none',0], stk:'aug', grip:'aug', mag:['box_clear',.18,.15,.10], sgt:'aug_scope', bh:'side_l', mz:'bird', pl:'od', mt:'black', x:['aug_fold'] }});
 w({ id:'mp5', n:'H&K MP5A3', e:'cold', c:'SMG', y:1966, co:'West Germany', cal:'9×19mm', act:'auto', modes:['auto','burst3','semi'], rpm:800, mag:30, v:400, dmg:25, rec:[.35,.25], rl:[2.2,2.9], acc:5, wt:2.54,
   m:{ t:'smg', R:[.27,.06,.04], B:[.225,.008], hg:['mp5',.14], stk:'mp5_coll', grip:'hk', mag:['curve',.18,.4,-.06], sgt:'drum_hk', bh:'hk', mz:'crown', pl:'black', mt:'black', x:['cocking_tube','claw'] }});
@@ -230,7 +230,7 @@ w({ id:'ak74m', n:'AK-74M', e:'mod', c:'AR', y:1991, co:'Russia', cal:'5.45×39m
   m:{ t:'ak', R:[.30,.07,.045], B:[.415,.0085], hg:['ak_poly',.21], stk:'ak_side', grip:'ak', mag:['curve',.20,.35,-.07], sgt:'ak', bh:'ak', mz:'ak74', pl:'black', mt:'black', x:['gas','dust','siderail','lug'] }});
 w({ id:'an94', n:'AN-94 “Abakan”', e:'mod', c:'AR', y:1994, co:'Russia', cal:'5.45×39mm', act:'auto', modes:['burst2','auto','semi'], rpm:600, burstRpm:1800, mag:30, v:900, dmg:32, rec:[.6,.35], rl:[2.5,3.1], acc:2.8, wt:3.85,
   m:{ t:'ak', R:[.34,.075,.045], B:[.405,.0085], hg:['ak_poly',.22], stk:'ak_side', grip:'ak', mag:['curve',.20,.3,-.09,.25], sgt:'ak', bh:'ak', mz:'an94', pl:'black', mt:'black', x:['gas','siderail'] }});
-w({ id:'g36', n:'H&K G36', e:'mod', c:'AR', y:1997, co:'Germany', cal:'5.56×45mm', act:'auto', modes:['auto','burst2','semi'], rpm:750, mag:30, v:920, dmg:30, rec:[.5,.3], rl:[2.4,2.9], acc:3, wt:3.63,
+w({ id:'g36', n:'H&K G36', e:'mod', c:'AR', y:1997, co:'Germany', cal:'5.56×45mm', act:'auto', modes:['auto','burst2','semi'], rpm:750, mag:30, v:920, dmg:30, rec:[.5,.3], rl:[2.4,2.9], acc:3, wt:3.63, defOptic:'g36_dual',
   m:{ t:'ar', R:[.36,.08,.042], B:[.48,.0085], hg:['g36',.26], stk:'g36', grip:'g36', mag:['box_clear',.19,.15,-.06], sgt:'g36_handle', bh:'g36', mz:'bird', pl:'g36', mt:'black', x:[] }});
 w({ id:'famas', n:'FAMAS F1', e:'mod', c:'AR', y:1978, co:'France', cal:'5.56×45mm', act:'auto', modes:['auto','burst3','semi'], rpm:1000, mag:25, v:960, dmg:30, rec:[.6,.4], rl:[2.6,3.1], acc:3, wt:3.61,
   m:{ t:'bullpup', R:[.46,.09,.045], B:[.49,.0085], hg:['none',0], stk:'famas', grip:'famas', mag:['box',.15,0,.10], sgt:'famas', bh:'famas', mz:'bird', bip:1, pl:'black', mt:'black', x:['famas_handle'] }});
@@ -490,7 +490,7 @@ G.SLOTS = [
   ['mag', 'Magazine'], ['stock', 'Stock'], ['ammo', 'Ammunition'], ['finish', 'Finish'],
 ];
 
-G.hasRail = (wp) => wp.m.x && wp.m.x.some(x => x === 'railT' || x === 'railP');
+G.hasRail = (wp) => wp.m.x && wp.m.x.some(x => x === 'railT' || x === 'railP' || x === 'rail_bolt');
 G.isAK = (wp) => wp.m.t === 'ak';
 
 G.attachOK = function (wp, at) {
@@ -504,6 +504,7 @@ G.attachOK = function (wp, at) {
   }
   if (at.cls && !at.only && !at.only_family && !at.cls.includes(wp.c)) return false;
   if (at.not && at.not.includes(wp.id)) return false;
+  if (at.fixedOk === false && G.fixedMag && G.fixedMag(wp)) return false;
   if (at.not_cls && at.not_cls.includes(wp.c)) return false;
   if (at.needs === 'rail' && !G.hasRail(wp) && !(G.isAK(wp) && eo >= 3)) return false;
   if (at.needs === 'hg' && ['PST','SR'].includes(wp.c)) return false;
@@ -583,6 +584,7 @@ G.TARGETS = [
   { id:'armor',   n:'Armour plate test',          d:'NIJ IIIA / III / IV plates on a stand. Shows stop or pass.' },
   { id:'bottles', n:'Bottles & melons',           d:'Things that shatter.' },
   { id:'dummy',   n:'Enemy mannequin',            d:'An era soldier on a stand. Shows hit zones.' },
+  { id:'clay',    n:'Clay pigeon trap',           d:'Throws a clay every 3 s. Made for shotguns.' },
 ];
 G.RANGE_DISTS = [7, 15, 25, 50, 100, 200, 300, 500, 800, 1000];
 

@@ -30,92 +30,131 @@ function sphereHit(ro, rd, c, r, maxT) { const oc = ro.clone().sub(c); const b =
 function labelTex(txt, bg = '#e9e4d4', fg = '#1b1b1b') { const c = document.createElement('canvas'); c.width = 256; c.height = 128; const x = c.getContext('2d'); x.fillStyle = bg; x.fillRect(0, 0, 256, 128); x.fillStyle = fg; x.font = 'bold 64px monospace'; x.textAlign = 'center'; x.fillText(txt, 128, 86); const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; return t; }
 
 const TGT = {};
-TGT.paper = function (x, z, dist, o) {
-  const s = Math.max(1, dist / 60), w = .55 * s;
+// bullet hole that belongs to the target (moves with it, cleared on reset)
+const HOLE_MAT = {};
+function holeMark(parent, x, y, z, r, col = '#0b0907') {
+  const m = HOLE_MAT[col] || (HOLE_MAT[col] = new THREE.MeshBasicMaterial({ color: G.col(col), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+  const h = new THREE.Mesh(new THREE.CircleGeometry(r, 10), m); h.position.set(x, y, z); parent.add(h); return h;
+}
+function calDia(cal) { const c = G.CAL[cal]; return c ? c.cs[1] * 2 : .009; }
+TGT.paper = function (x, z, dist) {
+  const s = clamp(dist / 150, 1, 4), w = .55 * s;
   const g = new THREE.Group(); g.position.set(x, 0, z);
-  const cy = 1.5 * Math.max(1, s * .7);
-  const face = new THREE.Mesh(new THREE.PlaneGeometry(w, w), new THREE.MeshStandardMaterial({ map: G.texTarget('paper'), roughness: .95 })); face.position.set(0, cy, 0); g.add(face);
+  const cy = Math.max(1.45, .95 + w / 2);
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(w, w), G.mat({ map: G.texTarget('paper'), roughness: .95 })); face.position.set(0, cy, 0); g.add(face);
   const board = new THREE.Mesh(gBox(w * 1.15, w * 1.2, .015), G.surf('planks')); board.position.set(0, cy, -.012); board.castShadow = true; g.add(board);
   standPosts(g, w * 1.15, cy + w * .6, G.surf('bark'));
-  const T = { type: 'paper', g, hits: [], center: V3(x, cy, z), w, scale: s,
+  const holes = new THREE.Group(); g.add(holes);
+  const T = { type: 'paper', g, hits: [], w, scale: s, focus: V3(x, cy, z),
     rayTest(ro, rd, maxT) { const t = planeHit(ro, rd, z, maxT); if (t < 0) return -1; const p = ro.clone().addScaledVector(rd, t); return Math.abs(p.x - x) < w * .58 && Math.abs(p.y - cy) < w * .6 ? t : -1; },
     onHit(b, p, dir) {
       const dx = p.x - x, dy = p.y - cy, r = Math.hypot(dx, dy);
+      if (Math.abs(dx) > w / 2 || Math.abs(dy) > w / 2) { holeMark(holes, dx, cy + dy, .0, calDia(b.cal) * .6); G.FX.impact(p, V3(0, 0, 1), dir, 'wood', .5, { decal: false }); return { pass: true, v: .9, info: 'Hit the backer board' }; }
+      holeMark(holes, dx, cy + dy, .002, calDia(b.cal) * .55);
       const ring = r < w / 2 ? Math.max(0, 10 - Math.floor(r / (w / 2) * 10)) : 0;
-      G.FX.addDecal('paper', V3(p.x, p.y, z + .002), V3(0, 0, 1), (G.CAL[b.cal] || {}).cs ? G.CAL[b.cal].cs[1] * 2.2 : .01);
-      if (Math.abs(dx) > w / 2 || Math.abs(dy) > w / 2) { G.FX.impact(p, V3(0, 0, 1), dir, 'wood', .5); return { pass: false, info: 'Frame' }; }
       this.hits.push([dx, dy]); if (this.hits.length > 10) this.hits.shift();
-      return { pass: true, v: .98, info: ring ? `${ring} ring` : 'Miss (paper)', ring };
+      return { pass: true, v: .98, info: ring ? `${ring}-ring · ${(dx * 100).toFixed(1)} cm ${dx >= 0 ? 'right' : 'left'}, ${(Math.abs(dy) * 100).toFixed(1)} cm ${dy >= 0 ? 'high' : 'low'}` : 'Outside the rings', ring };
     },
-    group() { if (this.hits.length < 2) return 0; let m = 0; for (const a of this.hits.slice(-5)) for (const c of this.hits.slice(-5)) m = Math.max(m, Math.hypot(a[0] - c[0], a[1] - c[1])); return m; },
-    reset() { this.hits = []; },
+    group() { const H = this.hits.slice(-5); if (H.length < 2) return 0; let m = 0; for (const a of H) for (const c of H) m = Math.max(m, Math.hypot(a[0] - c[0], a[1] - c[1])); return m; },
+    reset() { this.hits = []; holes.clear(); },
   };
   return T;
 };
-TGT.ipsc = function (x, z, dist) {
-  const s = Math.max(1, dist / 120), w = .46 * s, h = .76 * s, cy = 1.1 + h / 2;
+TGT.ipsc = function (x, z, dist, o = {}) {
+  const s = clamp(dist / 150, 1, 4), w = .46 * s, h = .76 * s, cy = .9 + h / 2;
   const g = new THREE.Group(); g.position.set(x, 0, z);
-  const face = new THREE.Mesh(new THREE.PlaneGeometry(w * 1.113, w * 1.113 * (512 / 512) * 1.65), new THREE.MeshStandardMaterial({ map: G.texTarget('ipsc'), transparent: true, alphaTest: .5, roughness: 1, side: THREE.DoubleSide }));
-  face.scale.set(1, h / (w * 1.113 * 1.65), 1); face.position.set(0, cy, 0); face.castShadow = true; g.add(face);
-  const stick = new THREE.Mesh(gBox(.04, 1.2, .02), G.surf('planks')); stick.position.set(0, .6, -.01); g.add(stick);
-  return { type: 'ipsc', g,
-    rayTest(ro, rd, maxT) { const t = planeHit(ro, rd, z, maxT); if (t < 0) return -1; const p = ro.clone().addScaledVector(rd, t); const lx = (p.x - x) / w, ly = (p.y - cy) / h;
+  const card = new THREE.Group(); g.add(card);
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(w * 1.113, h * 1.113 * .96), G.mat({ map: G.texTarget('ipsc'), transparent: true, alphaTest: .5, roughness: 1, side: THREE.DoubleSide }));
+  face.position.set(0, cy, 0); face.castShadow = true; card.add(face);
+  const stick = new THREE.Mesh(gBox(.04, .9, .02), G.surf('planks')); stick.position.set(0, .45, -.01); card.add(stick);
+  const holes = new THREE.Group(); card.add(holes);
+  const T = { type: 'ipsc', g, card, cx: 0, focus: V3(x, cy, z),
+    rayTest(ro, rd, maxT) { const t = planeHit(ro, rd, z, maxT); if (t < 0) return -1; const p = ro.clone().addScaledVector(rd, t); const lx = (p.x - x - this.cx) / w, ly = (p.y - cy) / h;
       const inHead = Math.abs(lx) < .22 && ly > .28 && ly < .5, inBody = Math.abs(lx) < .5 && ly < .28 && ly > -.5; return inHead || inBody ? t : -1; },
-    onHit(b, p) { const lx = (p.x - x) / w, ly = (p.y - cy) / h; G.FX.addDecal('paper', V3(p.x, p.y, z + .002), V3(0, 0, 1), .011);
+    onHit(b, p) { const dx = p.x - x - this.cx, lx = dx / w, ly = (p.y - cy) / h;
+      holeMark(holes, dx, p.y, .002, calDia(b.cal) * .55);
       const zone = ly > .28 ? (Math.abs(lx) < .13 && ly < .44 ? 'A (head)' : 'B (head)') : Math.abs(lx) < .11 && ly > -.2 && ly < .22 ? 'A' : Math.abs(lx) < .2 && ly > -.45 ? 'C' : 'D';
-      return { pass: true, v: .98, info: 'Zone ' + zone }; },
-    reset() {} };
+      return { pass: true, v: .98, info: `Zone ${zone} · ${{ A: 5, C: 3, D: 1 }[zone[0]] || 4} pts (major)` }; },
+    reset() { holes.clear(); } };
+  return T;
 };
 TGT.steel = function (x, z, dist) {
   const r = clamp(.15 * dist / 100, .1, .5);
   const g = new THREE.Group(); g.position.set(x, 0, z);
   const top = 1.6 + r * 2;
   const mat = G.surf('darkmetal');
-  for (const s of [-1, 1]) { const p = new THREE.Mesh(gBox(.06, top, .06), mat); p.position.set(s * (r + .3), top / 2, 0); p.castShadow = true; g.add(p); }
+  for (const s of [-1, 1]) { const p = new THREE.Mesh(gBox(.06, top, .06), mat); p.position.set(s * (r + .3), top / 2, 0); p.castShadow = true; g.add(p); const f = new THREE.Mesh(gBox(.06, .06, .6), mat); f.position.set(s * (r + .3), .03, 0); g.add(f); }
   const bar = new THREE.Mesh(gBox(r * 2 + .7, .06, .06), mat); bar.position.set(0, top, 0); g.add(bar);
   const piv = new THREE.Group(); piv.position.set(0, top, 0); g.add(piv);
   for (const s of [-1, 1]) { const c = new THREE.Mesh(gBox(.01, r * .8, .01), mat); c.position.set(s * r * .5, -r * .4, 0); piv.add(c); }
-  const plate = new THREE.Mesh(gCyl(r, r, .012, 32), G.mat({ color: '#e8e3d4', roughness: .6, metalness: .3 }));
+  const plate = new THREE.Mesh(gCyl(r, r, .012, 40), G.mat({ color: '#e8e3d4', roughness: .6, metalness: .3 }));
   plate.position.set(0, -r * .8 - r, 0); plate.castShadow = true; piv.add(plate);
-  const T = { type: 'steel', g, ang: 0, av: 0, splats: [],
+  const T = { type: 'steel', g, ang: 0, av: 0, focus: V3(x, top - r * 1.8, z),
     rayTest(ro, rd, maxT) { const cy = top - r * 1.8; const t = planeHit(ro, rd, z, maxT); if (t < 0) return -1; const p = ro.clone().addScaledVector(rd, t); return Math.hypot(p.x - x, p.y - cy) < r ? t : -1; },
     onHit(b, p, dir, energy, speed) {
-      const cal = G.CAL[b.cal]; const m = (MASS[b.cal] || 8) / 1000; const J = .5 * m * speed * speed;
+      const m = (MASS[b.cal] || 8) / 1000; const J = .5 * m * speed * speed;
       this.av += Math.min(6, J / 900) * (b.pellet ? .3 : 1);
       G.Audio.ding(p, 0); G.FX.impact(p, V3(0, 0, 1), dir, 'steel', 1.2, { decal: false });
-      const s = new THREE.Mesh(new THREE.CircleGeometry(.018 + Math.min(.05, J / 80000), 10), G.mat({ color: '#9a9a96', roughness: .9 }));
-      const local = plate.worldToLocal(p.clone()); s.position.set(local.x, local.y, .007); plate.add(s); this.splats.push(s);
+      const local = plate.worldToLocal(p.clone());
+      holeMark(plate, local.x, local.y, .0065, .014 + Math.min(.05, J / 80000), '#8f8f8a'); // lead splash on the paint
       const pass = b.pen >= 5;
-      return { pass, v: .6, info: pass ? 'Penetrated AR500' : `Hit · ${Math.round(J)} J` };
+      if (pass) holeMark(plate, local.x, local.y, .0068, calDia(b.cal) * .6);
+      return { pass, v: .6, info: pass ? 'Penetrated the AR500 plate' : `Ding · ${Math.round(J)} J on steel` };
     },
     update(dt) { this.av -= this.ang * 30 * dt; this.av *= Math.pow(.25, dt); this.ang += this.av * dt; piv.rotation.x = -this.ang; },
-    reset() { for (const s of this.splats) plate.remove(s); this.splats = []; },
+    reset() { plate.clear(); this.ang = this.av = 0; },
   };
   return T;
 };
 TGT.popper = function (x, z, dist) {
-  const s = Math.max(1, dist / 100);
+  const s = clamp(dist / 120, 1, 4);
   const g = new THREE.Group(); g.position.set(x, 0, z);
   const piv = new THREE.Group(); piv.position.set(0, .15, 0); g.add(piv);
-  const pts = [[-.1 * s, 0], [.1 * s, 0], [.07 * s, .7 * s], [.15 * s, .78 * s], [.15 * s, .95 * s], [-.15 * s, .95 * s], [-.15 * s, .78 * s], [-.07 * s, .7 * s]].map(p => [p[0], p[1]]);
+  const pts = [[-.1, 0], [.1, 0], [.07, .7], [.15, .78], [.15, .95], [-.15, .95], [-.15, .78], [-.07, .7]].map(p => [p[0] * s, p[1] * s]);
   const shape = new THREE.Shape(); shape.moveTo(pts[0][0], pts[0][1]); pts.slice(1).forEach(p => shape.lineTo(p[0], p[1]));
   const m = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: .012, bevelEnabled: false }), G.mat({ color: '#d9d4c4', roughness: .6, metalness: .3 })); m.castShadow = true; piv.add(m);
   const base = new THREE.Mesh(gBox(.4 * s, .15, .3), G.surf('darkmetal')); base.position.y = .075; g.add(base);
-  const T = { type: 'popper', g, down: 0, t: 0,
-    rayTest(ro, rd, maxT) { if (this.down > .5) return -1; const t = planeHit(ro, rd, z + .012, maxT); if (t < 0) return -1; const p = ro.clone().addScaledVector(rd, t); const lx = p.x - x, ly = p.y - .15; if (ly < 0 || ly > .95 * s) return -1; const hw = ly > .7 * s ? .15 * s : .1 * s - ly / (.7 * s) * .03 * s; return Math.abs(lx) < hw ? t : -1; },
-    onHit(b, p, dir, energy, speed) { const J = .5 * (MASS[b.cal] || 8) / 1000 * speed * speed; G.Audio.ding(p, 0); G.FX.impact(p, V3(0, 0, 1), dir, 'steel', 1, { decal: false }); if (J > 180 * (b.pellet ? .3 : 1)) { this.fall = true; this.t = 0; return { pass: false, info: `Down · ${Math.round(J)} J` }; } return { pass: false, info: `Stayed up · ${Math.round(J)} J` }; },
-    update(dt) { if (this.fall) { this.down = Math.min(1, this.down + dt * 5); this.t += dt; if (this.t > 2.5) this.fall = false; } else this.down = Math.max(0, this.down - dt * 2); piv.rotation.x = -this.down * 1.45; },
-    reset() { this.fall = false; this.down = 0; } };
+  const marks = new THREE.Group(); piv.add(marks);
+  const T = { type: 'popper', g, down: 0, t: 0, focus: V3(x, .15 + .6 * s, z),
+    rayTest(ro, rd, maxT) { if (this.down > .3) return -1; const t = planeHit(ro, rd, z + .012, maxT); if (t < 0) return -1; const p = ro.clone().addScaledVector(rd, t); const lx = p.x - x, ly = p.y - .15; if (ly < 0 || ly > .95 * s) return -1; const hw = ly > .7 * s ? .15 * s : .1 * s - ly / (.7 * s) * .03 * s; return Math.abs(lx) < hw ? t : -1; },
+    onHit(b, p, dir, energy, speed) {
+      const J = .5 * (MASS[b.cal] || 8) / 1000 * speed * speed;
+      G.Audio.ding(p, 0); G.FX.impact(p, V3(0, 0, 1), dir, 'steel', 1, { decal: false });
+      holeMark(marks, p.x - x, p.y - .15, .0135, .012 + Math.min(.03, J / 100000), '#8f8f8a');
+      // IPSC calibration: a popper must fall to a major-power hit on the head; lighter hits may not topple it
+      if (J > 300 * (b.pellet ? .25 : 1) || (p.y - .15 > .7 * s && J > 180)) { this.fall = true; this.t = 0; return { pass: false, info: `Down · ${Math.round(J)} J` }; }
+      return { pass: false, info: `Stayed up · ${Math.round(J)} J (hit higher or use more power)` };
+    },
+    update(dt) { if (this.fall) { this.down = Math.min(1, this.down + dt * (2 + this.down * 8)); this.t += dt; if (this.t > 2.5) { this.fall = false; } } else if (this.down > 0) { this.down = Math.max(0, this.down - dt * 1.5); if (this.down === 0) marks.clear(); } piv.rotation.x = -this.down * 1.45; },
+    reset() { this.fall = false; this.down = 0; marks.clear(); } };
   return T;
 };
 TGT.mover = function (x, z, dist) {
-  const T = TGT.ipsc(0, z, dist); T.type = 'mover'; T.x0 = 0; T.dir = 1; T.cx = 0;
-  const rail = new THREE.Mesh(gBox(14, .08, .1), G.surf('darkmetal')); rail.position.set(0, .05, z + .2); T.g.add(rail);
-  T.g.position.x = 0; T.baseRay = T.rayTest; T.baseHit = T.onHit;
-  T.rayTest = function (ro, rd, maxT) { const r2 = ro.clone(); r2.x -= this.cx; return this.baseRay(r2, rd, maxT); };
-  T.onHit = function (b, p) { const q = p.clone(); q.x -= this.cx; const r = this.baseHit(b, q); r.info += ' (moving)'; return r; };
-  T.update = function (dt) { this.cx += this.dir * 3 * dt; if (Math.abs(this.cx) > 6) this.dir *= -1; this.g.children[0].position.x = this.cx; this.g.children[1].position.x = this.cx; };
-  // decals do not follow the mover; skip them
+  const T = TGT.ipsc(0, z, dist); T.type = 'mover'; T.dir = 1; T.speed = 3;
+  const rail = new THREE.Mesh(gBox(14, .08, .1), G.surf('darkmetal')); rail.position.set(0, .05, .2); T.g.add(rail);
+  const cart = new THREE.Mesh(gBox(.5, .2, .3), G.surf('darkmetal')); cart.position.set(0, .15, .05); T.card.add(cart);
+  T.baseHit = T.onHit;
+  T.onHit = function (b, p) { const r = this.baseHit(b, p); r.info += ` · moving ${this.speed} m/s`; return r; };
+  T.update = function (dt) { this.cx += this.dir * this.speed * dt; if (Math.abs(this.cx) > 6) { this.cx = Math.sign(this.cx) * 6; this.dir *= -1; } this.card.position.x = this.cx; this.focus.x = this.cx; };
+  return T;
+};
+// clay pigeons: a trap house throws a clay every few seconds (made for shotguns)
+TGT.clay = function (x, z, dist) {
+  const g = new THREE.Group(); g.position.set(x, 0, z);
+  const house = new THREE.Mesh(gBox(1.4, .8, 1.2), G.surf('planks')); house.position.set(0, .4, 0); house.castShadow = true; g.add(house);
+  const arm = new THREE.Mesh(gBox(.6, .05, .08), G.surf('darkmetal')); arm.position.set(0, .82, 0); g.add(arm);
+  const cm = G.mat({ color: '#e46a1e', roughness: .7 });
+  const clay = new THREE.Mesh(gCylY(.055, .045, .025, 16), cm); clay.visible = false; g.add(clay);
+  const T = { type: 'clay', g, t: 1, v: V3(), p: V3(), live: false, focus: V3(x, 2.5, z - 4),
+    throwClay() { this.p.set(x, .9, z); const side = (Math.random() - .5) * 8; this.v.set(side, 9 + Math.random() * 2, -10 - Math.random() * 6); this.live = true; clay.visible = true; G.Audio.mech('bipod', this.p); },
+    rayTest(ro, rd, maxT) { if (!this.live) return -1; return sphereHit(ro, rd, this.p, .07, maxT); },
+    onHit(b) { this.live = false; clay.visible = false; const p = this.p;
+      for (let i = 0; i < 28; i++) G.FX.debris.spawn({ x: p.x, y: p.y, z: p.z, vx: this.v.x * .3 + (Math.random() - .5) * 6, vy: this.v.y * .2 + Math.random() * 3, vz: this.v.z * .3 + (Math.random() - .5) * 6, life: 1.6, s0: .04, s1: .03, r: .9, g: .42, b: .12, grav: 9.8, drag: .7, bounce: .2, floor: 0 });
+      for (let i = 0; i < 8; i++) G.FX.dust.spawn({ x: p.x, y: p.y, z: p.z, vx: (Math.random() - .5) * 2, vy: (Math.random() - .5) * 2, vz: (Math.random() - .5) * 2, life: 1, s0: .1, s1: .6, r: .8, g: .5, b: .3, a: .5, drag: .3 });
+      G.Audio.impact(p, 'glass', true); this.t = 0; return { pass: false, info: `Clay broken at ${Math.round(p.distanceTo(G.E.camera.position))} m` }; },
+    update(dt) { this.t += dt; if (!this.live && this.t > 3) { this.t = 0; this.throwClay(); }
+      if (this.live) { this.v.y -= 9.81 * dt; this.v.multiplyScalar(Math.pow(.85, dt)); this.p.addScaledVector(this.v, dt); clay.position.copy(this.p).sub(g.position); clay.rotation.x += dt * 20; this.focus.copy(this.p); if (this.p.y < 0) { this.live = false; clay.visible = false; this.t = 0; } } },
+    reset() { this.live = false; clay.visible = false; this.t = 1; } };
   return T;
 };
 function gelDepth(b, speed) {
@@ -220,7 +259,7 @@ TGT.bottles = function (x, z) {
   const cols = ['#2f5a2a', '#6a3a14', '#2f5a2a', '#a7c7c9', '#6a3a14'];
   for (let i = 0; i < 5; i++) { const m = new THREE.Mesh(gCylY(.035, .038, .24, 12), G.mat({ color: cols[i], roughness: .05, metalness: .2, transparent: true, opacity: .8 })); m.position.set(-.7 + i * .2, 1.02, 0); g.add(m); const n = new THREE.Mesh(gCylY(.012, .03, .08, 10), m.material); n.position.y = .15; m.add(n); items.push({ m, kind: 'glass', c: V3(x - .7 + i * .2, 1.04, z), r: .045 }); }
   for (let i = 0; i < 2; i++) { const m = new THREE.Mesh(gSph(.12, 16), G.mat({ color: '#2f5a24', roughness: .5 })); m.scale.set(1, .85, 1.25); m.position.set(.35 + i * .3, 1.0, 0); m.castShadow = true; g.add(m); items.push({ m, kind: 'melon', c: V3(x + .35 + i * .3, 1.0, z), r: .12 }); }
-  return { type: 'bottles', g, items,
+  return { type: 'bottles', g, items, focus: V3(x, 1.04, z),
     rayTest(ro, rd, maxT) { let best = -1; for (const it of items) { if (!it.m.visible) continue; const t = sphereHit(ro, rd, it.c, it.r, maxT); if (t >= 0 && (best < 0 || t < best)) { best = t; this._hit = it; } } return best; },
     onHit(b, p, dir) {
       const it = this._hit; it.m.visible = false;
@@ -245,12 +284,13 @@ TGT.dummy = function (x, z, dist, o) {
       let armor = '';
       if ((this._zone === 'chest' || this._zone === 'stomach') && this.tier.armor < 1 && G.ERA[era].ord >= 3) { const m = b.pen >= 4 ? .95 : b.pen >= 3 ? this.tier.armor + .15 : this.tier.armor; d *= m; armor = ' (armour)'; }
       this.hp -= d; G.FX.impact(p, dir.clone().negate(), dir, 'flesh', 1);
+      S.flinch = Math.min(1.2, S.flinch + .8); S.flinchDir = Math.sign(Math.random() - .5);
       const dead = this.hp <= 0;
-      if (dead) { S.dead = .0001; S.deathDir.set(0, 0, -1); this.t = 0; }
+      if (dead) { S.dead = .0001; S.deathKind = null; S.headshot = this._zone === 'head'; S.deathDir.set(0, 0, -1); this.t = 0; }
       return { pass: false, info: `${this._zone.toUpperCase()} · ${Math.round(d)} dmg${armor}${dead ? ' · LETHAL' : ` · ${Math.max(0, Math.round(this.hp))} HP left`}` };
     },
-    update(dt) { if (S.dead > 0) { G.animateSoldier(S, { dt, dead: true }); this.t += dt; if (this.t > 3) this.reset(); } },
-    reset() { this.hp = this.tier.hp; S.dead = 0; S.root.rotation.set(0, 0, 0); S.hips.position.y = .96; S.chest.rotation.x = 0; S.neck.rotation.x = 0; for (const L of S.legs) { L.knee.rotation.x = 0; L.hip.rotation.x = 0; } if (S.gun) { S.gun.holder.rotation.set(0, 0, 0); S.gun.holder.position.set(.13, .06, -.12); } G.animateSoldier(S, { dt: 1, speed: 0 }); },
+    update(dt) { if (S.dead > 0) { G.animateSoldier(S, { dt, dead: true }); this.t += dt; if (this.t > 3) this.reset(); } else G.animateSoldier(S, { dt, speed: 0, aimPitch: 0 }); },
+    reset() { this.hp = this.tier.hp; S.dead = 0; S.deathKind = null; S.flinch = 0; S.root.rotation.set(0, 0, 0); S.hips.position.y = .96; S.chest.rotation.x = 0; S.neck.rotation.x = 0; for (const L of S.legs) { L.knee.rotation.x = 0; L.hip.rotation.x = 0; } if (S.gun) { S.gun.holder.rotation.set(0, 0, 0); S.gun.holder.position.set(.13, .06, -.12); } G.animateSoldier(S, { dt: 1, speed: 0 }); },
   };
   return T;
 };
@@ -263,6 +303,7 @@ Game.addTarget = function (type, dist, o = {}) {
   const x = lanes[n % lanes.length] * (dist > 200 ? 1 + dist / 400 : 1);
   const T = TGT[type](x, -dist, dist, o);
   T.dist = dist; T.x = x;
+  if (!T.focus) T.focus = V3(x, T.type === 'gel' || T.type === 'bottles' ? 1 : 1.35, -dist);
   G.E.world.group.add(T.g);
   Game.targets.push(T);
   if (Game.targets.length > 9) { const old = Game.targets.shift(); G.E.world.group.remove(old.g); }
@@ -315,7 +356,7 @@ Game.spawnPoint = function (team) {
   const p = best.clone(); p.x += (Math.random() - .5) * 3; p.z += (Math.random() - .5) * 3; return p;
 };
 Game.cleanup = function (clearTargets) {
-  if (Game.player) { G.E.vmScene.remove(Game.player.vm.pivot); for (const a of Game.player.vm.arms) { G.E.vmScene.remove(a.upper); G.E.vmScene.remove(a.fore); G.E.vmScene.remove(a.hand); } }
+  if (Game.player) { G.E.vmScene.remove(Game.player.vm.pivot); for (const a of Game.player.vm.arms) { G.E.vmScene.remove(a.upper); G.E.vmScene.remove(a.fore); G.E.vmScene.remove(a.hand); G.E.vmScene.remove(a.cuff); } }
   for (const b of Game.bots) b.remove();
   Game.bots = []; Game.agents = []; G.Ballistics.list = []; Game.grenades = [];
   Game.killfeed = []; G.E.vmLight.intensity = 0;
@@ -431,6 +472,9 @@ function rangeStat(b, T, p, speed, r) {
   const tAim = (p.z - eye.z) / dir.z; const aimP = eye.clone().addScaledVector(dir, tAim);
   const drop = aimP.y - p.y, wind = p.x - aimP.x;
   const m = (MASS[b.cal] || 8) / 1000;
+  Game.camTarget = T; Game.camT = 6;
+  if (r && r.info) Game.toast(r.info, 1.4);
+  G.UI.hitmarker(false, false); G.Audio.hit(false, false);
   S.last = { target: T.type, dist, tof: b.t, v: speed, v0: b.v0, J: .5 * m * speed * speed, J0: .5 * m * b.v0 * b.v0, drop, wind, info: r ? r.info : '', group: T.group ? T.group() : 0 };
   G.UI.dirty = true;
 }

@@ -82,14 +82,16 @@ G.gunMaterials = function (wp, S) {
   const brass = new THREE.MeshStandardMaterial({ color: '#b98e3c', metalness: 1, roughness: .28 });
   const copper = new THREE.MeshStandardMaterial({ color: '#b26a3c', metalness: 1, roughness: .3 });
   const glass = new THREE.MeshStandardMaterial({ color: '#0e1b26', metalness: .9, roughness: .04, transparent: true, opacity: .72 });
-  const lensRed = new THREE.MeshStandardMaterial({ color: '#3a1e1a', metalness: .9, roughness: .04, transparent: true, opacity: .45 });
+  const lensRed = new THREE.MeshStandardMaterial({ color: '#c89a70', metalness: .6, roughness: .02, transparent: true, opacity: .1, depthWrite: false });
+  const lensClear = new THREE.MeshStandardMaterial({ color: '#9fc4d8', metalness: .5, roughness: .02, transparent: true, opacity: .08, depthWrite: false });
+  const inner = new THREE.MeshStandardMaterial({ color: '#0c0c0c', roughness: .9, metalness: .1, side: THREE.BackSide });
   const clearPoly = new THREE.MeshStandardMaterial({ color: '#b9a888', metalness: 0, roughness: .2, transparent: true, opacity: .45 });
   const red = new THREE.MeshStandardMaterial({ color: '#8a1a14', roughness: .6 });
   const shell = new THREE.MeshStandardMaterial({ color: '#a51e1e', roughness: .5 });
   const glow = new THREE.MeshBasicMaterial({ color: '#ff3020' });
   const tritium = new THREE.MeshBasicMaterial({ color: '#6aff7a' });
   const cloth = new THREE.MeshStandardMaterial({ color: '#6b6448', roughness: 1 });
-  const out = { metal, steel, bright, wood: wood || poly, poly, rubber, brass, copper, glass, lensRed, clearPoly, red, shell, glow, tritium, cloth };
+  const out = { metal, steel, bright, wood: wood || poly, poly, rubber, brass, copper, glass, lensRed, lensClear, inner, clearPoly, red, shell, glow, tritium, cloth };
   for (const k in out) G.linMat(out[k]);
   out.hasWood = !!m.wd;
   return out;
@@ -164,6 +166,8 @@ G.buildGun = function (wp, L, opt = {}) {
       add(gBox(.004, .01, .012), MT.steel, -RW * .52, -RH * .45, zr - .02); // selector
       add(gBox(.004, .008, .02), MT.steel, -RW * .52, -RH * .3, -.07); // bolt catch
       add(gCyl(.004, .004, .006, 8), MT.steel, RW * .52, -RH * .62, -.035).rotation.y = PI / 2; // mag release
+      for (const z of [zf + .015, zr - .015]) add(gCylX(.0035, .0035, RW * 1.02, 10), MT.steel, 0, -RH * .3, z); // takedown & pivot pins
+      add(gBox(.003, RH * .12, .04), MT.steel, -RW * .51, RH * .12, zr - .03); // brass deflector edge
     }
   } else if (t === 'pistol') {
     // frame
@@ -588,6 +592,7 @@ G.buildGun = function (wp, L, opt = {}) {
         const l = len * ext;
         sgm([[-depth / 2, .01], [depth / 2, .01], [depth / 2 + l * .06, -l], [-depth / 2 + l * .06, -l]], mw);
         add(gRBox(mw * 1.25, .008, depth * 1.2, .003), MT.metal, 0, -l, l * .06, g); // floorplate
+        add(gCyl(Math.min(.0055, mw * .22), Math.min(.0045, mw * .18), depth * .85, 10), MT.brass, mw * .12, .012, -.002, g); // top round
         if (type === 'box_clear') for (let i = 0; i < 6; i++) add(gCyl(.004, .004, depth * .8, 8), MT.brass, (i % 2 ? .006 : -.006), -.01 - i * l / 7, 0, g);
         if (small && type === 'box' && l > .1) for (let i = 0; i < 3; i++) add(gBox(mw * 1.05, .002, depth * .8), mat, 0, -l * (.25 + i * .22), l * .02 * i, g);
         break; }
@@ -598,6 +603,7 @@ G.buildGun = function (wp, L, opt = {}) {
         for (let i = 0; i <= N; i++) { const u = i / N; pts.push([-depth / 2 - u * u * l * c * .9, .01 - u * l]); }
         for (let i = N; i >= 0; i--) { const u = i / N; pts.push([depth / 2 - u * u * l * c * .9 + u * .008, .01 - u * l]); }
         sgm(pts, mw);
+        add(gCyl(Math.min(.0055, mw * .22), Math.min(.0045, mw * .18), depth * .85, 10), MT.brass, -mw * .12, .013, -.002, g); // top round
         add(gRBox(mw * 1.3, .01, depth * 1.25, .003), mat === MT.clearPoly ? MT.poly : MT.metal, 0, -l, -l * c * .9 + .004, g).rotation.x = -c * .9;
         if (small && G.isAK(wp)) for (const s of [-1, 1]) add(gProf(pts.map(p => [p[0] * .4, p[1] * .92]), .002, .0005), mat, s * mw * .52, 0, 0, g);
         if (type.includes('pair')) { const g2 = sgm(pts, mw); g2.position.set(mw * 1.2, 0, .01); add(gBox(mw * 2.4, .03, .02), MT.cloth, mw * .6, -l * .5, 0, g); }
@@ -672,6 +678,12 @@ G.buildGun = function (wp, L, opt = {}) {
         add(gRBox(.052, .018, len, .006), MT.clearPoly, 0, .009, 0, g);
         if (small) for (let i = 0; i < 12; i++) add(gCylX(.0028, .0028, .02, 6), MT.brass, (i % 2 ? .01 : -.01), .009, -len / 2 + .01 + i * len / 13, g);
         break; }
+      case 'helical': { // Bizon-style helical magazine under the barrel
+        pos = V3(0, bot + .005, zf + .05);
+        add(gCyl(.028, .028, len, 20), MT.poly, 0, -.028, -len / 2, g);
+        if (small) for (let i = 0; i < 6; i++) add(gCyl(.0285, .0285, .004, 20), MT.poly, 0, -.028, -.03 - i * len / 6.5, g);
+        add(gRBox(.024, .02, .03, .006), MT.poly, 0, -.005, -.01, g);
+        break; }
       case 'pst': {
         pos = V3(0, bot * 1.25 - .002, .045);
         const l = len * ext;
@@ -690,6 +702,20 @@ G.buildGun = function (wp, L, opt = {}) {
     rig.magPos = pos.clone();
   }
 
+  // highest point of already-built geometry inside a thin corridor along the bore line (z0..z1, |x - cx| < hw)
+  function corridorTop(z0, z1, cx = 0, hw = .009) {
+    root.updateMatrixWorld(true);
+    const b = new THREE.Box3(); let top = -1;
+    root.traverse(o => {
+      if (!o.isMesh || o.isSprite || (o.material && o.material.transparent)) return;
+      let p = o; while (p && p !== root) { if (p === rig.mag || p === rig.bipod || p === rig.skipGroup) return; p = p.parent; }
+      b.setFromObject(o);
+      if (b.max.x < cx - hw || b.min.x > cx + hw) return;
+      if (b.max.z < Math.min(z0, z1) || b.min.z > Math.max(z0, z1)) return;
+      if (b.max.y > top) top = b.max.y;
+    });
+    return top;
+  }
   function buildSights() {
     const s = m.sgt || 'rifle';
     let sh = .02, sz = zr - .02, eye = .14;
@@ -720,16 +746,22 @@ G.buildGun = function (wp, L, opt = {}) {
       case 'rifle': case 'tall': case 'hood': case 'lewis': case 'offset_l': {
         const rh = s === 'tall' ? .03 : s === 'lewis' ? .045 : .02;
         const rz = t === 'bolt' || t === 'lever' || t === 'pump' ? zf - .05 : zr - .03;
+        const ox = s === 'offset_l' ? -.055 : 0;
         const base = t === 'bolt' || t === 'lever' ? br * 1.2 : (t === 'smg' || t === 'lmg' ? RW * .5 : top);
-        add(gRBox(.02, .008, .07, .003), MT.metal, 0, base + .004, rz + .02); // sight base
-        const y = base + .008 + rh;
-        rearNotch(y, rz - .01, base + .008);
-        frontPost(y, fz, s === 'hood');
-        sh = y; sz = rz - .01; eye = t === 'bolt' || t === 'lever' || t === 'pump' ? .4 : .28;
+        eye = t === 'bolt' || t === 'lever' || t === 'pump' ? .4 : .28;
+        // raise the line above anything standing between the eye and the muzzle (pans, jackets, handles)
+        const clear = Math.max(corridorTop(muzzleZ + .07, rz - .02, ox), corridorTop(rz + .02, rz + eye - .05, ox, .006));
+        const y = Math.max(base + .008 + rh, clear + (m.mag[0] === 'pan' ? .022 : .008));
+        const prev = cur; if (ox) { cur = grp(ox, 0, 0); for (const z of [rz, fz]) add(gRBox(Math.abs(ox) + .01, .01, .02, .003), MT.metal, -ox / 2, y - .02, z, root); }
+        add(gRBox(.02, .008, .07, .003), MT.metal, 0, (ox ? y - .03 : base) + .004, rz + .02); // sight base
+        rearNotch(y, rz - .01, ox ? y - .03 : base + .008);
+        frontPost(y, fz, s === 'hood', ox ? y - .03 : br * .8);
+        cur = prev;
+        sh = y; sz = rz - .01; rig.sightX = ox;
         break; }
       case 'peep': case 'uzi': {
         const base = t === 'semiw' ? RW * .5 : top;
-        const y = base + .016;
+        const y = Math.max(base + .016, corridorTop(muzzleZ + .07, zr - .03) + .004);
         rearRing(y, zr - .02, base);
         frontPost(y, fz, false);
         if (wp.id === 'garand' || wp.id === 'm14' || wp.id === 'm21' || wp.id === 'm1carbine') for (const s2 of [-1, 1]) add(gRBox(.003, .016, .018, .002), MT.metal, s2 * .0085, y - .006, fz);
@@ -738,7 +770,7 @@ G.buildGun = function (wp, L, opt = {}) {
       case 'ak': {
         const rz = zf + .03, base = RH * .22;
         add(gProf([[rz + .05, 0], [rz - .03, 0], [rz - .03, .008], [rz + .05, .006]], .02, .002), MT.metal, 0, base);
-        const y = base + .016;
+        const y = Math.max(base + .016, corridorTop(muzzleZ + .07, rz - .04) + .004, corridorTop(rz, rz + .3, 0, .006) + .004);
         rearNotch(y, rz - .025, base + .006, .0035, .02);
         frontPost(y, fz, false);
         sh = y; sz = rz - .025; eye = .36;
@@ -755,13 +787,24 @@ G.buildGun = function (wp, L, opt = {}) {
           if (s === 'handle') add(gRBox(.03, .012, .026, .006), MT.metal, 0, br * 1.6, fz);
           sh = y; sz = zr - .045; eye = .075;
         } else {
-          // integral optic housings (AUG, G36, P90) with a 1× aiming ring
+          // integral optic housings (AUG, G36, P90). The magnified optic is the default; with irons chosen
+          // (or on the P90) the housing becomes an open window with a 1× reflex ring.
           const oy = s === 'aug_scope' ? RH * .8 : s === 'p90' ? top + .05 : top + .045;
           const oz = zr - RL * .45;
-          if (s === 'g36_handle') { add(gRBox(.034, .05, RL * .6, .01), MT.poly, 0, oy - .01, oz); add(gCyl(.013, .013, .004, 16), MT.glass, 0, oy, oz + RL * .3); add(gCyl(.015, .015, .004, 16), MT.glass, 0, oy, oz - RL * .3); }
-          else if (s === 'aug_scope') { add(gRBox(.03, .05, RL * .35, .012), MT.poly, 0, oy - .035, oz); add(gCyl(.018, .018, RL * .38, 18), MT.poly, 0, oy, oz); add(gCyl(.017, .017, .004, 16), MT.glass, 0, oy, oz + RL * .19); add(gCyl(.019, .019, .004, 16), MT.glass, 0, oy, oz - RL * .19); }
-          else { add(gRBox(.034, .034, .09, .008), MT.poly, 0, oy - .012, oz); add(gCyl(.015, .015, .004, 16), MT.glass, 0, oy, oz + .045); add(gCyl(.015, .015, .004, 16), MT.glass, 0, oy, oz - .045); }
-          sh = oy; sz = oz + (s === 'p90' ? .05 : RL * .3); eye = .08;
+          const scopeOn = L.optic === 'g36_dual' || L.optic === 'aug_scope';
+          if (s === 'aug_scope') { add(gRBox(.03, .05, RL * .35, .012), MT.poly, 0, oy - .045, oz); }
+          else add(gRBox(.034, .016, s === 'p90' ? .09 : RL * .6, .006), MT.poly, 0, oy - .026, oz);
+          if (scopeOn) {
+            if (s === 'aug_scope') { add(gCyl(.018, .018, RL * .38, 20, true), MT.poly, 0, oy, oz); add(gCyl(.017, .017, .003, 20), MT.glass, 0, oy, oz + RL * .19); add(gCyl(.019, .019, .003, 20), MT.glass, 0, oy, oz - RL * .19); }
+            else { add(gCyl(.016, .016, RL * .5, 20, true), MT.poly, 0, oy, oz); add(gCyl(.015, .015, .003, 16), MT.glass, 0, oy, oz + RL * .25); add(gCyl(.015, .015, .003, 16), MT.glass, 0, oy, oz - RL * .25); add(gRBox(.02, .02, .05, .006), MT.poly, 0, oy + .03, oz); }
+          } else {
+            const wz = oz - .03;
+            for (const sx of [-1, 1]) add(gBox(.004, .034, .09), MT.poly, sx * .019, oy, oz);
+            add(gBox(.042, .004, .09), MT.poly, 0, oy + .018, oz);
+            const ring = new THREE.Mesh(new THREE.RingGeometry(.0045, .0052, 36), new THREE.MeshBasicMaterial({ color: '#ff5030', transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false })); ring.position.set(0, oy, wz); ring.renderOrder = 10; root.add(ring);
+            const d = new THREE.Mesh(new THREE.CircleGeometry(.0007, 12), ring.material); d.position.set(0, oy, wz); d.renderOrder = 10; root.add(d);
+          }
+          sh = oy; sz = oz + (s === 'p90' ? .05 : RL * .3); eye = .1;
           rig.integralRing = true;
         }
         break; }
@@ -785,21 +828,27 @@ G.buildGun = function (wp, L, opt = {}) {
         rig.railY = ry + .006; rig.railZ = railZ; rig.railLen = railLen;
         break; }
       case 'drum_hk': {
-        const y = top + .03;
-        add(gCylX(.012, .012, .028, 14), MT.metal, 0, y, zr - .03);
-        add(gRBox(.02, y - .012 - top, .03, .004), MT.metal, 0, top + (y - .012 - top) / 2, zr - .03);
-        rearRing(y, zr - .045, y - .01, .0042);
+        const y = Math.max(top + .034, corridorTop(muzzleZ + .07, zr - .06) + .004);
+        add(gCylX(.011, .011, .026, 14), MT.metal, 0, y - .017, zr - .035); // rotary diopter drum below the aperture
+        add(gRBox(.02, y - .026 - top, .03, .004), MT.metal, 0, top + (y - .026 - top) / 2, zr - .035);
+        rearRing(y, zr - .045, y - .006, .0042);
         frontPost(y, fz, true, top);
         sh = y; sz = zr - .045; eye = .075;
         break; }
       case 'mg42': {
-        const y = top + .04;
+        const y = Math.max(top + .04, corridorTop(zf - .01, zr - .08) + .004);
         rearNotch(y, zr - .06, top, .005, .03);
         frontPost(y, zf - .02, false, br * 2);
         sh = y; sz = zr - .06; eye = .22;
         break; }
       case 'pst': {
-        if (rev) { sh = rig.sightH; sz = rig.sightZ; eye = rig.eyeDist; break; }
+        if (rev) {
+          const strap = RH * .6, y = Math.max(strap + .006, rig.sightH);
+          rearNotch(y, .02, strap - .002, .0035, .016);
+          const by = rig.muzzleY || 0, bt = by + m.B[1] * 1.6;
+          add(gProf([[rig.muzzleZ + .006, bt], [rig.muzzleZ + .03, bt], [rig.muzzleZ + .012, y], [rig.muzzleZ + .006, y]], .004, .0008), MT.metal);
+          sh = y; sz = .02; eye = .42; break;
+        }
         const sy = RH * .5 + .002, y = sy + .007;
         const bz = rig.slide ? null : null;
         const g = rig.slide || root;
@@ -811,10 +860,11 @@ G.buildGun = function (wp, L, opt = {}) {
         sh = y; sz = zr - .012; eye = .42;
         break; }
       case 'bead': case 'ghost': {
-        const y = s === 'ghost' ? top + .025 : br + .014;
+        const y = Math.max(s === 'ghost' ? top + .025 : br + .014, corridorTop(muzzleZ + .03, s === 'ghost' ? zr - .04 : zr + .02) + .005);
         if (s === 'ghost') { rearRing(y, zr - .03, top, .007); eye = .12; sz = zr - .03; }
         else { eye = .3; sz = zr; }
         add(gSph(.0028, 8), s === 'bead' ? MT.brass : MT.tritium, 0, y - .0028, muzzleZ + .012);
+        if (y - br > .02) add(gRBox(.006, y - .003 - br, .01, .002), MT.metal, 0, br + (y - .003 - br) / 2, muzzleZ + .012); // raised bead post
         if (s === 'bead') add(gRBox(.006, .004, blen * .9, .002), MT.metal, 0, br + .004, zf - blen * .45);
         else frontPost(y, fz, false);
         sh = y;
@@ -1046,61 +1096,113 @@ G.buildGun = function (wp, L, opt = {}) {
     const O = L.optic;
     if (O !== 'irons' && G.ATT[O]) {
       const at = G.ATT[O], s = at.s;
-      const ry = rig.railY || (t === 'ak' ? RH * .35 : ['bolt', 'lever', 'semiw'].includes(t) ? RW * .5 + .004 : top + .006);
+      let ry = rig.railY || (t === 'ak' ? RH * .35 : ['bolt', 'lever', 'semiw'].includes(t) ? RW * .5 + .004 : top + .006);
+      if (m.sgt === 'handle') ry = top + .05; // scopes sit on top of the carry handle
       const rz = rig.railZ !== undefined ? rig.railZ : zr - RL * .5;
       const og = grp(0, ry, rz);
       cur = og;
-      let axis = .03, ocZ = .06, lensZ = -.06;
-      const mount = (h, z) => { add(gRBox(.024, h, .014, .003), MT.metal, 0, h / 2, z); };
-      const tube = (r, len, bellF, bellR, y) => {
-        add(gCyl(r, r, len, 20), MT.metal, 0, y, 0);
-        add(gCyl(bellR, r, .04, 20), MT.metal, 0, y, len / 2 - .02 + .02);
-        add(gCyl(r, bellF, .05, 20), MT.metal, 0, y, -len / 2 - .01);
-        add(gCyl(bellF * .9, bellF * .9, .003, 20), MT.glass, 0, y, -len / 2 - .036);
-        add(gCyl(bellR * .85, bellR * .85, .003, 20), MT.glass, 0, y, len / 2 + .021);
-        add(gCyl(bellR * 1.03, bellR * 1.03, .012, 20), MT.rubber, 0, y, len / 2 + .03);
-      };
+      let axis = .03, ocZ = .06, lensZ = -.06, ox = 0;
       const zoom = s.zoom || 1;
-      if (zoom > 1.6 && !['acog', 'susat', 'g36_dual', 'pso1', 'aug_scope', 'xm157', 'holo_mag', 'colt3x'].includes(O)) {
-        // classic tube scope
-        const old = at.e1 !== undefined && at.e1 <= 2;
-        const r = old ? .011 : zoom >= 12 ? .017 : .015;
-        const len = old ? (O === 'unertl' || O === 'win_a5' ? .42 : .26) : zoom >= 12 ? .34 : .28;
-        const bf = old ? r * 1.3 : zoom >= 12 ? .03 : .024, bR = old ? r * 1.4 : .02;
-        axis = old ? .04 : .035;
-        mount(axis - r, -len * .25); mount(axis - r, len * .25);
-        for (const z of [-len * .25, len * .25]) add(gCyl(r * 1.25, r * 1.25, .014, 16), MT.metal, 0, axis, z);
-        tube(r, len, bf, bR, axis);
-        if (!old || zoom >= 3) { add(gCylY(.009, .009, .016, 14), MT.metal, 0, axis + r + .008, 0); add(gCylX(.009, .009, .016, 14), MT.metal, r + .008, axis, 0); }
-        if (zoom >= 12 && small) add(gCylX(.012, .012, .01, 16), MT.metal, -r - .006, axis, 0);
-        ocZ = len / 2 + .036; lensZ = -len / 2 - .036;
-        if (old) { og.position.y += .01; }
-      } else if (O === 'acog' || O === 'susat' || O === 'colt3x' || O === 'pso1' || O === 'xm157' || O === 'holo_mag' || O === 'g36_dual' || O === 'aug_scope') {
-        if (O === 'acog') { axis = .042; add(gRBox(.03, .02, .1, .006), MT.metal, 0, .01, 0); add(gCyl(.018, .016, .11, 20), MT.metal, 0, axis, 0); add(gCyl(.021, .019, .04, 20), MT.metal, 0, axis, -.07); add(gCyl(.019, .019, .003, 20), MT.glass, 0, axis, -.09); add(gCyl(.013, .013, .003, 16), MT.glass, 0, axis, .056); add(gRBox(.008, .006, .07, .002), MT.red, 0, axis + .02, -.01); ocZ = .058; lensZ = -.09; }
-        else if (O === 'susat') { axis = .05; add(gRBox(.04, .05, .14, .01), MT.metal, 0, .03, 0); add(gCyl(.02, .02, .005, 16), MT.glass, 0, axis, -.072); add(gRBox(.038, .04, .03, .008), MT.rubber, 0, axis - .002, .08); ocZ = .1; lensZ = -.072; }
-        else if (O === 'colt3x') { axis = .03; add(gCyl(.012, .012, .15, 16), MT.metal, 0, axis, 0); add(gCyl(.013, .013, .003, 16), MT.glass, 0, axis, -.075); ocZ = .08; lensZ = -.075; og.position.y += .04; }
-        else if (O === 'pso1') { og.position.set(-RW * .5 - .02, ry - .02, rz); axis = .06; add(gRBox(.012, .06, .1, .004), MT.metal, .012, .02, 0); add(gCyl(.015, .015, .28, 18), MT.metal, .02, axis, 0); add(gCyl(.02, .015, .05, 18), MT.metal, .02, axis, -.16); add(gCyl(.018, .018, .003, 16), MT.glass, .02, axis, -.186); add(gRBox(.03, .03, .06, .01), MT.rubber, .02, axis, .16); add(gCylY(.008, .008, .02, 12), MT.metal, .02, axis + .02, -.02); og.position.x = -RW * .5 - .02 - .02 + .0; ocZ = .19; lensZ = -.186; og.userData.offX = .02; }
-        else if (O === 'xm157') { axis = .05; add(gRBox(.05, .07, .19, .012), MT.poly, 0, .04, 0); add(gCyl(.024, .024, .006, 20), MT.glass, 0, axis, -.098); add(gCyl(.019, .019, .006, 18), MT.glass, 0, axis, .098); add(gRBox(.02, .02, .05, .006), MT.poly, .035, .05, -.02); ocZ = .1; lensZ = -.098; }
-        else if (O === 'holo_mag') { axis = .038; add(gRBox(.04, .045, .1, .006), MT.poly, 0, .025, -.03); add(gRBox(.036, .03, .004, .003), MT.glass, 0, axis, -.06); add(gCyl(.015, .015, .09, 18), MT.metal, 0, axis, .07); add(gCyl(.013, .013, .003, 16), MT.glass, 0, axis, .115); ocZ = .12; lensZ = -.06; }
-        else if (O === 'g36_dual' || O === 'aug_scope') { axis = rig.sightH - ry; ocZ = .08; lensZ = -.08; }
+      const mount = (h, z, x = 0) => { add(gRBox(.022, h, .014, .003), MT.metal, x, h / 2, z); };
+      // open tube: outer shell + dark inner wall, see-through when looked down
+      const openTube = (rr, rf, len, y, z, x = 0) => { add(gCyl(rr, rf, len, 24, true), MT.metal, x, y, z); add(gCyl(rr * .92, rf * .92, len, 24, true), MT.inner, x, y, z); };
+      const lens = (r, y, z, x = 0, mat = MT.lensClear) => { const l = add(gCyl(r, r, .002, 24), mat, x, y, z); l.castShadow = false; l.renderOrder = 2; return l; };
+      // rectangular window frame (holo / reflex): bars around an open aperture
+      const frame = (w, h, y, z, d, mat, x = 0) => {
+        add(gBox(w + .008, .004, d), mat, x, y + h / 2 + .002, z); add(gBox(w + .008, .004, d), mat, x, y - h / 2 - .002, z);
+        for (const sx of [-1, 1]) add(gBox(.004, h + .008, d), mat, x + sx * (w / 2 + .002), y, z);
+      };
+      if (zoom >= 1.2) {
+        // ----- magnified optics: modelled in detail, viewed through the scope overlay at full ADS
+        if (O === 'acog') {
+          axis = .044; add(gRBox(.03, .022, .1, .006), MT.metal, 0, .011, 0);
+          openTube(.018, .016, .1, axis, 0); openTube(.021, .018, .04, axis, -.07);
+          lens(.019, axis, -.088, 0, MT.glass); lens(.013, axis, .05, 0, MT.glass);
+          add(gRBox(.007, .006, .07, .002), MT.red, 0, axis + .021, -.01); ocZ = .058; lensZ = -.09;
+        } else if (O === 'susat') {
+          axis = .052; add(gProf([[-.07, 0], [.07, 0], [.07, .06], [-.07, .065]], .04, .008), MT.metal, 0, 0, 0);
+          lens(.02, axis, -.072, 0, MT.glass); add(gRBox(.04, .045, .03, .01), MT.rubber, 0, axis, .085); ocZ = .1; lensZ = -.072;
+        } else if (O === 'colt3x') {
+          axis = .022; mount(.012, -.03); mount(.012, .03); openTube(.012, .012, .15, axis, 0); lens(.012, axis, -.075, 0, MT.glass); lens(.011, axis, .075, 0, MT.glass); ocZ = .08; lensZ = -.075;
+        } else if (O === 'pso1') {
+          ox = -(RW * .5 + .035); og.position.x = 0;
+          add(gRBox(.012, .07, .11, .004), MT.metal, ox * .55, .01, 0);
+          axis = .055; openTube(.015, .015, .26, axis, 0, ox); openTube(.021, .015, .05, axis, -.15, ox);
+          lens(.019, axis, -.174, ox, MT.glass); lens(.014, axis, .13, ox, MT.glass); add(gRBox(.034, .034, .06, .012), MT.rubber, ox, axis, .16);
+          add(gCylY(.008, .008, .022, 12), MT.metal, ox, axis + .02, -.02); add(gCylX(.008, .008, .022, 12), MT.metal, ox - .02, axis, -.02);
+          ocZ = .19; lensZ = -.174;
+        } else if (O === 'xm157') {
+          axis = .052; add(gRBox(.052, .03, .19, .01), MT.poly, 0, .015, 0);
+          openTube(.024, .02, .19, axis, 0); lens(.023, axis, -.096, 0, MT.glass); lens(.019, axis, .096, 0, MT.glass);
+          add(gRBox(.03, .035, .08, .008), MT.poly, .032, .045, -.03); add(gCyl(.006, .006, .003, 10), MT.glass, .032, .05, -.071); ocZ = .1; lensZ = -.096;
+        } else if (O === 'holo_mag') {
+          axis = .038; add(gRBox(.044, .02, .1, .006), MT.poly, 0, .01, -.03); frame(.034, .026, axis, -.03, .1, MT.poly); lens(.013, axis, -.07, 0, MT.lensRed);
+          openTube(.015, .015, .09, axis, .07); lens(.013, axis, .115, 0, MT.glass); ocZ = .12; lensZ = -.06;
+        } else if (O === 'g36_dual' || O === 'aug_scope') {
+          axis = rig.sightH - ry; ocZ = rig.sightZ - rz; lensZ = -.08;
+        } else {
+          const old = at.e1 !== undefined && at.e1 <= 2;
+          const r = old ? .011 : zoom >= 12 ? .017 : .015;
+          const len = old ? (O === 'unertl' || O === 'win_a5' ? .42 : .26) : zoom >= 12 ? .34 : .28;
+          const bf = old ? r * 1.3 : zoom >= 12 ? .03 : .024, bR = old ? r * 1.4 : .02;
+          axis = old ? .045 : .037;
+          mount(axis - r, -len * .25); mount(axis - r, len * .25);
+          for (const z of [-len * .25, len * .25]) add(gCyl(r * 1.25, r * 1.25, .014, 20, true), MT.metal, 0, axis, z);
+          openTube(r, r, len, axis, 0); openTube(bR, r, .04, axis, len / 2 + .02); openTube(r, bf, .05, axis, -len / 2 - .025);
+          lens(bf * .9, axis, -len / 2 - .049, 0, MT.glass); lens(bR * .85, axis, len / 2 + .039, 0, MT.glass);
+          add(gCyl(bR * 1.05, bR * 1.05, .014, 20, true), MT.rubber, 0, axis, len / 2 + .045);
+          if (!old || zoom >= 3) { add(gCylY(.009, .009, .016, 14), MT.metal, 0, axis + r + .008, 0); add(gCylX(.009, .009, .016, 14), MT.metal, r + .008, axis, 0); }
+          if (zoom >= 12 && small) add(gCylX(.012, .012, .01, 16), MT.metal, -r - .006, axis, 0);
+          ocZ = len / 2 + .052; lensZ = -len / 2 - .05;
+        }
       } else {
-        // 1× optics
-        if (O === 'holo') { axis = .033; add(gRBox(.042, .045, .1, .006), MT.poly, 0, .022, 0); add(gRBox(.036, .03, .004, .003), MT.lensRed, 0, axis, -.035); add(gRBox(.036, .03, .004, .003), MT.lensRed, 0, axis, .035); add(gRBox(.044, .008, .07, .003), MT.metal, 0, axis + .022, 0); lensZ = -.035; ocZ = .04; }
-        else if (O === 'rmr') { axis = .018; add(gRBox(.026, .022, .045, .008), MT.poly, 0, .01, 0); add(gRBox(.02, .016, .003, .005), MT.lensRed, 0, axis, -.01); lensZ = -.01; ocZ = .02; if (pistol) og.position.set(0, RH * .5 + .002, zr - .04); }
-        else if (O === 'kobra') { og.position.set(-RW * .5 - .015, ry - .015, rz); axis = .05; add(gRBox(.04, .06, .09, .008), MT.metal, .015, .03, 0); add(gRBox(.03, .03, .003, .005), MT.lensRed, .015, axis, -.04); lensZ = -.04; ocZ = .05; og.userData.offX = .015; }
-        else { axis = .03; // red dot tube (Aimpoint)
-          add(gRBox(.026, .02, .05, .004), MT.metal, 0, .01, 0); add(gCyl(.017, .017, .11, 20), MT.metal, 0, axis, 0); add(gCyl(.016, .016, .003, 20), MT.lensRed, 0, axis, -.05); add(gCyl(.016, .016, .003, 20), MT.glass, 0, axis, .05); add(gCylX(.007, .007, .012, 12), MT.metal, .02, axis, 0);
-          if (O === 'aimpoint_e') { add(gRBox(.02, .02, .06, .005), MT.metal, 0, axis + .02, 0); }
-          lensZ = -.05; ocZ = .056; }
-        // reticle dot on the lens
-        const dotTex = G.texSprite('glow');
-        const dot = new THREE.Sprite(new THREE.SpriteMaterial({ map: dotTex, color: O === 'holo' ? '#ff4030' : '#ff2a1a', blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, transparent: true }));
-        dot.scale.set(.0035, .0035, 1); dot.position.set(og.userData.offX || 0, axis, lensZ - .01); dot.renderOrder = 10; og.add(dot);
-        if (O === 'holo' || O === 'holo_mag') { const ring = new THREE.Mesh(new THREE.RingGeometry(.0065, .0073, 32), new THREE.MeshBasicMaterial({ color: '#ff4030', transparent: true, opacity: .85, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false })); ring.position.set(0, axis, lensZ - .011); ring.renderOrder = 10; og.add(ring); rig.ring = ring; }
+        // ----- 1× optics: everything around the sight axis is open so the eye sees straight through
+        const dotCol = '#ff2a1a';
+        if (O === 'holo') {
+          axis = .034; add(gRBox(.044, .018, .1, .005), MT.poly, 0, .009, 0);
+          add(gRBox(.03, .012, .03, .004), MT.poly, 0, .018 + .006, .03); // battery / controls, below the window
+          frame(.034, .027, axis, -.035, .012, MT.poly); frame(.034, .027, axis, .038, .01, MT.poly);
+          for (const sx of [-1, 1]) add(gBox(.004, .03, .07), MT.poly, sx * .019, axis, 0); // hood sides
+          add(gBox(.042, .004, .08), MT.metal, 0, axis + .017, 0); // hood top
+          lens(.001, axis, 0); const w = add(gBox(.034, .027, .002), MT.lensRed, 0, axis, -.035); w.renderOrder = 2;
+          lensZ = -.035; ocZ = .04;
+        } else if (O === 'rmr') {
+          axis = .016; if (pistol) og.position.set(0, RH * .5 + .002, zr - .04);
+          add(gRBox(.026, .009, .04, .003), MT.poly, 0, .0045, 0);
+          frame(.02, .016, axis, -.012, .012, MT.poly);
+          const w = add(gBox(.02, .016, .002), MT.lensRed, 0, axis, -.012); w.renderOrder = 2;
+          lensZ = -.012; ocZ = .02;
+        } else if (O === 'kobra') {
+          ox = -(RW * .5 + .02); add(gRBox(.012, .06, .08, .004), MT.metal, ox * .45, .005, 0);
+          axis = .05; add(gRBox(.04, .012, .09, .004), MT.metal, ox, axis - .022, 0);
+          frame(.032, .03, axis, -.04, .012, MT.metal, ox); frame(.032, .03, axis, .03, .008, MT.metal, ox);
+          const w = add(gBox(.032, .03, .002), MT.lensRed, ox, axis, -.04); w.renderOrder = 2;
+          lensZ = -.04; ocZ = .05;
+        } else { // Aimpoint-style tube red dot
+          axis = .031; add(gRBox(.024, .014, .05, .004), MT.metal, 0, .007, 0); add(gRBox(.014, axis - .014 - .017, .03, .003), MT.metal, 0, .014 + (axis - .031) / 2 + .0, 0);
+          openTube(.018, .018, .11, axis, 0); lens(.0165, axis, -.05, 0, MT.lensRed); lens(.0165, axis, .05);
+          add(gCylX(.007, .007, .012, 12), MT.metal, .022, axis, 0); add(gCylY(.007, .007, .01, 12), MT.metal, 0, axis + .021, .01);
+          if (O === 'aimpoint_e') add(gRBox(.02, .02, .06, .005), MT.metal, 0, axis + .03, 0);
+          lensZ = -.05; ocZ = .056;
+        }
+        // reticle: glowing dot projected at infinity (sits on the lens, centred on the axis)
+        const dot = new THREE.Sprite(new THREE.SpriteMaterial({ map: G.texSprite('glow'), color: dotCol, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, transparent: true }));
+        dot.scale.set(.003, .003, 1); dot.position.set(ox, axis, lensZ - .003); dot.renderOrder = 10; og.add(dot);
+        if (O === 'holo') { const ring = new THREE.Mesh(new THREE.RingGeometry(.0062, .0068, 40), new THREE.MeshBasicMaterial({ color: '#ff4030', transparent: true, opacity: .85, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false })); ring.position.set(0, axis, lensZ - .003); ring.renderOrder = 10; og.add(ring); rig.ring = ring; }
+        if (O === 'kobra') { for (const [dx, dy, w, h] of [[0, -.0035, .0006, .004], [-.003, .002, .004, .0006], [.003, .002, .004, .0006]]) { const q = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: '#ff3020', transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false })); q.position.set(ox + dx, axis + dy, lensZ - .003); q.renderOrder = 10; og.add(q); } }
         rig.dot = dot;
       }
-      rig.sightH = og.position.y + axis; rig.sightZ = rz + ocZ; rig.eyeDist = zoom > 1.6 ? .07 : .12;
-      rig.sightX = og.position.x + (og.userData.offX || 0);
+      // raise the optic on a riser if anything (iron sights, handles, pans) would sit in its field of view
+      rig.skipGroup = og;
+      const need = Math.max(corridorTop(rig.muzzleZ + .05, rz + lensZ, og.position.x + ox, .012), corridorTop(rz + ocZ, rz + ocZ + .12, og.position.x + ox, .01));
+      rig.skipGroup = null;
+      const lift = need + .008 - (og.position.y + axis);
+      if (lift > 0 && O !== 'g36_dual' && O !== 'aug_scope') {
+        og.position.y += lift;
+        for (const z of [-.03, .03]) add(gRBox(.024, lift + .004, .03, .003), MT.metal, og.position.x, og.position.y - lift / 2, rz + z, root);
+      }
+      rig.sightH = og.position.y + axis; rig.sightZ = rz + ocZ; rig.eyeDist = zoom >= 1.2 ? .07 : .14;
+      rig.sightX = og.position.x + ox;
       rig.optic = at; rig.lensZ = rz + lensZ;
       cur = root;
     }

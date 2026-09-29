@@ -22,11 +22,11 @@ const NAMES = {
 G.eraWeapons = function (era, cls) { return G.WEAPONS.filter(w => w.e === era && (!cls || cls.includes(w.c))); };
 // national arsenals per faction: [team 0, team 1] -> { eras to draw from, countries }
 const ARSENAL = {
-  ww1: [{ eras: ['ww1'], co: ['United Kingdom', 'United States', 'France'] }, { eras: ['ww1'], co: ['German Empire'] }],
-  ww2: [{ eras: ['ww2'], co: ['United States', 'United Kingdom'] }, { eras: ['ww2'], co: ['Germany'] }],
-  cold: [{ eras: ['cold'], co: ['United States', 'Belgium / UK', 'West Germany', 'Israel', 'Italy', 'Belgium', 'United Kingdom', 'Austria'] }, { eras: ['cold', 'ww2'], co: ['Soviet Union'] }],
-  mod: [{ eras: ['mod'], co: ['United States', 'United Kingdom', 'Germany', 'Belgium', 'Italy', 'France', 'Israel / US'] }, { eras: ['cold', 'mod'], co: ['Soviet Union', 'Russia', 'China'] }],
-  now: [{ eras: ['now', 'mod'], co: ['United States', 'Germany', 'United Kingdom', 'Belgium', 'Czech Republic', 'Israel', 'Switzerland', 'Italy', 'Austria'] }, { eras: ['now', 'mod'], co: ['Russia'] }],
+  ww1: [{ eras: ['ww1'], co: ['United Kingdom', 'United States', 'France', 'Canada', 'Kingdom of Italy'] }, { eras: ['ww1'], co: ['German Empire', 'Austria-Hungary'] }],
+  ww2: [{ eras: ['ww2'], co: ['United States', 'United Kingdom', 'Australia', 'Poland'] }, { eras: ['ww2'], co: ['Germany'] }],
+  cold: [{ eras: ['cold'], co: ['United States', 'Belgium / UK', 'West Germany', 'Israel', 'Italy', 'Belgium', 'United Kingdom', 'Austria', 'Switzerland'] }, { eras: ['cold', 'ww2'], co: ['Soviet Union', 'Czechoslovakia', 'China'] }],
+  mod: [{ eras: ['mod'], co: ['United States', 'United Kingdom', 'Germany', 'Belgium', 'Italy', 'France', 'Israel / US', 'Switzerland', 'Austria'] }, { eras: ['cold', 'mod'], co: ['Soviet Union', 'Russia', 'China', 'Czechoslovakia'] }],
+  now: [{ eras: ['now', 'mod'], co: ['United States', 'Germany', 'United Kingdom', 'Belgium', 'Czech Republic', 'Israel', 'Switzerland', 'Italy', 'Austria', 'Japan'] }, { eras: ['now', 'mod'], co: ['Russia', 'China'] }],
 };
 function pickLoadout(era, role, team) {
   const pools = { rifleman: ['RIF', 'AR', 'BR', 'CAR'], assault: ['SMG', 'SG', 'CAR', 'AR'], gunner: ['LMG'], marksman: ['DMR', 'SR', 'RIF'] };
@@ -79,11 +79,13 @@ class Bot {
     let armorStop = false;
     if ((zone === 'chest' || zone === 'stomach') && this.tier.armor < 1 && G.ERA[this.era].ord >= 3) { const m = b.pen >= 4 ? .95 : b.pen >= 3 ? this.tier.armor + .15 : this.tier.armor; d *= m; armorStop = m < .8; }
     this.hp -= d;
+    this.model.flinch = Math.min(1.2, this.model.flinch + .7 + d / 60); this.model.flinchDir = Math.sign(Math.random() - .5);
+    this.model.headshot = zone === 'head';
     // remember who shot us
     if (b.owner && b.owner.alive) { this.lastHeard = b.owner.pos.clone(); if (!this.target || !this.targetVisible) { this.target = b.owner; this.reactT = this.tier.react * .6 / 1000; } }
     if (this.hp <= 0) {
       this.hp = 0; this.alive = false; this.deaths++;
-      this.model.dead = .0001; this.model.deathDir.copy(dir).setY(0).normalize();
+      this.model.dead = .0001; this.model.deathKind = null; this.model.deathDir.copy(dir).setY(0).normalize();
       // convert world fall direction to local
       const inv = -this.yaw; const dx = this.model.deathDir.x, dz = this.model.deathDir.z;
       this.model.deathDir.set(dx * Math.cos(inv) + dz * Math.sin(inv), 0, -dx * Math.sin(inv) + dz * Math.cos(inv)).multiplyScalar(-1);
@@ -161,7 +163,7 @@ class Bot {
     // ---- fire
     this.fireCD -= dt; this.reactT -= dt; this.cycleT -= dt;
     if (this.reloadT > 0) { this.reloadT -= dt; if (this.reloadT <= 0) this.mag = this.S.mag; }
-    else if (this.mag <= 0) { this.reloadT = this.S.rl[1] * (1.1 - (T.id === 'elite' ? .2 : 0)); G.Audio.mech('magout', this.pos); }
+    else if (this.mag <= 0) { this.reloadT = this.reloadDur = this.S.rl[1] * (1.1 - (T.id === 'elite' ? .2 : 0)); G.Audio.mech('magout', this.pos); this.dropMag(); setTimeout(() => this.alive && G.Audio.mech('magin', this.pos), this.reloadDur * 700); }
     const dist = tgt ? tgt.pos.distanceTo(this.pos) : 999;
     const effRange = { SG: 30, SMG: 60, PST: 35, LMG: 150, SR: 400, DMR: 300 }[this.wp.c] || 200;
     const onTarget = visible && Math.abs(angDiff(this.yaw, desiredYaw)) < .08;
@@ -226,7 +228,8 @@ class Bot {
     // ---- animate
     M.root.position.copy(this.pos); M.root.rotation.y = this.yaw;
     this.recoil *= Math.pow(.001, dt);
-    G.animateSoldier(M, { dt, speed: hs, crouch: this.crouch, aimPitch: visible ? this.pitch : 0, recoil: this.recoil, sprint: !visible && hs > 3.5 });
+    const rlp = this.reloadT > 0 ? 1 - this.reloadT / this.reloadDur : -1;
+    G.animateSoldier(M, { dt, speed: hs, crouch: this.crouch, aimPitch: visible ? this.pitch : 0, recoil: this.recoil, sprint: !visible && hs > 3.5 && rlp < 0, reload: rlp });
   }
   shoot() {
     const M = this.model; this.mag--; this.recoil = 1;
@@ -254,6 +257,13 @@ class Bot {
       const rt = V3(Math.cos(this.yaw), .8, -Math.sin(this.yaw));
       G.FX.casing(this.wp.cal, muzzle.clone().addScaledVector(fwd, -.4), rt.multiplyScalar(2.5), (x, z, y) => G.E.world.groundAt(x, z, y));
     }
+  }
+  dropMag() {
+    const M = this.model; if (!M.gun || !M.gun.rig.mag || M.gun.rig.magFixed || !this.game.player || this.pos.distanceTo(this.game.player.pos) > 35) return;
+    const m = G.mergeByMaterial(M.gun.rig.mag);
+    M.root.updateMatrixWorld(true); const p = M.gun.holder.localToWorld(M.magLocal.clone());
+    m.position.copy(p); G.FX.scene.add(m);
+    G.FX.casings.push({ m, v: V3(0, -1, 0), w: V3(Math.random() * 3, 0, Math.random() * 3), life: 15, bounces: 3, ground: (x, z, y) => G.E.world.groundAt(x, z, y) + .02, shell: false });
   }
   remove() { G.E.world.group.remove(this.model.root); }
 }
