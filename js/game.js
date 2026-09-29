@@ -1,5 +1,5 @@
 // ============================================================================
-// Game: range targets & statistics, 5v5 battle manager, grenades, melee,
+// Game: range targets & statistics, solo-mission manager, grenades, melee,
 // HUD, minimap, scope overlay and the main update loop.
 // ============================================================================
 'use strict';
@@ -326,23 +326,6 @@ Game.startRange = function (sel) {
   else { const keep = Game.targets.map(t => [t.type, t.dist, { era: t.era, tier: t.tier && t.tier.id }]); Game.targets = []; for (const k of keep) Game.addTarget(...k); }
   G.UI.showHUD('range');
 };
-Game.startBattle = function (cfg) {
-  Game.mode = 'battle'; Game.state = 'play';
-  Game.cleanup(true);
-  const map = G.MAPS.find(m => m.id === cfg.map);
-  G.E.loadMap(map);
-  const P = Game.player = new G.Player();
-  P.setupWeapons([cfg.primary, cfg.secondary].filter(Boolean));
-  Game.bots = [];
-  const tierFor = (team, i) => { const t = team === 0 ? cfg.allyTier : cfg.enemyTier; if (t === 'mixed') return G.TIERS[Math.min(3, Math.floor(i * 4 / 5))].id; return t; };
-  for (let i = 0; i < 4; i++) Game.bots.push(new G.Bot(Game, 0, tierFor(0, i), map.era, i + 1));
-  for (let i = 0; i < 5; i++) Game.bots.push(new G.Bot(Game, 1, tierFor(1, i), map.era, i));
-  Game.agents = [P, ...Game.bots];
-  Game.score = [0, 0]; Game.scoreLimit = cfg.scoreLimit || 30; Game.timeLeft = (cfg.minutes || 10) * 60; Game.cfg = cfg; Game.map = map;
-  Game.spawnAll();
-  G.UI.showHUD('battle');
-  Game.toast(map.name + ' — ' + G.UNIFORMS[map.era][0].name + ' vs ' + G.UNIFORMS[map.era][1].name, 4);
-};
 // ======================================================= SOLO MISSIONS
 // cfg: { mission, tod, tier, primary, secondary }
 Game.startMission = function (cfg) {
@@ -390,13 +373,6 @@ Game.endMission = function (ok, reason) {
   const Ms = Game.mission; if (!Ms || Ms.done) return; Ms.done = true; Ms.ok = ok; Ms.reason = reason;
   Game.state = 'end'; setTimeout(() => G.UI.showMissionResults(), ok ? 1500 : 1100);
 };
-Game.spawnAll = function () {
-  const W = G.E.world;
-  const P = Game.player; const sp = W.spawns[0][2] || W.spawns[0][0];
-  P.pos.copy(sp); P.yaw = 0; P.pitch = 0; P.hp = 100; P.alive = true; P.armorState = G.newArmorState();
-  let i0 = 0, i1 = 0; const free0 = [0, 1, 3, 4];
-  for (const b of Game.bots) { const list = W.spawns[b.team]; const p = list[(b.team ? i1++ : free0[i0++ % 4]) % list.length].clone(); p.x += (Math.random() - .5) * 2; p.z += (Math.random() - .5) * 2; b.spawn(p); }
-};
 Game.spawnPoint = function (team) {
   const W = G.E.world; const list = W.spawns[team];
   let best = list[0], bd = -1;
@@ -421,16 +397,7 @@ Game.onKill = function (killer, victim, weapon, head) {
     if (Ms.killed >= Ms.total) Game.endMission(true, 'Structure clear. All hostiles neutralised.');
     return;
   }
-  if (Game.mode !== 'battle') return;
-  if (killer && killer !== victim) { killer.kills = (killer.kills || 0) + 1; Game.score[killer.team]++; }
-  Game.killfeed.unshift({ k: killer ? killer.name : '—', kt: killer ? killer.team : -1, v: victim.name, vt: victim.team, w: weapon ? weapon.n : '', head, t: 5 });
-  if (Game.killfeed.length > 6) Game.killfeed.pop();
-  if (killer === Game.player) { G.UI.hitmarker(true, head); G.Audio.hit(head, true); Game.toast(head ? 'Headshot  +150' : 'Kill  +100', 1.2); }
-  if (victim === Game.player) { Game.respawnT = 3.5; Game.deathBy = killer; }
-  G.UI.dirty = true;
-  if (Game.score[0] >= Game.scoreLimit || Game.score[1] >= Game.scoreLimit) Game.endBattle();
 };
-Game.endBattle = function () { if (Game.state === 'end') return; Game.state = 'end'; setTimeout(() => G.UI.showResults(), 1200); };
 Game.onPlayerHurt = function (d, dir, b) { G.UI.damage(d, dir); Game.player.shake = Math.min(1, Game.player.shake + .3); if (Game.mission) Game.mission.dmgTaken += d; };
 Game.onPlayerShot = function (w) {
   if (Game.stats) Game.stats.shots++;
@@ -488,7 +455,6 @@ Game.update = function (dt, now) {
       G.Input.lastDx = 0;
     }
     for (const b of Game.bots) b.update(dt, now);
-    if (Game.mode === 'battle') { Game.timeLeft -= dt; if (Game.timeLeft <= 0) { Game.timeLeft = 0; Game.endBattle(); } }
     if (Game.mode === 'mission' && Game.mission && !Game.mission.done) Game.mission.t += dt;
   } else if (Game.state === 'end') { for (const b of Game.bots) b.update(dt * .3, now); }
   // bullets

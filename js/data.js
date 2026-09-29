@@ -567,7 +567,7 @@ G.resolveStats = function (wp, L) {
 };
 
 // ---------------------------------------------------------------------------
-// Enemy tiers (the difficulty ladder for battles)
+// Enemy tiers (the difficulty ladder for missions)
 // react: reaction ms, aimErr: radians of aim error, track: aim tracking speed,
 // hp, armor (torso damage multiplier), burst: shots per burst, strafe
 // ---------------------------------------------------------------------------

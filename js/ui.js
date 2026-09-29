@@ -1,5 +1,5 @@
 // ============================================================================
-// UI: main menu, armory (live 3D showroom + attachment slots), battle setup,
+// UI: main menu, armory (live 3D showroom + attachment slots), solo missions,
 // range target menu, pause/settings/results, HUD, scope reticles, main loop.
 // ============================================================================
 'use strict';
@@ -15,7 +15,6 @@ UI.loadouts = store.get('loadouts', {});
 UI.loadoutFor = wp => { const L = Object.assign(G.defaultLoadout(wp), UI.loadouts[wp.id] || {}); for (const s in L) if (!G.ATT[L[s]] || (G.ATT[L[s]].slot === s && !G.attachOK(wp, G.ATT[L[s]]) && !['irons', 'mz_std', 'brl_std', 'ub_none', 'sd_none', 'mag_std', 'stk_std', 'am_fmj', 'am_buck', 'fin_factory'].includes(L[s]))) L[s] = G.defaultLoadout(wp)[s]; return L; };
 UI.saveLoadout = (wp, L) => { UI.loadouts[wp.id] = L; store.set('loadouts', UI.loadouts); };
 UI.sel = store.get('sel', { era: 'ww2', wp: 'garand', cls: null });
-UI.battle = store.get('battle', { era: 'ww2', map: 'bocage', enemyTier: 'regular', allyTier: 'regular', score: 30, minutes: 10, primary: null, secondary: null });
 
 // ============================================================ SHOWROOM
 const SR = UI.showroom = {};
@@ -88,7 +87,6 @@ UI.show = function (name) {
   G.Input.unlock();
   if (name === 'menu') renderMenu(root);
   if (name === 'armory') renderArmory(root);
-  if (name === 'battle') renderBattle(root);
   if (name === 'kit') renderKit(root);
   if (name === 'missions') renderMissions(root);
   $('#hud').hidden = true;
@@ -101,14 +99,13 @@ function renderMenu(root) {
   root.innerHTML = `<section class="screen" id="menu"><div class="left">
     <div class="eyebrow">Small-arms simulator · 1914 → today</div>
     <div class="logo">Ironsight<span>Armory</span></div>
-    <p class="tag">${G.WEAPONS.length} weapons across five eras, each with its own period-correct attachments. Test them on a 1,000 m ballistic range, then take them into 5v5 era battles.</p>
+    <p class="tag">${G.WEAPONS.length} weapons across five eras, each with its own period-correct attachments. Test them on a 1,000 m ballistic range, then take them on solo counter-terror missions.</p>
     <nav class="menu-list">
       <button class="menu-item" data-go="armory"><span class="n">01</span><b>Armory</b><i>Inspect and customise every weapon</i></button>
       <button class="menu-item" data-go="range"><span class="n">02</span><b>Firing range</b><i>Paper, steel, gel, armour plates and mannequins out to 1,000 m</i></button>
-      <button class="menu-item" data-go="battle"><span class="n">03</span><b>Battle 5v5</b><i>Two maps per era and four enemy tiers</i></button>
-      <button class="menu-item" data-go="missions"><span class="n">04</span><b>Solo missions</b><i>Clear terrorists from ships, rigs, embassies and trains — dawn to night</i></button>
-      <button class="menu-item" data-go="kit"><span class="n">05</span><b>Kit locker</b><i>Helmets, armour, plates, camo and night vision from armies worldwide</i></button>
-      <button class="menu-item" data-go="settings"><span class="n">06</span><b>Settings</b><i>Sensitivity, field of view, audio, graphics</i></button>
+      <button class="menu-item" data-go="missions"><span class="n">03</span><b>Solo missions</b><i>Clear terrorists from ships, rigs, embassies and trains — dawn to night</i></button>
+      <button class="menu-item" data-go="kit"><span class="n">04</span><b>Kit locker</b><i>Helmets, armour, plates, camo and night vision from armies worldwide</i></button>
+      <button class="menu-item" data-go="settings"><span class="n">05</span><b>Settings</b><i>Sensitivity, field of view, audio, graphics</i></button>
     </nav>
     <div class="menu-foot">Click the view to capture the mouse · H in game for controls<br>Headphones recommended</div>
   </div></section>
@@ -141,7 +138,7 @@ function renderArmory(root) {
     <div class="col left"><div class="colhead"><div class="eyebrow">Era</div><div class="eras">${G.ERAS.map(e => `<button class="chip ${e.id === era ? 'on' : ''}" data-era="${e.id}" title="${e.span}">${esc(e.name)}</button>`).join('')}</div><div class="muted" style="font:12px var(--f-mono)">${G.ERA[era].span} · ${G.WEAPONS.filter(w => w.e === era).length} weapons</div></div>
       <div class="scroll" id="wlist"></div></div>
     <div class="stage"><div class="top"><div><div class="eyebrow" id="wera"></div><h2 id="wname"></h2><div class="sub" id="wsub"></div></div><button class="btn small" id="back">Main menu</button></div>
-      <div><div class="actions"><button class="btn primary" id="torange">Take to the range</button><button class="btn" id="tobattle">Use in battle</button><button class="btn" id="rnd">Random build</button><button class="btn" id="rst">Factory</button></div><p class="hint">Drag to rotate · scroll to zoom</p></div></div>
+      <div><div class="actions"><button class="btn primary" id="torange">Take to the range</button><button class="btn" id="tomis">Use on a mission</button><button class="btn" id="rnd">Random build</button><button class="btn" id="rst">Factory</button></div><p class="hint">Drag to rotate · scroll to zoom</p></div></div>
     <div class="col right"><div class="scroll" id="specs"></div></div>
   </section>`;
   const list = $('#wlist');
@@ -154,7 +151,7 @@ function renderArmory(root) {
   const on = list.querySelector('.on'); if (on) on.scrollIntoView({ block: 'center' });
   $('#back').onclick = () => UI.show('menu');
   $('#torange').onclick = () => UI.startRange();
-  $('#tobattle').onclick = () => { if (wp.c === 'PST') UI.battle.secondary = wp.id; else UI.battle.primary = wp.id; UI.battle.era = wp.e; if (!G.MAPS.find(m => m.id === UI.battle.map && m.era === wp.e)) UI.battle.map = G.mapsFor(wp.e)[0].id; store.set('battle', UI.battle); UI.show('battle'); };
+  $('#tomis').onclick = () => { if (wp.c === 'PST') UI.mis.secondary = wp.id; else UI.mis.primary = wp.id; store.set('mis', UI.mis); UI.show('missions'); };
   $('#rnd').onclick = () => { const L2 = {}; for (const [s] of G.SLOTS) { const o = G.attachFor(wp, s); L2[s] = o[Math.floor(Math.random() * o.length)].id; } UI.saveLoadout(wp, L2); G.Audio.ui('attach'); refresh(); };
   $('#rst').onclick = () => { UI.saveLoadout(wp, G.defaultLoadout(wp)); refresh(); };
   let open = null;
@@ -279,47 +276,6 @@ UI.showMissionResults = function () {
 };
 
 // ------------------------------------------------------------ BATTLE SETUP
-function renderBattle(root) {
-  G.Game.mode = 'menu';
-  const B = UI.battle;
-  const eraW = G.WEAPONS.filter(w => w.e === B.era);
-  if (!G.WEAPON[B.primary] || G.WEAPON[B.primary].e !== B.era || G.WEAPON[B.primary].c === 'PST') B.primary = (eraW.find(w => ['AR', 'RIF'].includes(w.c)) || eraW[0]).id;
-  if (!G.WEAPON[B.secondary] || G.WEAPON[B.secondary].e !== B.era || G.WEAPON[B.secondary].c !== 'PST') B.secondary = (eraW.find(w => w.c === 'PST') || {}).id || null;
-  if (!G.MAPS.find(m => m.id === B.map && m.era === B.era)) B.map = G.mapsFor(B.era)[0].id;
-  store.set('battle', B);
-  const tierCards = (key) => G.TIERS.map(t => `<button class="card ${B[key] === t.id ? 'on' : ''}" data-${key}="${t.id}"><small style="color:${t.color}">Tier ${G.TIERS.indexOf(t) + 1}</small><b>${t.n}</b><span>${t.d}</span></button>`).join('') + `<button class="card ${B[key] === 'mixed' ? 'on' : ''}" data-${key}="mixed"><small>All tiers</small><b>Mixed squad</b><span>One recruit up to one elite.</span></button>`;
-  root.innerHTML = `<section class="screen" id="battle"><div class="setup">
-    <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap"><div><div class="eyebrow">Team deathmatch · 5 v 5</div><h1>Battle</h1></div><button class="btn small" id="back">Main menu</button></div>
-    <div><span class="lbl">Era</span><div class="row">${G.ERAS.map(e => `<button class="card ${e.id === B.era ? 'on' : ''}" data-era="${e.id}"><small>${e.span}</small><b>${esc(e.name)}</b><span>${esc(G.UNIFORMS[e.id][0].name)} vs ${esc(G.UNIFORMS[e.id][1].name)}</span></button>`).join('')}</div></div>
-    <div><span class="lbl">Map</span><div class="row">${G.mapsFor(B.era).map(m => `<button class="card ${m.id === B.map ? 'on' : ''}" data-map="${m.id}"><small>${m.env} · ${m.weather || 'clear'}</small><b>${esc(m.name)}</b><span>${esc(m.blurb)}</span></button>`).join('')}</div></div>
-    <div><span class="lbl">Enemy tier</span><div class="row">${tierCards('enemyTier')}</div></div>
-    <div class="loadrow">
-      <div><span class="lbl">Primary</span><div class="pick"><select id="prim">${eraW.filter(w => w.c !== 'PST').map(w => `<option value="${w.id}" ${w.id === B.primary ? 'selected' : ''}>${esc(w.n)} — ${G.CLASS_NAMES[w.c]}</option>`).join('')}</select><button class="btn small" data-cust="prim">Customise</button></div></div>
-      <div><span class="lbl">Sidearm</span><div class="pick"><select id="sec">${eraW.filter(w => w.c === 'PST').map(w => `<option value="${w.id}" ${w.id === B.secondary ? 'selected' : ''}>${esc(w.n)}</option>`).join('')}</select><button class="btn small" data-cust="sec">Customise</button></div></div>
-      <div><span class="lbl">Allied tier</span><select id="ally">${G.TIERS.map(t => `<option value="${t.id}" ${B.allyTier === t.id ? 'selected' : ''}>${t.n}</option>`).join('')}<option value="mixed" ${B.allyTier === 'mixed' ? 'selected' : ''}>Mixed</option></select></div>
-      <div><span class="lbl">Score limit / time</span><div class="pick" style="grid-template-columns:1fr 1fr"><select id="lim">${[15, 30, 50, 75].map(n => `<option ${B.score == n ? 'selected' : ''}>${n}</option>`).join('')}</select><select id="min">${[5, 10, 15, 20].map(n => `<option value="${n}" ${B.minutes == n ? 'selected' : ''}>${n} min</option>`).join('')}</select></div></div>
-    </div>
-    <div class="deploy"><span class="muted" style="max-width:60ch">Kills score for your team. Enemies wear coloured armbands by tier. Veterans and Elites in Modern and Present eras wear body armour, so armour-piercing ammo helps.</span><button class="btn primary" id="go" style="font-size:20px;padding:14px 36px">Deploy</button></div>
-  </div></section>`;
-  const re = () => { store.set('battle', B); renderBattle(root); };
-  root.querySelectorAll('[data-era]').forEach(b => b.onclick = () => { B.era = b.dataset.era; G.Audio.ui(); re(); });
-  root.querySelectorAll('[data-map]').forEach(b => b.onclick = () => { B.map = b.dataset.map; G.Audio.ui(); re(); });
-  root.querySelectorAll('[data-enemyTier]').forEach(b => b.onclick = () => { B.enemyTier = b.dataset.enemytier; G.Audio.ui(); re(); });
-  $('#prim').onchange = e => { B.primary = e.target.value; store.set('battle', B); };
-  $('#sec') && ($('#sec').onchange = e => { B.secondary = e.target.value; store.set('battle', B); });
-  $('#ally').onchange = e => { B.allyTier = e.target.value; store.set('battle', B); };
-  $('#lim').onchange = e => { B.score = +e.target.value; store.set('battle', B); };
-  $('#min').onchange = e => { B.minutes = +e.target.value; store.set('battle', B); };
-  root.querySelectorAll('[data-cust]').forEach(b => b.onclick = () => { const id = b.dataset.cust === 'prim' ? B.primary : B.secondary; if (!id) return; UI.sel.era = B.era; UI.sel.wp = id; store.set('sel', UI.sel); UI.show('armory'); });
-  $('#back').onclick = () => UI.show('menu');
-  $('#go').onclick = () => { G.Audio.init(); UI.deploy(); };
-}
-UI.deploy = function () {
-  const B = UI.battle;
-  const p = G.WEAPON[B.primary], s = G.WEAPON[B.secondary];
-  const cfg = { map: B.map, enemyTier: B.enemyTier, allyTier: B.allyTier, scoreLimit: B.score, minutes: B.minutes, primary: { wp: p, L: UI.loadoutFor(p) }, secondary: s ? { wp: s, L: UI.loadoutFor(s) } : null };
-  loading('Deploying…', () => { G.Game.startBattle(cfg); UI.lastBattle = cfg; });
-};
 UI.startRange = function (o = {}) {
   const wp = G.WEAPON[UI.sel.wp] || G.WEAPONS[0];
   const list = [{ wp, L: UI.loadoutFor(wp) }];
@@ -353,7 +309,7 @@ UI.pause = function (on) {
     Gm.state = Gm.state === 'end' ? 'end' : 'pause'; G.Input.unlock(); G.Input.clear();
     const o = overlay(`<div class="dialog"><div class="eyebrow">${Gm.mode === 'range' ? 'Firing range' : esc(Gm.map ? Gm.map.name : '')}</div><h2>Paused</h2><div class="btns">
       <button class="btn primary" id="p-res">Resume</button>
-      ${Gm.mode === 'range' ? '<button class="btn" id="p-tgt">Targets & wind (T)</button><button class="btn" id="p-arm">Change weapon</button>' : '<button class="btn" id="p-rs">Restart battle</button>'}
+      ${Gm.mode === 'range' ? '<button class="btn" id="p-tgt">Targets & wind (T)</button><button class="btn" id="p-arm">Change weapon</button>' : '<button class="btn" id="p-rs">Restart mission</button>'}
       <button class="btn" id="p-help">Controls</button><button class="btn" id="p-set">Settings</button><button class="btn" id="p-quit">Quit to main menu</button></div></div>`);
     $('#p-res').onclick = () => UI.resume();
     $('#p-set').onclick = () => UI.settings(() => UI.pause(true));
@@ -361,7 +317,7 @@ UI.pause = function (on) {
     $('#p-quit').onclick = () => { UI.closeOverlay(); Gm.cleanup(); Gm.state = 'menu'; Gm.player = null; UI.show('menu'); };
     if ($('#p-tgt')) $('#p-tgt').onclick = () => { UI.closeOverlay(); UI.toggleRangeMenu(true); };
     if ($('#p-arm')) $('#p-arm').onclick = () => { UI.closeOverlay(); Gm.cleanup(); Gm.state = 'menu'; Gm.player = null; UI.show('armory'); };
-    if ($('#p-rs')) $('#p-rs').onclick = () => { UI.closeOverlay(); loading('Redeploying…', () => G.Game.startBattle(UI.lastBattle)); };
+    if ($('#p-rs')) $('#p-rs').onclick = () => { UI.closeOverlay(); loading('Inserting…', () => G.Game.startMission(UI.lastMission)); };
   } else UI.resume();
 };
 UI.resume = function () { UI.closeOverlay(); const h = $('#helpov'); if (h) h.remove(); if (G.Game.state === 'pause') G.Game.state = 'play'; if (!G.Input.touch) G.Input.lock(); };
@@ -371,7 +327,7 @@ UI.onEscape = function () {
   if (Gm.mode === 'menu') { if ($('#ov')) UI.closeOverlay(); return; }
   if (Gm.state === 'play') UI.pause(true); else if (Gm.state === 'pause') UI.resume();
 };
-const KEYS = [['W A S D', 'Move'], ['Mouse', 'Look'], ['Left click', 'Fire'], ['Right click', 'Aim down sights'], ['Shift', 'Sprint · hold breath when scoped'], ['Space', 'Jump'], ['C', 'Crouch'], ['Z', 'Prone (auto bipod)'], ['Q / E', 'Lean'], ['R', 'Reload'], ['B', 'Fire mode'], ['1 / 2 · wheel', 'Switch weapon'], ['[ / ]', 'Zeroing distance'], ['X', 'Bipod'], ['V', 'Melee / bayonet'], ['G', 'Underbarrel launcher'], ['L', 'Weapon light'], ['F', 'Inspect'], ['T', 'Range: targets & wind'], ['N', 'Range: fly mode'], ['Y', 'Range: reset targets'], ['Tab', 'Scoreboard'], ['Esc', 'Pause']];
+const KEYS = [['W A S D', 'Move'], ['Mouse', 'Look'], ['Left click', 'Fire'], ['Right click', 'Aim down sights'], ['Shift', 'Sprint · hold breath when scoped'], ['Space', 'Jump'], ['C', 'Crouch'], ['Z', 'Prone (auto bipod)'], ['Q / E', 'Lean'], ['R', 'Reload'], ['B', 'Fire mode'], ['1 / 2 · wheel', 'Switch weapon'], ['[ / ]', 'Zeroing distance'], ['X', 'Bipod'], ['V', 'Melee / bayonet'], ['G', 'Underbarrel launcher'], ['L', 'Weapon light'], ['F', 'Inspect'], ['T', 'Range: targets & wind'], ['N', 'Range: fly mode'], ['Y', 'Range: reset targets'], ['Esc', 'Pause']];
 UI.toggleHelp = function (force, back) {
   let h = $('#helpov');
   if (h && !force) { h.remove(); return; }
@@ -414,26 +370,6 @@ UI.toggleRangeMenu = function (force) {
   draw();
   document.body.appendChild(m);
 };
-UI.showResults = function () {
-  const Gm = G.Game; G.Input.unlock();
-  const won = Gm.score[0] > Gm.score[1], draw = Gm.score[0] === Gm.score[1];
-  const rows = Gm.agents.slice().sort((a, b) => (b.kills || 0) - (a.kills || 0));
-  const mvp = rows[0];
-  overlay(`<div class="dialog" style="width:min(640px,100%)"><div class="eyebrow">${esc(Gm.map.name)}</div><h2>${draw ? 'Draw' : won ? 'Victory' : 'Defeat'}</h2>
-    <div style="font:700 40px var(--f-ui)"><span style="color:var(--blue)">${Gm.score[0]}</span> <span class="muted">—</span> <span style="color:var(--red)">${Gm.score[1]}</span></div>
-    <div class="muted">MVP: ${esc(mvp.name)} · ${mvp.kills || 0} kills</div>
-    <div id="board" style="position:static;transform:none;width:auto;background:none;border:0;padding:0">${boardHTML()}</div>
-    <div class="btns"><button class="btn primary" id="x-again">Rematch</button><button class="btn" id="x-setup">Change battle</button><button class="btn" id="x-menu">Main menu</button></div></div>`);
-  $('#x-again').onclick = () => { UI.closeOverlay(); loading('Redeploying…', () => G.Game.startBattle(UI.lastBattle)); };
-  $('#x-setup').onclick = () => { UI.closeOverlay(); Gm.cleanup(); Gm.player = null; UI.show('battle'); };
-  $('#x-menu').onclick = () => { UI.closeOverlay(); Gm.cleanup(); Gm.player = null; UI.show('menu'); };
-};
-function boardHTML() {
-  const Gm = G.Game;
-  const tbl = team => `<table><tr><th>${esc(G.UNIFORMS[Gm.map.era][team].name)}</th><th>Tier</th><th>Weapon</th><th>K</th><th>D</th></tr>${Gm.agents.filter(a => a.team === team).sort((a, b) => (b.kills || 0) - (a.kills || 0)).map(a => `<tr class="${a === Gm.player ? 'me' : ''}"><td>${esc(a.name)}</td><td style="color:${a.tier ? a.tier.color : 'var(--brass2)'}">${a.tier ? a.tier.n : '—'}</td><td class="muted">${esc(a.wp ? a.wp.n : Gm.player.W.wp.n)}</td><td>${a.kills || 0}</td><td>${a.deaths || 0}</td></tr>`).join('')}</table>`;
-  return tbl(0) + '<div style="height:10px"></div>' + tbl(1);
-}
-
 // ============================================================ HUD
 UI.showHUD = function (mode) {
   UI.screen = 'game';
@@ -444,7 +380,7 @@ UI.showHUD = function (mode) {
     <div id="hit"><i></i><i></i><i></i><i></i></div><div id="dmgdir"></div>
     <div class="hudbox" id="ammo"><div class="wn"></div><div id="rounds"></div><div class="mag"></div><div class="md"></div></div>
     <div class="hudbox" id="hp"><div class="v">100</div><div class="b"><i></i></div><div class="st"></div></div>
-    ${mode === 'mission' ? '<div class="hudbox" id="score"><span class="a">0</span><span class="t">0:00</span><span class="e">0</span></div><div class="hudbox" id="feed"></div>' : ''}${mode === 'battle' ? '<div class="hudbox" id="score"><span class="a">0</span><span class="t">10:00</span><span class="e">0</span></div><canvas class="hudbox" id="mini" width="168" height="168"></canvas><div class="hudbox" id="feed"></div>' : '<div class="hudbox" id="tcam" hidden><b></b></div><div class="hudbox" id="rstats"></div><div class="hudbox" id="rhint">T targets & wind · N fly · Y reset · [ ] zero · H controls</div>'}
+    ${mode === 'mission' ? '<div class="hudbox" id="score"><span class="a">0</span><span class="t">0:00</span><span class="e">0</span></div><div class="hudbox" id="feed"></div>' : ''}${mode === 'range' ? '<div class="hudbox" id="tcam" hidden><b></b></div><div class="hudbox" id="rstats"></div><div class="hudbox" id="rhint">T targets & wind · N fly · Y reset · [ ] zero · H controls</div>' : ''}
     <div class="hudbox" id="compass"><div class="strip"></div></div>
     <div class="hudbox" id="toast"></div><div class="hudbox" id="center"></div><div class="hudbox" id="board" hidden></div>`;
   const strip = $('#compass .strip'); let s = '';
@@ -507,14 +443,7 @@ UI.updateHUD = function (dt) {
     const Ms = Gm.mission, sc = $('#score'); if (sc) { sc.children[0].textContent = Ms.killed; sc.children[2].textContent = Ms.total - Ms.killed; const t = Ms.t | 0; sc.children[1].textContent = `${(t / 60) | 0}:${String(t % 60).padStart(2, '0')} · hostiles left · hostages ${Ms.hostages - Ms.hostagesLost}`; }
     if (UI.dirty) { const f = $('#feed'); if (f) f.innerHTML = Gm.killfeed.map(k => `<div><span class="${k.kt === 0 ? 'a' : 'e'}">${esc(k.k)}</span><span class="w">${esc(k.w)}${k.head ? ' ⌖' : ''}</span><span class="${k.vt === 0 ? 'a' : 'e'}">${esc(k.v)}</span></div>`).join(''); UI.dirty = false; }
   }
-  // battle
-  if (Gm.mode === 'battle') {
-    const sc = $('#score'); if (sc) { sc.children[0].textContent = Gm.score[0]; sc.children[2].textContent = Gm.score[1]; const s = Math.max(0, Gm.timeLeft | 0); sc.children[1].textContent = `${(s / 60) | 0}:${String(s % 60).padStart(2, '0')} · first to ${Gm.scoreLimit}`; }
-    if (UI.dirty) { const f = $('#feed'); if (f) f.innerHTML = Gm.killfeed.map(k => `<div><span class="${k.kt === 0 ? 'a' : 'e'}">${esc(k.k)}</span><span class="w">${esc(k.w)}${k.head ? ' ⌖' : ''}</span><span class="${k.vt === 0 ? 'a' : 'e'}">${esc(k.v)}</span></div>`).join(''); }
-    drawMini();
-    const c = $('#center'); if (c) c.textContent = !P.alive && Gm.state === 'play' ? `Killed by ${Gm.deathBy ? Gm.deathBy.name : '—'} · respawn in ${Math.max(0, Gm.respawnT).toFixed(1)}` : '';
-    const b = $('#board'); if (b) { const show = G.Input.keys.Tab; b.hidden = !show; if (show && Gm.frame % 15 === 0) b.innerHTML = boardHTML(); }
-  } else if (Gm.mode === 'range' && (UI.dirty || Gm.frame % 10 === 0)) {
+  if (Gm.mode === 'range' && (UI.dirty || Gm.frame % 10 === 0)) {
     const s = Gm.stats, L = s && s.last, r = $('#rstats');
     if (r) r.innerHTML = `<h4>Ballistics · last hit</h4>${L ? `
       <div class="kv"><span>Range</span><b>${L.dist.toFixed(1)} m</b></div>
@@ -533,23 +462,6 @@ UI.updateHUD = function (dt) {
   UI.dirty = false;
   drawScope();
 };
-function drawMini() {
-  const c = $('#mini'); if (!c) return; const x = c.getContext('2d'); const Gm = G.Game, P = Gm.player, W = G.E.world;
-  const S = 168, sc = 1.8;
-  x.clearRect(0, 0, S, S); x.save(); x.beginPath(); x.arc(S / 2, S / 2, S / 2 - 1, 0, 7); x.clip();
-  x.translate(S / 2, S / 2); x.rotate(P.yaw); x.scale(sc, sc); x.translate(-P.pos.x, -P.pos.z);
-  x.fillStyle = 'rgba(200,196,180,.28)';
-  for (const col of W.colliders) { if (col.noShoot || col.soft || col.max.y < .8) continue; x.fillRect(col.min.x, col.min.z, col.max.x - col.min.x, col.max.z - col.min.z); }
-  for (const a of Gm.agents) {
-    if (!a.alive || a === P) continue;
-    const friend = a.team === 0;
-    const seen = friend || Gm.bots.some(b => b.team === 0 && b.alive && b.target === a && b.targetVisible) || (a.fireCD > -1 && a.pos.distanceTo(P.pos) < 40 && !(a.S && a.S.sup));
-    if (!seen) continue;
-    x.fillStyle = friend ? '#5aa6d6' : '#d65a3c'; x.beginPath(); x.arc(a.pos.x, a.pos.z, 1.4, 0, 7); x.fill();
-  }
-  x.restore();
-  x.fillStyle = '#e6c572'; x.beginPath(); x.moveTo(S / 2, S / 2 - 7); x.lineTo(S / 2 + 5, S / 2 + 5); x.lineTo(S / 2 - 5, S / 2 + 5); x.fill();
-}
 
 // ------------------------------------------------------------ SCOPE RETICLES
 function drawScope() {
