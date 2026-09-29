@@ -167,7 +167,7 @@ const GRAV = 9.81;
 // o: { pos, dir, v, k, dmg, pen, team, owner, tracer, streak, cal, weapon, pellets..., aim (for range stats) }
 B.fire = function (o) {
   const b = { p: o.pos.clone(), v: o.dir.clone().multiplyScalar(o.v), v0: o.v, k: o.k, dmg: o.dmg, pen: o.pen, team: o.team, owner: o.owner, t: 0, dist: 0,
-    tracer: o.tracer, streak: o.streak, cal: o.cal, weapon: o.weapon, start: o.pos.clone(), vis: o.vis ? o.vis.clone() : null, aim: o.aim, snapped: false, inc: o.inc, ammo: o.ammo, hp: o.hp, player: o.player, alive: true, hits: 0, pellet: o.pellet, pierced: 0 };
+    gyro: o.gyro || null, ap: !!o.ap, tracer: o.tracer || (o.gyro ? 'red' : null), streak: o.streak, cal: o.cal, weapon: o.weapon, start: o.pos.clone(), vis: o.vis ? o.vis.clone() : null, aim: o.aim, snapped: false, inc: o.inc, ammo: o.ammo, hp: o.hp, player: o.player, alive: true, hits: 0, pellet: o.pellet, pierced: 0 };
   B.list.push(b);
   return b;
 };
@@ -182,6 +182,10 @@ B.update = function (dt, ctx) {
       rel.copy(b.v).sub(B.wind); const sp = rel.length();
       b.v.addScaledVector(rel, -b.k * sp * h);
       b.v.y -= GRAV * h;
+      if (b.gyro && b.t < b.gyro.burn) { // rocket motor still burning: accelerate along the flight path
+        const sp2 = b.v.length(); b.v.multiplyScalar((sp2 + (b.gyro.v - b.v0) / b.gyro.burn * h) / (sp2 || 1));
+        if (Math.random() < .5) G.FX.smoke.spawn({ x: b.p.x, y: b.p.y, z: b.p.z, life: .8, s0: .03, s1: .25, r: .9, g: .88, b: .85, a: .35, drag: .3 });
+      }
       b.p.addScaledVector(b.v, h); b.t += h;
       const segLen = tmpA.distanceTo(b.p); b.dist += segLen;
       trace(b, tmpA, b.p, segLen, ctx);
@@ -264,7 +268,12 @@ function trace(b, a, c, len, ctx) {
   } else if (best.kind === 'target') {
     const r = best.T.onHit(b, p, dir, energy, speed);
     ctx.onTargetHit && ctx.onTargetHit(b, best.T, p, speed, r);
-    if (r && r.pass) { b.p.copy(p).addScaledVector(dir, r.depth || .02); if (r.v) b.v.multiplyScalar(r.v); (b.skipT || (b.skipT = new Set())).add(best.T); return; }
+    if (r && r.pass) {
+      b.p.copy(p).addScaledVector(dir, r.depth || .02); if (r.v) b.v.multiplyScalar(r.v);
+      if (r.dir) b.v.copy(r.dir).multiplyScalar(b.v.length()); // deflection (e.g. through glass)
+      if (!r.keep) (b.skipT || (b.skipT = new Set())).add(best.T); // multi-part targets track their own parts
+      return;
+    }
     b.alive = false; b.p.copy(p);
   }
 }

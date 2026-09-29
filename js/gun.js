@@ -37,11 +37,22 @@ function gRBox(w, h, d, r) {
 }
 // side profile [[z,y],...] extruded across x with width w
 function gProf(pts, w, bev = .003, smooth = false, key) {
-  const k = key || ('p' + pts.map(p => r4(p[0]) + ':' + r4(p[1])).join('|') + w + bev + smooth);
+  const k = key || ('pf' + pts.map(p => r4(p[0]) + ':' + r4(p[1])).join('|') + w + bev + smooth);
   return cached(k, () => {
     const s = new THREE.Shape();
     if (smooth) { s.moveTo(pts[0][0], pts[0][1]); s.splineThru(pts.slice(1).concat([pts[0]]).map(p => new THREE.Vector2(p[0], p[1]))); }
-    else { s.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) s.lineTo(pts[i][0], pts[i][1]); s.closePath(); }
+    else { // every corner gets a small fillet so stocks, grips and magazines read as machined/moulded parts
+      const n = pts.length;
+      for (let i = 0; i < n; i++) {
+        const p = pts[i], a = pts[(i - 1 + n) % n], b = pts[(i + 1) % n];
+        const da = Math.hypot(a[0] - p[0], a[1] - p[1]), db = Math.hypot(b[0] - p[0], b[1] - p[1]);
+        const r = Math.min(.005, da * .35, db * .35);
+        const p1 = [p[0] + (a[0] - p[0]) / (da || 1) * r, p[1] + (a[1] - p[1]) / (da || 1) * r], p2 = [p[0] + (b[0] - p[0]) / (db || 1) * r, p[1] + (b[1] - p[1]) / (db || 1) * r];
+        if (i === 0) s.moveTo(p1[0], p1[1]); else s.lineTo(p1[0], p1[1]);
+        s.quadraticCurveTo(p[0], p[1], p2[0], p2[1]);
+      }
+      s.closePath();
+    }
     bev = Math.min(bev, w * .3);
     const g = new THREE.ExtrudeGeometry(s, { depth: Math.max(.001, w - bev * 2), bevelEnabled: bev > 0, bevelThickness: bev, bevelSize: bev, bevelSegments: 2, curveSegments: 10 });
     g.rotateY(-PI / 2); g.translate((w - bev * 2) / 2, 0, 0); g.computeVertexNormals(); return g;
@@ -65,13 +76,13 @@ G.gunMaterials = function (wp, S) {
   if (fin === 'engraved') { metalMap = G.texEngraved(); metalCol = '#ffffff'; metalRough = .35; }
   if (fin === 'whitewash') { metalRough = .9; metalMet = .1; }
   const camo = CAMOS.includes(fin) ? G.texCamo(fin) : null;
-  const metal = new THREE.MeshStandardMaterial({ color: camo ? '#ffffff' : metalCol, map: camo || metalMap, metalness: camo ? .3 : metalMet, roughness: camo ? .7 : metalRough, roughnessMap: camo ? null : brushed });
+  const metal = new THREE.MeshStandardMaterial({ color: camo ? '#ffffff' : metalCol, map: camo || metalMap, metalness: camo ? .3 : metalMet, roughness: camo ? .7 : metalRough, roughnessMap: camo ? null : brushed, bumpMap: brushed, bumpScale: .00018 });
   const steel = new THREE.MeshStandardMaterial({ color: fin === 'gold' ? '#caa040' : '#3b3f44', metalness: .92, roughness: .3, roughnessMap: brushed });
   const bright = new THREE.MeshStandardMaterial({ color: '#8d9197', metalness: 1, roughness: .22 });
   let wood;
   if (m.wd) {
     const wt = G.texWood(m.wd).clone(); wt.needsUpdate = true; wt.repeat.set(2.5, 2.5);
-    wood = new THREE.MeshStandardMaterial({ color: fin === 'whitewash' ? '#e0ddd5' : '#ffffff', map: camo || (fin === 'whitewash' ? null : wt), roughness: .52, metalness: 0 });
+    wood = new THREE.MeshStandardMaterial({ color: fin === 'whitewash' ? '#e0ddd5' : '#ffffff', map: camo || (fin === 'whitewash' ? null : wt), roughness: .52, metalness: 0, bumpMap: wt, bumpScale: .00035 });
   }
   const polyCols = { black: '#1d1e1f', tan: '#a08c68', od: '#4f5638', plum: '#5e2a28', bakelite: '#4a2418', g36: '#2a2c2c', fde: '#8b7454', coyote: '#806a4a', ral8000: '#86704f', green: '#3d4a2e' };
   let polyCol = polyCols[m.pl] || polyCols.black;
@@ -369,6 +380,7 @@ G.buildGun = function (wp, L, opt = {}) {
   buildMuzzle();
   // ===================================================== EXTRAS
   buildExtras();
+  buildExperimental();
   // ===================================================== ATTACHMENTS
   buildAttachments();
 
@@ -390,6 +402,15 @@ G.buildGun = function (wp, L, opt = {}) {
     const mat = MT.poly;
     const len = RL, h = RH, w = RW;
     const id = wp.id;
+    if (has('g11body')) { // G11: a sealed housing, muzzle flush with the front face, carry handle with integral optic mount
+      add(gRBox(w, h * 1.1, len, .014), mat, 0, -h * .18, (zr + zf) / 2);
+      add(gProf([[zf, -h * .7], [zf + .05, -h * .72], [zf + .05, h * .35], [zf, h * .3]], w * 1.02, .006), mat);
+      add(gRBox(w * .5, .03, len * .45, .008), mat, 0, h * .55, zr - len * .45);
+      add(gRBox(.012, .02, .03, .004), mat, 0, h * .42, zr - len * .25); add(gRBox(.012, .02, .03, .004), mat, 0, h * .42, zr - len * .65);
+      add(gCylX(.018, .018, w * 1.05, 16), MT.metal, 0, -h * .1, zr - .12); // cocking knob drum
+      add(gRBox(w * 1.05, h * .9, .02, .006), MT.rubber, 0, -h * .22, zr + .01);
+      return;
+    }
     // lower body profile (z from zf to zr)
     const pts = [[zf, h * .25], [zf, -h * .45], [zf + len * .35, -h * .55], [zr - .02, -h * .7], [zr, -h * .75], [zr, h * .3], [zr - .03, h * .35], [zf + .05, h * .33]];
     add(gProf(pts, w, .008, false), mat);
@@ -678,6 +699,16 @@ G.buildGun = function (wp, L, opt = {}) {
         pos = V3(0, top + .005, -.03);
         add(gRBox(.052, .018, len, .006), MT.clearPoly, 0, .009, 0, g);
         if (small) for (let i = 0; i < 12; i++) add(gCylX(.0028, .0028, .02, 6), MT.brass, (i % 2 ? .01 : -.01), .009, -len / 2 + .01 + i * len / 13, g);
+        break; }
+      case 'top_long': { // G11: long horizontal magazine lying above the barrel, rounds pointing down
+        pos = V3(0, top + .004, (zr + zf) / 2 - .06);
+        add(gRBox(.03, .034, len, .006), MT.poly, 0, .017, 0, g);
+        if (small) for (let i = 0; i < 5; i++) add(gBox(.031, .002, .004), MT.rubber, 0, .03, -len / 2 + .03 + i * len / 5.5, g);
+        break; }
+      case 'cassette': { // Jackhammer rotary shell cassette behind the grip
+        pos = V3(0, -.015, zr - .13);
+        add(gCyl(.058, .058, .1, 20), MT.poly, 0, 0, 0, g);
+        if (small) for (let i = 0; i < 10; i++) { const a = i / 10 * PI * 2; add(gCyl(.012, .012, .102, 10), MT.shell, Math.cos(a) * .04, Math.sin(a) * .04, 0, g); }
         break; }
       case 'helical': { // Bizon-style helical magazine under the barrel
         pos = V3(0, bot + .005, zf + .05);
@@ -1093,6 +1124,28 @@ G.buildGun = function (wp, L, opt = {}) {
     if (small && !pistol && !rev && !bullpup) { add(gTor(.007, .0015), MT.steel, 0, bot - .02, (rig.stockEnd ? rig.stockEnd.z : zr) - .05).rotation.y = PI / 2; }
   }
 
+  function buildExperimental() {
+    const bl = Math.max(.1, blen);
+    if (has('twin_over')) { add(gCyl(br * 1.1, br * .9, bl * .95, 14), MT.steel, 0, -br * 2.6, zf - bl * .48); add(gRBox(br * 3, br * 5, .02, br), MT.metal, 0, -br * 1.3, zf - bl * .95); }
+    if (has('triple')) for (const [x, y] of [[-br * 2.3, -br * 1.4], [br * 2.3, -br * 1.4]]) add(gCyl(br * 1.1, br * .95, bl, 14), MT.steel, x, y, zf - bl / 2);
+    if (has('triple')) add(gRBox(br * 7, br * 4, .03, br), MT.metal, 0, -br * .8, zf - bl + .015);
+    if (has('twin_side')) { // Villar-Perosa: a second complete gun alongside the first
+      const twin = new THREE.Group(); twin.position.x = .052;
+      const src = root.children.slice();
+      for (const o of src) { if (o === rig.mag || o === rig.bipod || o.isSprite) continue; const c = o.clone(true); twin.add(c); }
+      const m2 = rig.mag.clone(true); twin.add(m2);
+      root.add(twin); add(gRBox(.06, .012, .04, .004), MT.metal, .026, -RH * .5, zf + .03);
+      add(gRBox(.06, .012, .04, .004), MT.metal, .026, -RH * .5, zr - .03);
+    }
+    if (has('oicw_gl')) { // 20 mm / 40 mm launcher module riding above the carbine
+      const gy = RH * .55 + .045, gl = RL * .95;
+      add(gCyl(.03, .03, gl, 22), MT.poly, 0, gy, (zr + zf) / 2 - .1);
+      add(gCyl(.02, .02, .04, 16), MT.metal, 0, gy, (zr + zf) / 2 - .1 - gl / 2 - .02);
+      add(gRBox(.05, .05, .15, .012), MT.poly, 0, gy + .045, zr - .1);
+      add(gCyl(.017, .017, .003, 16), MT.glass, 0, gy + .045, zr - .1 - .076);
+    }
+    if (has('gyro')) for (let i = 0; i < 4; i++) { const a = i * PI / 2 + PI / 4; add(gCyl(.0016, .0016, .004, 6), MT.rubber, Math.cos(a) * .006, Math.sin(a) * .006, muzzleZ - .001); }
+  }
   function buildAttachments() {
     // ---------- optic
     const O = L.optic;

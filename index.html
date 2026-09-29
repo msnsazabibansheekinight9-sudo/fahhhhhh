@@ -79,6 +79,7 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
 .bar i::after { content: ''; position: absolute; inset: 0 auto 0 0; width: var(--v); background: var(--brass); transition: width .25s; }
 .bar i.up::after { background: var(--good); } .bar i.down::after { background: var(--red); }
 .bar s { text-decoration: none; font: 12px var(--f-mono); color: var(--fg); text-align: right; font-variant-numeric: tabular-nums; }
+.blurb { margin: 0; padding: 12px 16px; font-size: 15px; color: var(--brass2); border-bottom: 1px solid var(--line); }
 .slot { border-bottom: 1px solid var(--line); }
 .slot > button { width: 100%; display: grid; grid-template-columns: 94px 1fr auto; gap: 8px; align-items: center; text-align: left; padding: 10px 16px; background: transparent; border: 0; }
 .slot > button:hover { background: rgba(255,255,255,.03); }
@@ -198,6 +199,7 @@ input[type=range] { width: 100%; accent-color: var(--brass); }
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="js/data.js"></script>
 <script src="js/data2.js"></script>
+<script src="js/data3.js"></script>
 <script src="js/tex.js"></script>
 <script src="js/gun.js"></script>
 <script src="js/audio.js"></script>
@@ -208,5 +210,6 @@ input[type=range] { width: 100%; accent-color: var(--brass); }
 <script src="js/player.js"></script>
 <script src="js/bots.js"></script>
 <script src="js/game.js"></script>
+<script src="js/vehicles.js"></script>
 <script src="js/input.js"></script>
 <script src="js/ui.js"></script>

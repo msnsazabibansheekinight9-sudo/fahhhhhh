@@ -124,9 +124,11 @@ class Player {
     this.computeZero(w);
     return w;
   }
-  computeZero(w) { w.zeroAng = G.Ballistics.zeroAngle(w.S.v, w.S.k, Math.max(.02, w.rig.sightH), w.zero); }
+  computeZero(w) { w.zeroAng = G.Ballistics.zeroAngle(w.wp.gyro ? w.wp.gyro.v * .85 : w.S.v, w.S.k, Math.max(.02, w.rig.sightH), w.zero); }
   equip(i, instant) {
     if (!this.weapons[i]) return;
+    // lower the current weapon first, then bring the new one up
+    if (!instant && this.W && this.W.rig.root.visible && i !== this.cur) { this.finishAction(true); this.startAction('holster', { next: i }); return; }
     const prev = this.W;
     this.cur = i;
     for (const w of this.weapons) w.rig.root.visible = false;
@@ -144,7 +146,15 @@ class Player {
     const rig = w.rig;
     const empty = w.mag === 0;
     switch (name) {
-      case 'equip': dur = wp.c === 'PST' ? .35 : .55; fn = t => { this.anim = { px: 0, py: -.25 * (1 - ss(t)), pz: 0, rx: -.8 * (1 - ss(t)), ry: 0, rz: .3 * (1 - ss(t)) }; }; break;
+      case 'holster': dur = wp.c === 'PST' ? .22 : .3; fn = t => { const e = ss(t); this.anim = { px: .04 * e, py: -.28 * e, pz: .05 * e, rx: -.7 * e, ry: .2 * e, rz: .5 * e }; };
+        end = () => { this.anim = null; this.equip(o.next, 'draw'); this.startAction('equip'); G.Audio.mech('equip'); }; break;
+      case 'equip': {
+        const heavy = wp.heavy || wp.c === 'LMG';
+        dur = wp.c === 'PST' ? .4 : heavy ? .85 : .6;
+        if (wp.c === 'PST') fn = t => { const e = 1 - ss(t), flip = track([[0, 1], [.55, -.15], [.8, .04], [1, 0]], t); this.anim = { px: .02 * e, py: -.2 * e, pz: .04 * e, rx: -1.3 * flip, ry: .3 * e, rz: -.4 * e }; };
+        else fn = t => { const e = 1 - ss(Math.min(1, t * 1.25)), settle = track([[.7, 0], [.82, 1], [1, 0]], t); this.anim = { px: .08 * e, py: -.3 * e - settle * .01 * (heavy ? 2 : 1), pz: .06 * e, rx: -.6 * e + settle * .03, ry: .5 * e, rz: .7 * e }; };
+        ev = [[.75, () => G.Audio.mech('mode')]];
+        break; }
       case 'cycle': { // bolt, pump or lever cycle after a shot
         const type = rig.boltType; dur = wp.cyc || .7; keepAds = true;
         if (type === 'bolt') {
@@ -166,11 +176,49 @@ class Player {
         end = () => { w.cycleNeeded = false; };
         break; }
       case 'reload': { const R = this.reloadAnim(w, empty); dur = R.dur; fn = R.fn; ev = R.ev; end = R.end; cancel = R.cancel; break; }
-      case 'inspect': dur = 3.2; cancel = true; fn = t => {
-        const a = track([[0, 0], [.2, 1], [.5, 1], [.6, 0], [.7, 0], [.85, 1], [1, 0]], t), b = track([[0, 0], [.55, 0], [.62, 1], [.9, 1], [1, 0]], t);
-        this.anim = { px: -.08 * a - .02 * b, py: .03 * a + .02 * b, pz: .06 * a, rx: .15 * a + .5 * b, ry: .9 * a - .3 * b, rz: -.5 * a + .6 * b };
-        if (rig.bolt && rig.boltType === 'reciprocate') rig.bolt.position.z = track([[.6, 0], [.7, rig.boltStroke || .05], [.8, 0]], t);
-      }; ev = [[.65, () => G.Audio.mech('boltback')], [.8, () => G.Audio.mech('boltfwd')]]; break;
+      case 'inspect': {
+        cancel = true;
+        const type = rig.boltType;
+        if (type === 'bolt') { // open the bolt partway and check the chamber
+          dur = 2.8; const b = rig.bolt, st = rig.boltStroke || .08;
+          fn = t => { const lift = track([[.15, 0], [.3, 1], [.7, 1], [.85, 0]], t), back = track([[.3, 0], [.42, .45], [.6, .45], [.72, 0]], t), look = track([[0, 0], [.2, 1], [.8, 1], [1, 0]], t);
+            if (b) { b.rotation.z = lift * 1.35; b.position.z = rig.zr - .04 + back * st; }
+            this.anim = { px: -.06 * look, py: .04 * look, pz: .05 * look, rx: .1 * look, ry: .45 * look, rz: .55 * look };
+            this.lhOverride = { w: track([[.2, 0], [.3, 1], [.75, 1], [.85, 0]], t), p: V3(RWx(rig) + .05, 0, rig.zr - .03 + back * st), rot: -1 }; };
+          ev = [[.3, () => G.Audio.mech('boltup')], [.42, () => G.Audio.mech('boltback')], [.72, () => G.Audio.mech('boltfwd')]];
+        } else if (type === 'slide') { // press check: ease the slide back and look into the ejection port
+          dur = 2.4;
+          fn = t => { const look = track([[0, 0], [.2, 1], [.8, 1], [1, 0]], t), press = track([[.3, 0], [.4, 1], [.65, 1], [.72, 0]], t);
+            if (rig.slide) rig.slide.position.z = press * (rig.slideStroke || .02) * .45;
+            this.anim = { px: -.05 * look, py: .05 * look, pz: .06 * look, rx: .15 * look, ry: -.6 * look, rz: .7 * look }; };
+          ev = [[.4, () => G.Audio.mech('slide')]];
+        } else if (type === 'rev') { // swing the cylinder out, spin it, close it
+          dur = 2.6;
+          fn = t => { const o2 = track([[.2, 0], [.3, 1], [.75, 1], [.85, 0]], t), look = track([[0, 0], [.15, 1], [.85, 1], [1, 0]], t);
+            if (rig.cyl) { rig.cyl.position.x = -.04 * o2; rig.cyl.rotation.z += o2 > .9 && t > .35 && t < .65 ? .5 : 0; }
+            this.anim = { px: -.05 * look, py: .05 * look, pz: .05 * look, rx: .4 * look, ry: .3 * look, rz: .8 * o2 }; };
+          ev = [[.3, () => G.Audio.mech('cyl')], [.8, () => G.Audio.mech('cyl')]];
+        } else if (type === 'pump') { // short-stroke the pump to check a shell is chambered
+          dur = 2.4;
+          fn = t => { const look = track([[0, 0], [.2, 1], [.8, 1], [1, 0]], t), pb = track([[.35, 0], [.45, .35], [.6, .35], [.68, 0]], t);
+            if (rig.pump) rig.pump.position.z = pb * .085; if (rig.bolt) rig.bolt.position.z = pb * .07;
+            this.anim = { px: -.06 * look, py: .04 * look, pz: .05 * look, rx: .1 * look, ry: .5 * look, rz: .5 * look }; };
+          ev = [[.45, () => G.Audio.mech('shell')], [.66, () => G.Audio.mech('boltfwd')]];
+        } else { // look over both sides, check the magazine, then the chamber
+          dur = 3.6;
+          fn = t => {
+            const a = track([[0, 0], [.14, 1], [.3, 1], [.38, 0]], t), b2 = track([[.3, 0], [.4, 1], [.62, 1], [.7, 0]], t), c = track([[.66, 0], [.74, 1], [.92, 1], [1, 0]], t);
+            this.anim = { px: -.08 * a - .03 * b2 - .03 * c, py: .03 * a + .05 * b2 + .03 * c, pz: .06 * a + .04 * b2, rx: .15 * a + .35 * b2 + .2 * c, ry: .9 * a - .2 * b2 + .5 * c, rz: -.5 * a + .5 * b2 + .6 * c };
+            const drop = track([[.42, 0], [.47, 1], [.57, 1], [.62, 0]], t);
+            if (rig.mag && !rig.magFixed) { rig.mag.position.copy(rig.magHome.pos).y -= drop * .04; }
+            this.lhOverride = { w: track([[.38, 0], [.44, 1], [.62, 1], [.68, 0]], t), p: rig.magHome ? rig.magHome.pos.clone().add(V3(0, -.06 - drop * .04, 0)) : rig.hgPos, rot: 0 };
+            const ch = track([[.76, 0], [.8, .5], [.88, .5], [.92, 0]], t);
+            if (rig.bolt && type === 'reciprocate') rig.bolt.position.z = ch * (rig.boltStroke || .05);
+            if (rig.charge) rig.charge.position.z = rig.zr + .005 + ch * .03;
+          };
+          ev = [[.47, () => G.Audio.mech('magout')], [.6, () => G.Audio.mech('magin')], [.8, () => G.Audio.mech('boltback')], [.92, () => G.Audio.mech('boltfwd')]];
+        }
+        break; }
       case 'melee': dur = .55; cancel = false; fn = t => { const s = track([[0, 0], [.25, 1], [.45, 1], [1, 0]], t); this.anim = { px: -.05 * s, py: .02 * s, pz: -.25 * s, rx: -.15 * s, ry: .5 * s, rz: -.3 * s }; }; ev = [[.25, () => this.meleeHit()]]; G.Audio.mech('melee'); break;
       case 'mode': dur = .3; keepAds = true; fn = t => { const s = track([[0, 0], [.4, 1], [1, 0]], t); this.anim = { px: 0, py: 0, pz: 0, rx: 0, ry: 0, rz: .12 * s }; }; ev = [[.3, () => G.Audio.mech('mode')]]; break;
       case 'gl': dur = 1.6; keepAds = true; fn = t => { const s = track([[0, 0], [.05, 1], [.3, 0], [.4, 0], [.6, 1], [.8, 1], [1, 0]], t); this.anim = { px: 0, py: -.03 * s, pz: .03 * s, rx: .2 * s, ry: 0, rz: .1 * s }; }; ev = [[.02, () => this.fireGL()], [.6, () => G.Audio.mech('magout')], [.85, () => G.Audio.mech('magin')]]; break;
@@ -258,7 +306,7 @@ class Player {
     }
     // --- detachable magazines (box, curve, drum, pan, top, side, belt, pistol)
     let axis = V3(0, -1, 0);
-    if (mt === 'pan' || mt === 'top_curve' || mt === 'p90' || mt === 'pedersen') axis = V3(0, 1, 0);
+    if (mt === 'pan' || mt === 'top_curve' || mt === 'p90' || mt === 'pedersen' || mt === 'top_long') axis = V3(0, 1, 0);
     if (mt === 'sidebox_l' || mt === 'snail') axis = V3(-1, 0, 0);
     if (mt.startsWith('belt')) axis = V3(-.4, -1, 0).normalize();
     const belt = mt.startsWith('belt');
@@ -313,6 +361,7 @@ class Player {
   vmToWorld(p) { return G.E.camera.localToWorld(p.clone()); }
   ejectCasing(rev) {
     const w = this.W, rig = w.rig;
+    if (w.wp.caseless) return;
     if (!rig.eject) return;
     const p = this.vmToWorld(rig.eject.getWorldPosition(V3()));
     const cam = G.E.camera;
@@ -343,7 +392,8 @@ class Player {
   }
   fire(now) {
     const w = this.W, S = w.S, wp = w.wp, rig = w.rig;
-    this.lastShot = now; w.mag--; this.hudDirty = true;
+    const salvo = Math.min(wp.salvo || 1, w.mag); // multi-barrel salvo weapons fire several rounds per pull
+    this.lastShot = now; w.mag -= salvo; this.hudDirty = true;
     const cam = G.E.camera;
     // aim direction: camera forward with gun-offset (sway) and zero elevation
     const q = cam.getWorldQuaternion(new THREE.Quaternion());
@@ -354,7 +404,7 @@ class Player {
     const ads = this.ads;
     let spreadDeg = lerp((HIPSPREAD[wp.c] || 3) * S.hip, 0, ss(ads)) * (1 + moving / 5) * (this.stance === 1 ? .8 : this.stance === 2 ? .6 : 1) * (this.onGround ? 1 : 3);
     spreadDeg += ads * moving * .15;
-    const pellets = S.pellets;
+    const pellets = S.pellets * salvo;
     const cal = G.CAL[wp.cal];
     const tracerOn = S.tracer || (wp.c === 'LMG' && w.shotCount % 5 === 0);
     w.shotCount = (w.shotCount || 0) + 1;
@@ -362,7 +412,7 @@ class Player {
     for (let i = 0; i < pellets; i++) {
       const d = V3(0, 0, -1);
       const moa = S.acc * .000291 * (pellets > 1 ? 1 : 1) * (1 + w.heat * .6);
-      const pelletCone = pellets > 1 ? (S.flech ? 1.6 : 2.6) * PI / 180 : 0;
+      const pelletCone = pellets > 1 ? (wp.salvo ? .35 : wp.duplex ? .45 : S.flech ? 1.6 : 2.6) * PI / 180 : 0;
       const r1 = Math.sqrt(Math.random()), a1 = Math.random() * 2 * PI;
       const sprd = spreadDeg * PI / 180 * r1 + moa * Math.sqrt(-2 * Math.log(Math.random() + 1e-9)) * .5;
       const pr = pellets > 1 ? pelletCone * Math.sqrt(Math.random()) : 0, pa = Math.random() * 2 * PI;
@@ -370,10 +420,12 @@ class Player {
       d.applyAxisAngle(V3(0, 1, 0), -offX + Math.cos(a1) * sprd + Math.cos(pa) * pr);
       d.applyQuaternion(q).normalize();
       const start = eye.clone().addScaledVector(V3(0, 1, 0).applyQuaternion(q), -Math.max(.02, rig.sightH) * ads);
-      G.Ballistics.fire({ pos: start, dir: d, v: S.v * (pellets > 1 ? .95 + Math.random() * .1 : 1), k: S.k, dmg: S.dmg, pen: S.pen, team: 0, owner: this, tracer: tracerOn ? 'red' : null, streak: !tracerOn && i === 0 && Math.random() < .4, cal: wp.cal, weapon: wp, vis, aim: { eye: eye.clone(), dir: V3(0, 0, -1).applyQuaternion(q) }, inc: S.inc, player: true, pellet: pellets > 1 });
+      G.Ballistics.fire({ pos: start, dir: d, v: S.v * (pellets > 1 ? .95 + Math.random() * .1 : 1), k: S.k, dmg: S.dmg, pen: S.pen, team: 0, owner: this, tracer: tracerOn ? 'red' : null, streak: !tracerOn && i === 0 && Math.random() < .4, cal: wp.cal, weapon: wp, vis, aim: { eye: eye.clone(), dir: V3(0, 0, -1).applyQuaternion(q) }, inc: S.inc, player: true, pellet: pellets > 1 && !wp.salvo && !wp.duplex, gyro: wp.gyro, hp: L_HP(w), ap: w.L.ammo === 'am_ap' || w.L.ammo === 'am_inc' });
     }
     // recoil
-    const stanceK = (this.stance === 1 ? .82 : this.stance === 2 ? .6 : 1) * (this.bipod ? .38 : 1) * lerp(1.15, 1, ads);
+    let stanceK = (this.stance === 1 ? .82 : this.stance === 2 ? .6 : 1) * (this.bipod ? .38 : 1) * lerp(1.15, 1, ads) * Math.sqrt(salvo);
+    // G11 hyperburst: the barrel/action recoils inside the housing, so the shooter feels the burst only when it ends
+    if (wp.hyper && (S.modes[w.mode] || '').startsWith('burst')) stanceK *= this.burst > 1 ? .08 : 2.4;
     const rv = S.rv * stanceK, rh = S.rh * stanceK;
     const vk = rv * .0125 * (.85 + Math.random() * .3);
     this.pitch += vk; this.recoilBank += vk * (S.modes[w.mode] === 'auto' ? .35 : .6);
@@ -394,7 +446,7 @@ class Player {
     if (mode === 'bolt' || mode === 'pump' || mode === 'lever') { w.cycleNeeded = true; if (w.mag > 0 || true) setTimeout(() => { if (this.W === w && w.cycleNeeded && !this.action) this.startAction('cycle'); }, 90); }
     else {
       this.boltT = 1; // reciprocate
-      if (rig.boltType !== 'rev') this.ejectCasing();
+      if (rig.boltType !== 'rev' && !wp.caseless) this.ejectCasing();
       if (w.mag === 0 && (wp.c === 'PST' || rig.boltType === 'reciprocate') && wp.act !== 'auto_ob') w.slideLock = true;
       if (wp.enbloc && w.mag === 0) { G.Audio.mech('ping'); w.slideLock = true; }
       if (rig.cyl) rig.cyl.userData.turn = (rig.cyl.userData.turn || 0) + 1;
@@ -424,8 +476,8 @@ class Player {
   finishAction(cancelled) {
     const a = this.action; if (!a) return;
     if (!cancelled) { for (const [, fn] of a.ev) fn(); a.ev.length = 0; }
-    if (a.end) a.end();
     this.action = null; this.anim = null; this.lhOverride = null;
+    if (a.end) a.end(); // may start a follow-up action (holster -> draw)
     const rig = this.W.rig;
     if (rig.bolt && rig.boltType === 'bolt') { rig.bolt.rotation.z = 0; rig.bolt.position.z = rig.zr - .04; }
     if (rig.pump) rig.pump.position.z = 0; if (rig.lever) rig.lever.rotation.x = 0;
@@ -525,8 +577,9 @@ class Player {
     if (this.holding) this.breath = Math.max(0, this.breath - dt / 5); else this.breath = Math.min(1, this.breath + dt / (this.breath <= 0 ? 7 : 4));
     // fire
     this.fireHeld = input.fire;
-    if (input.fire) this.tryFire(now, input.firePressed);
-    if (!input.fire) this.burst = 0;
+    const hyper = w && w.wp.hyper && this.burst > 0; // a hyperburst always completes once started
+    if (input.fire || hyper) this.tryFire(now, input.firePressed);
+    if (!input.fire && !hyper) this.burst = 0;
     // action timeline
     if (this.action) {
       const a = this.action; a.t += dt / a.dur;
@@ -600,6 +653,8 @@ class Player {
     const P = hip.clone().lerp(adsP, a);
     // sprint pose, bipod pose
     const spr = this.sprintBlend = lerp(this.sprintBlend || 0, this.sprinting ? 1 : 0, Math.min(1, dt * 8));
+    const tac = G.ERA[wp.e].ord >= 3 && !pst && !wp.heavy; // modern tactical sprint: muzzle up, gun tucked high
+    const rollIn = Math.sin(a * PI) * (this.adsHeld ? .07 : -.04);
     const idle = Math.sin(now * 1.6) * .0025 * (1 - a * .8);
     const hs = Math.hypot(this.vel.x, this.vel.z), bA = Math.min(1, hs / 4) * (1 - a * .85) * (this.onGround ? 1 : .3);
     const bx = Math.sin(this.bob) * .012 * bA * (this.sprinting ? 2.2 : 1), by = -Math.abs(Math.cos(this.bob)) * .012 * bA * (this.sprinting ? 2 : 1);
@@ -619,7 +674,8 @@ class Player {
     this.tiltS = lerp(this.tiltS || 0, tilt * (1 - a), Math.min(1, dt * 6));
     const wl = this.wall * (1 - a * .5);
     vm.offset.position.set(P.x + bx - spr * .06 + wl * .03, P.y + by + idle - spr * .05 - dip + air - wl * .06, P.z + kz + spr * .02 + wl * .14);
-    vm.offset.rotation.set(krx + spr * -.35 - dip * 1.2 + wl * .55, spr * .8 + (1 - a) * .05 + wl * .35, spr * .35 + K.rz + (1 - a) * -.03 - this.tiltS, 'YXZ');
+    const sx = tac ? .75 : -.35, sy = tac ? .35 : .8, sz = tac ? .9 : .35;
+    vm.offset.rotation.set(krx + spr * sx - dip * 1.2 + wl * .55, spr * sy + (1 - a) * .05 + wl * .35, spr * sz + K.rz + (1 - a) * -.03 - this.tiltS + rollIn, 'YXZ');
     // sway in pivot (so ADS sights move with the aim offset)
     vm.pivot.rotation.set(this.scoped ? 0 : this.aimOff.y, this.scoped ? 0 : -this.aimOff.x + K.ry, -this.lean * .05, 'YXZ');
     // animation additive
@@ -698,6 +754,7 @@ class Player {
     orient(arm.upper, s, elbow); orient(arm.fore, elbow, t);
   }
 }
+function L_HP(w) { return w.L.ammo === 'am_hp'; }
 function RWx(rig) { return rig.wp.m.R[2] * .5; }
 const tC = V3(), Yup = V3(0, 1, 0);
 function orient(mesh, a, b) { tC.subVectors(b, a); const len = tC.length(); mesh.position.copy(a).addScaledVector(tC, .5); mesh.scale.set(1, len, 1); mesh.quaternion.setFromUnitVectors(Yup, tC.divideScalar(len || 1)); }

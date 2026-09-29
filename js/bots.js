@@ -23,15 +23,15 @@ G.eraWeapons = function (era, cls) { return G.WEAPONS.filter(w => w.e === era &&
 // national arsenals per faction: [team 0, team 1] -> { eras to draw from, countries }
 const ARSENAL = {
   ww1: [{ eras: ['ww1'], co: ['United Kingdom', 'United States', 'France', 'Canada', 'Kingdom of Italy'] }, { eras: ['ww1'], co: ['German Empire', 'Austria-Hungary'] }],
-  ww2: [{ eras: ['ww2'], co: ['United States', 'United Kingdom', 'Australia', 'Poland'] }, { eras: ['ww2'], co: ['Germany'] }],
-  cold: [{ eras: ['cold'], co: ['United States', 'Belgium / UK', 'West Germany', 'Israel', 'Italy', 'Belgium', 'United Kingdom', 'Austria', 'Switzerland'] }, { eras: ['cold', 'ww2'], co: ['Soviet Union', 'Czechoslovakia', 'China'] }],
+  ww2: [{ eras: ['ww2'], co: ['United States', 'United Kingdom', 'Australia', 'Poland'] }, { eras: ['ww2'], co: ['Germany', 'Czechoslovakia'] }],
+  cold: [{ eras: ['cold'], co: ['United States', 'Belgium / UK', 'West Germany', 'Israel', 'Italy', 'Belgium', 'United Kingdom', 'Austria', 'Switzerland', 'Sweden', 'France', 'South Korea'] }, { eras: ['cold', 'ww2'], co: ['Soviet Union', 'Czechoslovakia', 'China'] }],
   mod: [{ eras: ['mod'], co: ['United States', 'United Kingdom', 'Germany', 'Belgium', 'Italy', 'France', 'Israel / US', 'Switzerland', 'Austria'] }, { eras: ['cold', 'mod'], co: ['Soviet Union', 'Russia', 'China', 'Czechoslovakia'] }],
   now: [{ eras: ['now', 'mod'], co: ['United States', 'Germany', 'United Kingdom', 'Belgium', 'Czech Republic', 'Israel', 'Switzerland', 'Italy', 'Austria', 'Japan'] }, { eras: ['now', 'mod'], co: ['Russia', 'China'] }],
 };
 function pickLoadout(era, role, team) {
   const pools = { rifleman: ['RIF', 'AR', 'BR', 'CAR'], assault: ['SMG', 'SG', 'CAR', 'AR'], gunner: ['LMG'], marksman: ['DMR', 'SR', 'RIF'] };
   const A = ARSENAL[era] && ARSENAL[era][team || 0];
-  let list = A ? G.WEAPONS.filter(w => A.eras.includes(w.e) && A.co.includes(w.co) && pools[role].includes(w.c)) : [];
+  let list = A ? G.WEAPONS.filter(w => !w.proto && A.eras.includes(w.e) && A.co.includes(w.co) && pools[role].includes(w.c)) : [];
   if (A && !list.length) list = G.WEAPONS.filter(w => A.eras.includes(w.e) && A.co.includes(w.co) && w.c !== 'PST');
   if (!list.length) list = G.eraWeapons(era, pools[role]);
   if (!list.length) list = G.eraWeapons(era, ['RIF', 'AR', 'SMG', 'CAR', 'BR']);
@@ -232,12 +232,12 @@ class Bot {
     G.animateSoldier(M, { dt, speed: hs, crouch: this.crouch, aimPitch: visible ? this.pitch : 0, recoil: this.recoil, sprint: !visible && hs > 3.5 && rlp < 0, reload: rlp });
   }
   shoot() {
-    const M = this.model; this.mag--; this.recoil = 1;
+    const M = this.model; const salvo = Math.min(this.wp.salvo || 1, Math.max(1, this.mag)); this.mag -= salvo; this.recoil = 1;
     M.root.updateMatrixWorld(true);
     const muzzle = M.gun.holder.localToWorld(M.muzzleLocal.clone());
     const eye = this.eye;
     const dir = V3(0, 0, -1).applyEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'));
-    const pellets = this.S.pellets;
+    const pellets = this.S.pellets * salvo;
     const cal = G.CAL[this.wp.cal];
     for (let i = 0; i < pellets; i++) {
       const d = dir.clone();
@@ -245,7 +245,7 @@ class Bot {
       d.x += (Math.random() - .5) * spread; d.y += (Math.random() - .5) * spread; d.z += (Math.random() - .5) * spread; d.normalize();
       // compensate drop for the target distance
       if (this.target) { const dd = this.target.pos.distanceTo(this.pos); const fl = G.Ballistics.flight(this.S.v, this.S.k, dd); d.y += .5 * 9.81 * fl.t * fl.t / Math.max(5, dd) * (this.tier.id === 'recruit' ? .6 : 1); d.normalize(); }
-      G.Ballistics.fire({ pos: eye.clone().addScaledVector(d, .4), dir: d, v: this.S.v, k: this.S.k, dmg: this.S.dmg, pen: this.S.pen, team: this.team, owner: this, tracer: (this.wp.c === 'LMG' && Math.random() < .25) ? (this.team === 1 && G.ERA[this.era].ord >= 2 && this.era !== 'mod' ? 'green' : 'red') : null, streak: false, cal: this.wp.cal, weapon: this.wp, vis: muzzle, pellet: pellets > 1 });
+      G.Ballistics.fire({ pos: eye.clone().addScaledVector(d, .4), dir: d, v: this.S.v, k: this.S.k, dmg: this.S.dmg, pen: this.S.pen, team: this.team, owner: this, tracer: (this.wp.c === 'LMG' && Math.random() < .25) ? (this.team === 1 && G.ERA[this.era].ord >= 2 && this.era !== 'mod' ? 'green' : 'red') : null, streak: false, cal: this.wp.cal, weapon: this.wp, vis: muzzle, pellet: pellets > 1 && !this.wp.salvo && !this.wp.duplex, gyro: this.wp.gyro });
     }
     const fwd = dir;
     G.FX.muzzle(muzzle, fwd, { scale: .5 + cal.cs[0] * 8, sup: this.S.sup, flash: this.S.flash, world: true });
@@ -253,7 +253,7 @@ class Bot {
     // everyone nearby hears it
     for (const b of this.game.bots) if (b !== this && b.alive && b.team !== this.team && b.pos.distanceTo(this.pos) < (this.S.sup ? 15 : 70) && !b.targetVisible) b.lastHeard = this.pos.clone();
     // casing
-    if (Math.random() < .5 && this.game.player && this.pos.distanceTo(this.game.player.pos) < 20) {
+    if (!this.wp.caseless && Math.random() < .5 && this.game.player && this.pos.distanceTo(this.game.player.pos) < 20) {
       const rt = V3(Math.cos(this.yaw), .8, -Math.sin(this.yaw));
       G.FX.casing(this.wp.cal, muzzle.clone().addScaledVector(fwd, -.4), rt.multiplyScalar(2.5), (x, z, y) => G.E.world.groundAt(x, z, y));
     }

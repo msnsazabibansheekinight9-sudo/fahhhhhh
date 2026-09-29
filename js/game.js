@@ -300,7 +300,8 @@ Game.clearTargets = function () { for (const T of Game.targets) G.E.world.group.
 Game.addTarget = function (type, dist, o = {}) {
   const n = Game.targets.length;
   const lanes = [0, -3, 3, -6, 6, -9, 9, -12, 12];
-  const x = lanes[n % lanes.length] * (dist > 200 ? 1 + dist / 400 : 1);
+  let x = lanes[n % lanes.length] * (dist > 200 ? 1 + dist / 400 : 1);
+  if (type === 'vehicle' || type === 'barrier') { const big = Game.targets.filter(t => t.type === 'vehicle' || t.type === 'barrier').length; x = [0, -10, 10, -20, 20, -30, 30][big % 7]; }
   const T = TGT[type](x, -dist, dist, o);
   T.dist = dist; T.x = x;
   if (!T.focus) T.focus = V3(x, T.type === 'gel' || T.type === 'bottles' ? 1 : 1.35, -dist);

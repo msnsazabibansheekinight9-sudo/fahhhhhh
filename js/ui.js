@@ -131,9 +131,9 @@ function renderArmory(root) {
   </section>`;
   const list = $('#wlist');
   const groups = {};
-  for (const w of G.WEAPONS.filter(w => w.e === era)) (groups[w.c] = groups[w.c] || []).push(w);
-  const order = ['AR', 'BR', 'CAR', 'RIF', 'SMG', 'LMG', 'DMR', 'SR', 'SG', 'PST'];
-  list.innerHTML = order.filter(c => groups[c]).map(c => `<div class="wgroup">${G.CLASS_NAMES[c]}</div>` + groups[c].map(w => `<button class="witem ${w.id === wp.id ? 'on' : ''}" data-wp="${w.id}"><b>${esc(w.n)}</b><em>${w.y}</em><span>${esc(w.co)} · ${esc(w.cal)}</span></button>`).join('')).join('');
+  for (const w of G.WEAPONS.filter(w => w.e === era)) { const k = w.proto ? 'PROTO' : w.c; (groups[k] = groups[k] || []).push(w); }
+  const order = ['AR', 'BR', 'CAR', 'RIF', 'SMG', 'LMG', 'DMR', 'SR', 'SG', 'PST', 'PROTO'];
+  list.innerHTML = order.filter(c => groups[c]).map(c => `<div class="wgroup">${c === 'PROTO' ? 'Prototype & experimental' : G.CLASS_NAMES[c]}</div>` + groups[c].map(w => `<button class="witem ${w.id === wp.id ? 'on' : ''}" data-wp="${w.id}"><b>${esc(w.n)}</b><em>${w.y}</em><span>${w.proto ? G.CLASS_NAMES[w.c] + ' · ' : ''}${esc(w.co)} · ${esc(w.cal)}</span></button>`).join('')).join('');
   list.querySelectorAll('[data-wp]').forEach(b => b.onclick = () => { UI.sel.wp = b.dataset.wp; store.set('sel', UI.sel); G.Audio.ui(); renderArmory(root); });
   root.querySelectorAll('[data-era]').forEach(b => b.onclick = () => { UI.sel.era = b.dataset.era; UI.sel.wp = null; store.set('sel', UI.sel); G.Audio.ui(); renderArmory(root); });
   const on = list.querySelector('.on'); if (on) on.scrollIntoView({ block: 'center' });
@@ -146,13 +146,13 @@ function renderArmory(root) {
   function refresh() {
     const L = UI.loadoutFor(wp), S = G.resolveStats(wp, L), S0 = G.resolveStats(wp, G.defaultLoadout(wp));
     SR.show(wp, L);
-    $('#wera').textContent = `${G.ERA[wp.e].name} · ${G.CLASS_NAMES[wp.c]}`;
+    $('#wera').textContent = `${G.ERA[wp.e].name} · ${G.CLASS_NAMES[wp.c]}${wp.proto ? ' · Prototype' : ''}`;
     $('#wname').textContent = wp.n;
     $('#wsub').textContent = `${wp.co} · adopted ${wp.y} · ${wp.cal} · ${{ bolt: 'bolt action', semi: 'semi-automatic', auto: 'selective fire', auto_ob: 'open bolt', pump: 'pump action', lever: 'lever action', rev: 'double-action revolver' }[wp.act] || wp.act}`;
     const b = statBars(wp, S), b0 = statBars(wp, S0);
     const blen = Math.round(wp.m.B[0] * S.blen * 1000);
     const spec = [['Rate of fire', S.modes.includes('bolt') ? `~${wp.rpm} rpm (aimed)` : `${S.rpm} rpm`], ['Capacity', `${S.mag} rds`], ['Muzzle velocity', `${Math.round(S.v)} m/s`], ['Weight (empty)', `${wp.wt.toFixed(2)} kg`], ['Barrel', `${blen} mm`], ['Fire modes', S.modes.map(m => ({ semi: 'Semi', auto: 'Auto', burst3: '3-rd', burst2: '2-rd', bolt: 'Bolt', pump: 'Pump', lever: 'Lever' }[m])).join(' / ')], ['Dispersion', `${S.acc.toFixed(1)} MOA`], ['Energy @ muzzle', `${Math.round(.5 * ((G.MASS || {})[wp.cal] || massOf(wp.cal)) / 1000 * S.v * S.v)} J`]];
-    $('#specs').innerHTML = `<dl class="spec">${spec.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
+    $('#specs').innerHTML = `${wp.blurb ? `<p class="blurb">${esc(wp.blurb)}</p>` : ''}<dl class="spec">${spec.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
       <div class="bars">${Object.keys(b).map(k => { const d = b[k] - b0[k]; return `<div class="bar">${k}<i class="${d > 1 ? 'up' : d < -1 ? 'down' : ''}" style="--v:${Math.max(2, b[k]).toFixed(0)}%"></i><s>${Math.round(b[k])}</s></div>`; }).join('')}</div>
       ${G.SLOTS.map(([s, name]) => { const opts = G.attachFor(wp, s); const cur = G.ATT[L[s]]; return `<div class="slot"><button data-slot="${s}"><span class="sn">${name}</span><span class="sv">${esc(cur ? cur.n : '—')}</span><span class="sc">${opts.length}</span></button>${open === s ? `<div class="opts">${opts.map(o => `<button class="opt ${o.id === L[s] ? 'on' : ''}" data-att="${o.id}"><b>${esc(o.n)}</b>${o.d ? `<span>${esc(o.d)}</span>` : ''}</button>`).join('')}</div>` : ''}</div>`; }).join('')}`;
     $('#specs').querySelectorAll('[data-slot]').forEach(bt => bt.onclick = () => { open = open === bt.dataset.slot ? null : bt.dataset.slot; G.Audio.ui(); refresh(); });
@@ -272,23 +272,27 @@ UI.toggleRangeMenu = function (force) {
   if (m && force !== true) { m.remove(); if (G.Game.state === 'pause') G.Game.state = 'play'; if (!G.Input.touch) G.Input.lock(); return; }
   if (m) m.remove();
   G.Input.unlock(); G.Game.state = 'pause';
-  const st = UI.rangeSel = UI.rangeSel || { type: 'paper', dist: 25, era: G.Game.player ? G.Game.player.W.wp.e : 'ww2', tier: 'regular' };
+  const st = UI.rangeSel = UI.rangeSel || { type: 'paper', dist: 25, era: G.Game.player ? G.Game.player.W.wp.e : 'ww2', tier: 'regular', veh: 'sedan', orient: 'side' };
   m = document.createElement('div'); m.id = 'rmenu';
   const draw = () => {
     m.innerHTML = `<div class="dialog"><div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px"><div><div class="eyebrow">Range control</div><h2>Targets</h2></div><span class="muted" style="font:12px var(--f-mono)">${G.Game.targets.length} / 9 placed</span></div>
       <div class="grid">${G.TARGETS.map(t => `<button class="card ${st.type === t.id ? 'on' : ''}" data-ty="${t.id}"><b>${t.n}</b><span>${t.d}</span></button>`).join('')}</div>
-      ${st.type === 'dummy' ? `<div class="loadrow"><div><span class="lbl">Mannequin era</span><select id="r-era">${G.ERAS.map(e => `<option value="${e.id}" ${st.era === e.id ? 'selected' : ''}>${e.name}</option>`).join('')}</select></div><div><span class="lbl">Enemy tier</span><select id="r-tier">${G.TIERS.map(t => `<option value="${t.id}" ${st.tier === t.id ? 'selected' : ''}>${t.n}${t.armor < 1 ? ' (armoured from 1990)' : ''}</option>`).join('')}</select></div></div>` : ''}
+      ${st.type === 'vehicle' ? `<div><span class="lbl">Vehicle</span><div class="grid">${G.VEHICLES.map(v => `<button class="card ${st.veh === v.id ? 'on' : ''}" data-veh="${v.id}"><small>${G.ERA[v.era].name}</small><b>${esc(v.n)}</b><span>${esc(v.d)}</span></button>`).join('')}</div></div>
+      <div><span class="lbl">Facing you</span><div class="eras">${[['side', 'Side'], ['front', 'Front'], ['rear', 'Rear'], ['quarter', '45° quarter']].map(([k, n]) => `<button class="chip ${st.orient === k ? 'on' : ''}" data-or="${k}">${n}</button>`).join('')}</div></div>` : ''}
+      ${st.type === 'dummy' || st.type === 'walker' ? `<div class="loadrow"><div><span class="lbl">Mannequin era</span><select id="r-era">${G.ERAS.map(e => `<option value="${e.id}" ${st.era === e.id ? 'selected' : ''}>${e.name}</option>`).join('')}</select></div><div><span class="lbl">Enemy tier</span><select id="r-tier">${G.TIERS.map(t => `<option value="${t.id}" ${st.tier === t.id ? 'selected' : ''}>${t.n}${t.armor < 1 ? ' (armoured from 1990)' : ''}</option>`).join('')}</select></div></div>` : ''}
       <div><span class="lbl">Distance</span><div class="eras">${G.RANGE_DISTS.map(d => `<button class="chip ${st.dist === d ? 'on' : ''}" data-d="${d}">${d} m</button>`).join('')}</div></div>
       <label class="field">Crosswind<input type="range" id="r-wind" min="-10" max="10" step=".5" value="${G.rangeWind || 0}"><output>${(G.rangeWind || 0).toFixed(1)} m/s</output></label>
       <div class="deploy"><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" id="r-clear">Clear all</button><button class="btn" id="r-reset">Reset targets</button></div><div style="display:flex;gap:6px"><button class="btn" id="r-close">Close</button><button class="btn primary" id="r-add">Place target</button></div></div></div>`;
     m.querySelectorAll('[data-ty]').forEach(b => b.onclick = () => { st.type = b.dataset.ty; draw(); });
     m.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { st.dist = +b.dataset.d; draw(); });
+    m.querySelectorAll('[data-veh]').forEach(b => b.onclick = () => { st.veh = b.dataset.veh; draw(); });
+    m.querySelectorAll('[data-or]').forEach(b => b.onclick = () => { st.orient = b.dataset.or; draw(); });
     if ($('#r-era', m)) { $('#r-era', m).onchange = e => st.era = e.target.value; $('#r-tier', m).onchange = e => st.tier = e.target.value; }
     $('#r-wind', m).oninput = e => { G.rangeWind = +e.target.value; G.Ballistics.wind.set(G.rangeWind, 0, 0); m.querySelector('output').textContent = G.rangeWind.toFixed(1) + ' m/s'; };
     $('#r-clear', m).onclick = () => { G.Game.clearTargets(); G.FX.clear(); draw(); };
     $('#r-reset', m).onclick = () => { for (const T of G.Game.targets) T.reset && T.reset(); G.FX.clear(); };
     $('#r-close', m).onclick = () => UI.toggleRangeMenu(false);
-    $('#r-add', m).onclick = () => { G.Game.addTarget(st.type, st.dist, { era: st.era, tier: st.tier }); G.Audio.ui('attach'); UI.toggleRangeMenu(false); };
+    $('#r-add', m).onclick = () => { G.Game.addTarget(st.type, st.dist, { era: st.era, tier: st.tier, veh: st.veh, orient: st.orient }); G.Audio.ui('attach'); UI.toggleRangeMenu(false); };
   };
   draw();
   document.body.appendChild(m);
