@@ -163,7 +163,7 @@ function buildVehicle(V, era) {
     const S = G.buildSoldier({ era: crewEra, team: V.kind === 'car' && !V.gunner ? 1 : 1, tier: 'regular' });
     S.root.rotation.y = -PI / 2; g.add(S.root);
     G.animateSoldier(S, { dt: 1, speed: 0 });
-    if (!standing) { for (const Lg of S.legs) { Lg.hip.rotation.x = -1.45; Lg.knee.rotation.x = 1.45; } S.hips.position.y = .96; S.root.position.set(x, seatY + .45 - .96, z); }
+    if (!standing) { G.poseSeated(S); S.root.position.set(x, seatY + .45 - .96, z); }
     else S.root.position.set(x, .95 - .0, z);
     crew.push({ S, name, hp: 100, dead: false });
   }
@@ -368,7 +368,7 @@ TGT.walker = function (x, z, dist, o = {}) {
       S.root.position.x = x + this.cx; S.root.rotation.y = this.dir > 0 ? -PI / 2 : PI / 2; this.focus.x = x + this.cx;
       G.animateSoldier(S, { dt, speed: 1.5 });
     },
-    reset() { this.hp = this.tier.hp; S.dead = 0; S.deathKind = null; S.root.rotation.set(0, -PI / 2, 0); S.hips.position.y = .96; S.chest.rotation.x = 0; S.neck.rotation.set(0, 0, 0); for (const L of S.legs) { L.knee.rotation.x = 0; L.hip.rotation.x = 0; } if (S.gun) { S.gun.holder.rotation.set(0, 0, 0); S.gun.holder.position.set(.13, .06, -.12); } },
+    reset() { this.hp = this.tier.hp; G.resetSoldier(S); S.root.rotation.set(0, -PI / 2, 0); },
   };
   return T;
 };

@@ -67,8 +67,7 @@ class Bot {
   get eye() { return V3(this.pos.x, this.pos.y + (this.crouch ? 1.1 : 1.58), this.pos.z); }
   spawn(p) {
     this.pos.copy(p); this.vel.set(0, 0, 0); this.hp = this.tier.hp; this.alive = true; this.mag = this.S.mag; this.reloadT = 0; this.target = null; this.path = [];
-    this.yaw = this.team === 0 ? 0 : PI; this.model.dead = 0; this.model.root.rotation.set(0, 0, 0); this.model.root.visible = true;
-    if (this.model.gun) { this.model.gun.holder.rotation.set(0, 0, 0); this.model.gun.holder.position.set(.13, .06, -.12); if (this.wp.c === 'PST') this.model.gun.holder.position.set(0, .1, -.42); }
+    this.yaw = this.team === 0 ? 0 : PI; G.resetSoldier(this.model); this.model.root.rotation.set(0, 0, 0); this.model.root.visible = true;
     this.spawnProt = 1.5;
   }
   hitboxes() { return G.soldierHitboxes(this.model); }
@@ -229,7 +228,7 @@ class Bot {
     M.root.position.copy(this.pos); M.root.rotation.y = this.yaw;
     this.recoil *= Math.pow(.001, dt);
     const rlp = this.reloadT > 0 ? 1 - this.reloadT / this.reloadDur : -1;
-    G.animateSoldier(M, { dt, speed: hs, crouch: this.crouch, aimPitch: visible ? this.pitch : 0, recoil: this.recoil, sprint: !visible && hs > 3.5 && rlp < 0, reload: rlp });
+    G.animateSoldier(M, { dt, speed: hs, crouch: this.crouch, aimPitch: visible ? this.pitch : 0, aim: visible || !!this.target, recoil: this.recoil, sprint: !visible && hs > 3.5 && rlp < 0, reload: rlp });
   }
   shoot() {
     const M = this.model; const salvo = Math.min(this.wp.salvo || 1, Math.max(1, this.mag)); this.mag -= salvo; this.recoil = 1;

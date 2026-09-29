@@ -13,7 +13,7 @@ const { gBox, gCylY, gCyl, gSph, gRBox, gProf } = G.geo;
 // projectile mass in grams (for energy readouts)
 const MASS = { '.303 British': 11.3, '7.92×57mm': 12.8, '.30-06': 9.7, '7.62×54mmR': 9.6, '8mm Lebel': 12.8, '6.5×52mm': 10.5, '6.5×50mmSR': 9, '7.7×58mm': 11.8, '.30-40 Krag': 14, '.30 Carbine': 7.1, '7.92×33mm Kurz': 8.1, '7.62×39mm': 7.9, '7.62×51mm': 9.5, '5.56×45mm': 4, '5.45×39mm': 3.4, '5.8×42mm': 4.2, '6.8×51mm': 8.8, '.300 BLK': 8.1, '.338 Lapua': 16.2, '.300 Win Mag': 12.3, '.50 BMG': 42, '9×19mm': 8, '.45 ACP': 14.9, '7.63×25mm': 5.5, '7.62×25mm': 5.5, '9×18mm': 6.1, '.455 Webley': 17, '.357 Magnum': 10.2, '.44 Magnum': 15.6, '.50 AE': 19.4, '8×22mm Nambu': 6.6, '.45 Colt': 16.2, '4.6×30mm': 2, '5.7×28mm': 2, '.40 S&W': 11.7, '12 gauge': 3.5 };
 
-G.MASS = MASS;
+G.MASS = Object.assign(MASS, G.MASS || {}); // keep the calibres added by the later data files
 const Game = G.Game = { mode: 'menu', state: 'menu', agents: [], bots: [], targets: [], grenades: [], autoReload: true, killfeed: [], time: 0 };
 
 // ======================================================= RANGE TARGETS
@@ -290,7 +290,7 @@ TGT.dummy = function (x, z, dist, o) {
       return { pass: false, info: `${this._zone.toUpperCase()} · ${Math.round(d)} dmg${armor}${dead ? ' · LETHAL' : ` · ${Math.max(0, Math.round(this.hp))} HP left`}` };
     },
     update(dt) { if (S.dead > 0) { G.animateSoldier(S, { dt, dead: true }); this.t += dt; if (this.t > 3) this.reset(); } else G.animateSoldier(S, { dt, speed: 0, aimPitch: 0 }); },
-    reset() { this.hp = this.tier.hp; S.dead = 0; S.deathKind = null; S.flinch = 0; S.root.rotation.set(0, 0, 0); S.hips.position.y = .96; S.chest.rotation.x = 0; S.neck.rotation.x = 0; for (const L of S.legs) { L.knee.rotation.x = 0; L.hip.rotation.x = 0; } if (S.gun) { S.gun.holder.rotation.set(0, 0, 0); S.gun.holder.position.set(.13, .06, -.12); } G.animateSoldier(S, { dt: 1, speed: 0 }); },
+    reset() { this.hp = this.tier.hp; G.resetSoldier(S); S.root.rotation.set(0, 0, 0); G.animateSoldier(S, { dt: 1, speed: 0 }); },
   };
   return T;
 };
