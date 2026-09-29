@@ -101,7 +101,7 @@ w({ id:'m1897', n:'Winchester M1897 Trench', e:'ww1', c:'SG', y:1917, co:'United
 w({ id:'m1911', n:'Colt M1911', e:'ww1', c:'PST', y:1911, co:'United States', cal:'.45 ACP', act:'semi', modes:['semi'], rpm:300, mag:7, v:253, dmg:40, rec:[1.6,.6], rl:[1.6,2.0], acc:6, wt:1.1,
   m:{ t:'pistol', R:[.21,.035,.029], B:[.127,.0065], stk:'none', grip:'pst', mag:['pst',.12], sgt:'pst', bh:'slide', mz:'crown', wd:'wood', mt:'park', x:['hammer'] }});
 w({ id:'luger', n:'Luger P08', e:'ww1', c:'PST', y:1908, co:'German Empire', cal:'9×19mm', act:'semi', modes:['semi'], rpm:320, mag:8, v:350, dmg:32, rec:[1.2,.5], rl:[1.7,2.2], acc:5, wt:.87,
-  m:{ t:'pistol', R:[.16,.03,.026], B:[.10,.006], stk:'none', grip:'pst_raked', mag:['pst',.12], sgt:'pst', bh:'toggle', mz:'crown', wd:'wood', mt:'blued', x:[] }});
+  m:{ t:'pistol', R:[.22,.03,.026], B:[.10,.006], stk:'none', grip:'pst_raked', mag:['pst',.12], sgt:'pst', bh:'toggle', mz:'crown', wd:'wood', mt:'blued', x:[] }});
 w({ id:'c96', n:'Mauser C96', e:'ww1', c:'PST', y:1896, co:'German Empire', cal:'7.63×25mm', act:'semi', modes:['semi'], rpm:300, mag:10, v:425, dmg:34, rec:[1.3,.5], rl:[2.3,2.8], acc:5, wt:1.13,
   m:{ t:'pistol', R:[.20,.05,.028], B:[.14,.006], stk:'none', grip:'broom', mag:['int'], sgt:'tall', bh:'hammer_only', mz:'crown', wd:'wood_dark', mt:'blued', x:['hammer','magwell_front'] }});
 w({ id:'webley', n:'Webley Mk VI', e:'ww1', c:'PST', y:1915, co:'United Kingdom', cal:'.455 Webley', act:'rev', modes:['semi'], rpm:150, mag:6, v:190, dmg:45, rec:[1.8,.6], rl:[2.8,2.8], acc:7, wt:1.1,
@@ -179,7 +179,7 @@ w({ id:'g3', n:'H&K G3A3', e:'cold', c:'BR', y:1959, co:'West Germany', cal:'7.6
 w({ id:'galil', n:'IMI Galil ARM', e:'cold', c:'AR', y:1972, co:'Israel', cal:'5.56×45mm', act:'auto', modes:['auto','semi'], rpm:650, mag:35, v:950, dmg:30, rec:[.7,.45], rl:[2.5,3.1], acc:3.5, wt:4.35,
   m:{ t:'ak', R:[.30,.07,.045], B:[.46,.0085], hg:['galil',.21], stk:'side_fold', grip:'ak', mag:['curve',.21,.25,-.07], sgt:'ak', bh:'ak_up', mz:'bird', bip:1, wd:'wood', pl:'black', mt:'park', x:['gas','dust','carry_galil'] }});
 w({ id:'aug', n:'Steyr AUG A1', e:'cold', c:'AR', y:1978, co:'Austria', cal:'5.56×45mm', act:'auto', modes:['auto','semi'], rpm:680, mag:30, v:970, dmg:30, rec:[.55,.35], rl:[2.9,3.4], acc:3, wt:3.6, defOptic:'aug_scope',
-  m:{ t:'bullpup', R:[.46,.09,.05], B:[.42,.0085], hg:['none',0], stk:'aug', grip:'aug', mag:['box_clear',.18,.15,.10], sgt:'aug_scope', bh:'side_l', mz:'bird', pl:'od', mt:'black', x:['aug_fold'] }});
+  m:{ bi:.09, t:'bullpup', R:[.46,.09,.05], B:[.42,.0085], hg:['none',0], stk:'aug', grip:'aug', mag:['box_clear',.18,.15,.10], sgt:'aug_scope', bh:'side_l', mz:'bird', pl:'od', mt:'black', x:['aug_fold'] }});
 w({ id:'mp5', n:'H&K MP5A3', e:'cold', c:'SMG', y:1966, co:'West Germany', cal:'9×19mm', act:'auto', modes:['auto','burst3','semi'], rpm:800, mag:30, v:400, dmg:25, rec:[.35,.25], rl:[2.2,2.9], acc:5, wt:2.54,
   m:{ t:'smg', R:[.27,.06,.04], B:[.225,.008], hg:['mp5',.14], stk:'mp5_coll', grip:'hk', mag:['curve',.18,.4,-.06], sgt:'drum_hk', bh:'hk', mz:'crown', pl:'black', mt:'black', x:['cocking_tube','claw'] }});
 w({ id:'uzi', n:'IMI Uzi', e:'cold', c:'SMG', y:1954, co:'Israel', cal:'9×19mm', act:'auto_ob', modes:['auto','semi'], rpm:600, mag:32, v:400, dmg:25, rec:[.45,.3], rl:[2.0,2.6], acc:8, wt:3.5,
@@ -233,13 +233,13 @@ w({ id:'an94', n:'AN-94 “Abakan”', e:'mod', c:'AR', y:1994, co:'Russia', cal
 w({ id:'g36', n:'H&K G36', e:'mod', c:'AR', y:1997, co:'Germany', cal:'5.56×45mm', act:'auto', modes:['auto','burst2','semi'], rpm:750, mag:30, v:920, dmg:30, rec:[.5,.3], rl:[2.4,2.9], acc:3, wt:3.63, defOptic:'g36_dual',
   m:{ t:'ar', R:[.36,.08,.042], B:[.48,.0085], hg:['g36',.26], stk:'g36', grip:'g36', mag:['box_clear',.19,.15,-.06], sgt:'g36_handle', bh:'g36', mz:'bird', pl:'g36', mt:'black', x:[] }});
 w({ id:'famas', n:'FAMAS F1', e:'mod', c:'AR', y:1978, co:'France', cal:'5.56×45mm', act:'auto', modes:['auto','burst3','semi'], rpm:1000, mag:25, v:960, dmg:30, rec:[.6,.4], rl:[2.6,3.1], acc:3, wt:3.61,
-  m:{ t:'bullpup', R:[.46,.09,.045], B:[.49,.0085], hg:['none',0], stk:'famas', grip:'famas', mag:['box',.15,0,.10], sgt:'famas', bh:'famas', mz:'bird', bip:1, pl:'black', mt:'black', x:['famas_handle'] }});
+  m:{ bi:.19, t:'bullpup', R:[.46,.09,.045], B:[.49,.0085], hg:['none',0], stk:'famas', grip:'famas', mag:['box',.15,0,.10], sgt:'famas', bh:'famas', mz:'bird', bip:1, pl:'black', mt:'black', x:['famas_handle'] }});
 w({ id:'l85', n:'L85A2', e:'mod', c:'AR', y:2002, co:'United Kingdom', cal:'5.56×45mm', act:'auto', modes:['auto','semi'], rpm:700, mag:30, v:940, dmg:30, rec:[.45,.3], rl:[2.6,3.2], acc:2.5, wt:3.82, defOptic:'susat',
-  m:{ t:'bullpup', R:[.48,.085,.045], B:[.518,.0085], hg:['l85',.18], stk:'l85', grip:'l85', mag:['curve',.19,.15,.10], sgt:'flat', bh:'side_r', mz:'bird', pl:'black', mt:'black', x:['railT'] }});
+  m:{ bi:.21, t:'bullpup', R:[.48,.085,.045], B:[.518,.0085], hg:['l85',.18], stk:'l85', grip:'l85', mag:['curve',.19,.15,.10], sgt:'flat', bh:'side_r', mz:'bird', pl:'black', mt:'black', x:['railT'] }});
 w({ id:'qbz95', n:'QBZ-95', e:'mod', c:'AR', y:1997, co:'China', cal:'5.8×42mm', act:'auto', modes:['auto','semi'], rpm:650, mag:30, v:930, dmg:31, rec:[.55,.35], rl:[2.6,3.2], acc:3, wt:3.25,
-  m:{ t:'bullpup', R:[.46,.09,.045], B:[.463,.0085], hg:['none',0], stk:'qbz', grip:'qbz', mag:['curve',.19,.2,.10], sgt:'qbz_handle', bh:'qbz', mz:'bird', pl:'black', mt:'black', x:[] }});
+  m:{ bi:.18, t:'bullpup', R:[.46,.09,.045], B:[.463,.0085], hg:['none',0], stk:'qbz', grip:'qbz', mag:['curve',.19,.2,.10], sgt:'qbz_handle', bh:'qbz', mz:'bird', pl:'black', mt:'black', x:[] }});
 w({ id:'tavor', n:'IWI Tavor TAR-21', e:'mod', c:'AR', y:2001, co:'Israel', cal:'5.56×45mm', act:'auto', modes:['auto','semi'], rpm:900, mag:30, v:910, dmg:30, rec:[.5,.3], rl:[2.5,3.0], acc:3, wt:3.27,
-  m:{ t:'bullpup', R:[.46,.10,.05], B:[.46,.0085], hg:['none',0], stk:'tavor', grip:'tavor', mag:['curve',.19,.15,.10], sgt:'flat', bh:'side_l', mz:'bird', pl:'black', mt:'black', x:['railT','tavor_guard'] }});
+  m:{ bi:.2, t:'bullpup', R:[.46,.10,.05], B:[.46,.0085], hg:['none',0], stk:'tavor', grip:'tavor', mag:['curve',.19,.15,.10], sgt:'flat', bh:'side_l', mz:'bird', pl:'black', mt:'black', x:['railT','tavor_guard'] }});
 w({ id:'hk416', n:'H&K HK416', e:'mod', c:'CAR', y:2005, co:'Germany', cal:'5.56×45mm', act:'auto', modes:['auto','semi'], rpm:850, mag:30, v:880, dmg:29, rec:[.5,.32], rl:[2.0,2.6], acc:2.2, wt:3.49,
   m:{ t:'ar', R:[.30,.08,.036], B:[.368,.0085], hg:['quad_long',.26], stk:'crane', grip:'ar', mag:['curve',.19,.15,-.06], sgt:'flat', bh:'ar', mz:'a2', pl:'black', mt:'black', x:['fa','railT'] }});
 w({ id:'scarl', n:'FN SCAR-L (Mk 16)', e:'mod', c:'AR', y:2009, co:'Belgium', cal:'5.56×45mm', act:'auto', modes:['auto','semi'], rpm:625, mag:30, v:870, dmg:30, rec:[.5,.3], rl:[2.2,2.8], acc:2, wt:3.29,
@@ -251,19 +251,19 @@ w({ id:'m249', n:'M249 SAW', e:'mod', c:'LMG', y:1984, co:'United States', cal:'
 w({ id:'m240', n:'M240B', e:'mod', c:'LMG', y:1997, co:'United States', cal:'7.62×51mm', act:'auto_ob', modes:['auto'], rpm:650, mag:100, v:853, dmg:56, rec:[1.0,.5], rl:[5.6,6.4], acc:4, wt:12.5, heavy:true,
   m:{ t:'mg', R:[.46,.10,.058], B:[.63,.012], hg:['m240',.25], stk:'m240', grip:'pg', mag:['beltbox',.16], sgt:'rifle', bh:'side_r', mz:'cone', bip:1, pl:'black', mt:'black', x:['carry_saw','railT'] }});
 w({ id:'p90', n:'FN P90', e:'mod', c:'SMG', y:1990, co:'Belgium', cal:'5.7×28mm', act:'auto', modes:['auto','semi'], rpm:900, mag:50, v:715, dmg:24, rec:[.3,.22], rl:[2.9,3.4], acc:4, wt:2.54,
-  m:{ t:'bullpup', R:[.40,.11,.055], B:[.263,.0075], hg:['none',0], stk:'p90', grip:'p90', mag:['p90',.26], sgt:'p90', bh:'side_both', mz:'crown', pl:'black', mt:'black', x:[] }});
+  m:{ bi:.24, t:'bullpup', R:[.48,.11,.055], B:[.263,.0075], hg:['none',0], stk:'p90', grip:'p90', mag:['p90',.26], sgt:'p90', bh:'side_both', mz:'crown', pl:'black', mt:'black', x:[] }});
 w({ id:'ump45', n:'H&K UMP45', e:'mod', c:'SMG', y:1999, co:'Germany', cal:'.45 ACP', act:'auto', modes:['auto','burst2','semi'], rpm:600, mag:25, v:285, dmg:30, rec:[.45,.3], rl:[2.2,2.8], acc:5, wt:2.3,
   m:{ t:'smg', R:[.30,.075,.04], B:[.20,.009], hg:['ump',.14], stk:'ump', grip:'hk_poly', mag:['box',.17,0,-.06], sgt:'flat', bh:'hk', mz:'crown', pl:'black', mt:'black', x:['cocking_tube','railT'] }});
 w({ id:'mp7', n:'H&K MP7A1', e:'mod', c:'SMG', y:2001, co:'Germany', cal:'4.6×30mm', act:'auto', modes:['auto','semi'], rpm:950, mag:40, v:735, dmg:22, rec:[.3,.22], rl:[2.0,2.5], acc:4, wt:1.9,
-  m:{ t:'smg', R:[.26,.09,.04], B:[.18,.007], hg:['none',0], stk:'mp7', grip:'magwell', mag:['box',.20,0,.02], sgt:'flat', bh:'ar', mz:'crown', pl:'black', mt:'black', x:['railT','foldgrip'] }});
+  m:{ bi:.1, t:'smg', R:[.30,.058,.036], B:[.18,.007], hg:['none',0], stk:'mp7', grip:'magwell', mag:['box',.20,0,.02], sgt:'flat', bh:'ar', mz:'crown', pl:'black', mt:'black', x:['railT','foldgrip'] }});
 w({ id:'vector', n:'KRISS Vector', e:'mod', c:'SMG', y:2009, co:'United States', cal:'.45 ACP', act:'auto', modes:['auto','burst2','semi'], rpm:1200, mag:25, v:290, dmg:28, rec:[.3,.22], rl:[2.2,2.8], acc:5, wt:2.7,
-  m:{ t:'smg', R:[.33,.11,.045], B:[.14,.009], hg:['vector',.12], stk:'vector', grip:'vector', mag:['box',.17,0,.00], sgt:'flat', bh:'side_l', mz:'crown', pl:'black', mt:'black', x:['railT'] }});
+  m:{ bi:.06, t:'smg', R:[.33,.085,.045], B:[.14,.009], hg:['vector',.12], stk:'vector', grip:'vector', mag:['box',.17,0,.00], sgt:'flat', bh:'side_l', mz:'crown', pl:'black', mt:'black', x:['railT'] }});
 w({ id:'m24', n:'M24 SWS', e:'mod', c:'SR', y:1988, co:'United States', cal:'7.62×51mm', act:'bolt', modes:['bolt'], rpm:40, mag:5, v:790, dmg:115, rec:[1.8,.4], rl:[2.5,3.1], acc:.6, wt:5.4, cyc:.8, defOptic:'m3a',
   m:{ t:'bolt', R:[.22,.06,.04], B:[.61,.011], hg:['poly_sporter',.40], stk:'sporter', grip:'pg_poly', mag:['int'], sgt:'none', bh:'bolt', mz:'crown', pl:'od', mt:'black', x:['rail_bolt'] }});
 w({ id:'awm', n:'Accuracy Intl. AWM', e:'mod', c:'SR', y:1996, co:'United Kingdom', cal:'.338 Lapua', act:'bolt', modes:['bolt'], rpm:35, mag:5, v:936, dmg:160, rec:[2.4,.5], rl:[2.8,3.6], acc:.5, wt:6.9, cyc:.9, defOptic:'pm2',
   m:{ t:'precision', R:[.26,.075,.05], B:[.69,.012], hg:['ai',.38], stk:'ai', grip:'thumbhole', mag:['box',.09,0,-.04], sgt:'none', bh:'bolt', mz:'brake', bip:1, pl:'od', mt:'black', x:['rail_bolt'] }});
 w({ id:'m82', n:'Barrett M82A1', e:'mod', c:'SR', y:1990, co:'United States', cal:'.50 BMG', act:'semi', modes:['semi'], rpm:40, mag:10, v:853, dmg:250, rec:[3.2,.8], rl:[3.4,4.2], acc:1.5, wt:14, heavy:true, defOptic:'leupold10',
-  m:{ t:'amr', R:[.60,.13,.07], B:[.74,.016], hg:['barrett',.40], stk:'barrett', grip:'pg', mag:['box',.10,0,-.05], sgt:'none', bh:'side_r', mz:'barrett', bip:1, pl:'black', mt:'park', x:['railT','carry_barrett'] }});
+  m:{ t:'amr', R:[.60,.16,.07], B:[.74,.016], hg:['barrett',.40], stk:'barrett', grip:'pg', mag:['box',.12,0,-.05], sgt:'none', bh:'side_r', mz:'barrett', bip:1, pl:'black', mt:'park', x:['railT','carry_barrett'] }});
 w({ id:'mk14', n:'Mk 14 EBR', e:'mod', c:'DMR', y:2004, co:'United States', cal:'7.62×51mm', act:'semi', modes:['semi','auto'], rpm:725, mag:20, v:853, dmg:62, rec:[1.4,.55], rl:[2.5,3.1], acc:1.2, wt:5.1,
   m:{ t:'semiw', R:[.30,.07,.042], B:[.46,.0095], hg:['ebr',.36], stk:'crane', grip:'ar', mag:['box',.13,0,-.08], sgt:'flat', bh:'side_r', mz:'a2', pl:'black', mt:'black', x:['railT','chassis'] }});
 w({ id:'m1014', n:'Benelli M1014', e:'mod', c:'SG', y:1999, co:'Italy', cal:'12 gauge', act:'semi', modes:['semi'], rpm:250, mag:7, v:400, dmg:15, pellets:9, rec:[2.6,.8], rl:[.45,.45], acc:36, wt:3.82, tubeLoad:true,
@@ -303,7 +303,7 @@ w({ id:'scorpion', n:'CZ Scorpion Evo 3', e:'now', c:'SMG', y:2012, co:'Czech Re
 w({ id:'apc9', n:'B&T APC9 Pro', e:'now', c:'SMG', y:2019, co:'Switzerland', cal:'9×19mm', act:'auto', modes:['auto','semi'], rpm:1080, mag:30, v:380, dmg:25, rec:[.35,.26], rl:[1.9,2.4], acc:4, wt:2.5,
   m:{ t:'smg', R:[.30,.085,.04], B:[.175,.0075], hg:['mlok',.12], stk:'apc', grip:'ar', mag:['box',.17,.1,-.05], sgt:'flat', bh:'side_l', mz:'crown', pl:'black', mt:'black', x:['railT'] }});
 w({ id:'vector2', n:'KRISS Vector Gen II', e:'now', c:'SMG', y:2011, co:'United States', cal:'9×19mm', act:'auto', modes:['auto','burst2','semi'], rpm:1200, mag:33, v:380, dmg:24, rec:[.25,.2], rl:[2.0,2.6], acc:4.5, wt:2.7,
-  m:{ t:'smg', R:[.33,.11,.045], B:[.14,.0085], hg:['vector',.12], stk:'vector', grip:'vector', mag:['box',.22,0,.00], sgt:'flat', bh:'side_l', mz:'crown', pl:'fde', mt:'black', x:['railT'] }});
+  m:{ t:'smg', R:[.33,.085,.045], B:[.14,.0085], hg:['vector',.12], stk:'vector', grip:'vector', mag:['box',.22,0,.00], sgt:'flat', bh:'side_l', mz:'crown', pl:'fde', mt:'black', x:['railT'] }});
 w({ id:'negev', n:'IWI Negev NG7', e:'now', c:'LMG', y:2012, co:'Israel', cal:'7.62×51mm', act:'auto_ob', modes:['auto','semi'], rpm:700, mag:125, v:830, dmg:56, rec:[1.0,.5], rl:[5.0,5.8], acc:4, wt:7.95, heavy:true,
   m:{ t:'mg', R:[.40,.095,.052], B:[.508,.012], hg:['saw',.22], stk:'side_fold', grip:'pg', mag:['beltpouch',.15], sgt:'flat', bh:'side_r', mz:'cone', bip:1, pl:'black', mt:'black', x:['railT','carry_saw'] }});
 w({ id:'rpk16', n:'RPK-16', e:'now', c:'LMG', y:2018, co:'Russia', cal:'5.45×39mm', act:'auto', modes:['auto','semi'], rpm:700, mag:96, v:900, dmg:31, rec:[.55,.35], rl:[3.6,4.3], acc:3, wt:4.5,
@@ -313,7 +313,7 @@ w({ id:'mk22', n:'Barrett MRAD Mk 22', e:'now', c:'SR', y:2021, co:'United State
 w({ id:'axmc', n:'Accuracy Intl. AXMC', e:'now', c:'SR', y:2014, co:'United Kingdom', cal:'.338 Lapua', act:'bolt', modes:['bolt'], rpm:35, mag:10, v:936, dmg:160, rec:[2.3,.45], rl:[2.8,3.5], acc:.4, wt:6.8, cyc:.85, defOptic:'nxs',
   m:{ t:'precision', R:[.30,.08,.05], B:[.69,.012], hg:['mlok_long',.42], stk:'ai', grip:'ar', mag:['box',.10,0,-.04], sgt:'none', bh:'bolt', mz:'brake', bip:1, pl:'od', mt:'black', x:['railT'] }});
 w({ id:'m107a1', n:'Barrett M107A1', e:'now', c:'SR', y:2011, co:'United States', cal:'.50 BMG', act:'semi', modes:['semi'], rpm:40, mag:10, v:853, dmg:250, rec:[3.0,.8], rl:[3.3,4.1], acc:1.2, wt:13, heavy:true, defOptic:'nxs',
-  m:{ t:'amr', R:[.60,.13,.07], B:[.74,.016], hg:['barrett',.40], stk:'barrett', grip:'pg', mag:['box',.10,0,-.05], sgt:'none', bh:'side_r', mz:'barrett', bip:1, pl:'fde', mt:'fde', x:['railT','carry_barrett'] }});
+  m:{ t:'amr', R:[.60,.16,.07], B:[.74,.016], hg:['barrett',.40], stk:'barrett', grip:'pg', mag:['box',.12,0,-.05], sgt:'none', bh:'side_r', mz:'barrett', bip:1, pl:'fde', mt:'fde', x:['railT','carry_barrett'] }});
 w({ id:'m110a1', n:'H&K M110A1 CSASS', e:'now', c:'DMR', y:2016, co:'United States', cal:'7.62×51mm', act:'semi', modes:['semi'], rpm:40, mag:20, v:785, dmg:64, rec:[1.3,.5], rl:[2.4,3.0], acc:.9, wt:4.1, defOptic:'lpvo',
   m:{ t:'ar', R:[.33,.09,.04], B:[.41,.0095], hg:['mlok',.34], stk:'g28', grip:'ar', mag:['box',.13,0,-.07], sgt:'flat', bh:'ar', mz:'sup_slx', pl:'ral8000', mt:'black', x:['railT','fa'] }});
 w({ id:'svch', n:'Chukavin SVCh', e:'now', c:'DMR', y:2021, co:'Russia', cal:'7.62×54mmR', act:'semi', modes:['semi'], rpm:40, mag:10, v:830, dmg:90, rec:[1.5,.5], rl:[2.4,3.0], acc:1, wt:4.6, defOptic:'nxs',

@@ -316,7 +316,7 @@ class Player {
     R.fn = t => {
       const p = track([[0, 0], [.12, 1], [tEnd, 1], [1, 0]], t);
       this.anim = belt ? { px: -.03 * p, py: .05 * p, pz: .05 * p, rx: -.25 * p, ry: .25 * p, rz: .15 * p }
-        : pistol ? { px: -.03 * p, py: .03 * p, pz: .02 * p, rx: .3 * p, ry: .15 * p, rz: .35 * p }
+        : pistol ? { px: -.07 * p, py: .085 * p, pz: .03 * p, rx: .55 * p, ry: .22 * p, rz: .5 * p } // raise, tip & roll so the magwell faces the support hand
         : { px: tilt.px * p, py: tilt.py * p, pz: tilt.pz * p, rx: tilt.rx * p, ry: tilt.ry * p, rz: tilt.rz * p };
       // magazine motion: out (.18-.3), gone (.3-.5), in (.5-.66)
       const mOut = track([[.16, 0], [.3, 1]], t), mIn = track([[.45, 1], [.64, 0]], t);
@@ -329,7 +329,7 @@ class Player {
       }
       if (belt && rig.cover) rig.cover.rotation.x = -track([[.08, 0], [.16, 1.3], [.7, 1.3], [.78, 0]], t);
       // support hand goes to magazine / charging handle
-      const hmag = mag ? mag.position.clone().add(V3(0, axis.y < 0 ? -.07 : .05, 0)) : rig.hgPos;
+      const hmag = mag ? mag.position.clone().add(rig.magGrab ? rig.magGrab.clone().applyEuler(mag.rotation) : V3(0, axis.y < 0 ? -.07 : .05, 0)) : rig.hgPos;
       const lhw = track([[0, 0], [.12, 1], [tEnd, 1], [1, 0]], t);
       let lp = hmag;
       if (t > .3 && t < .45) lp = V3(-.15, -.35, .15); // to the pouch
@@ -689,6 +689,7 @@ class Player {
       if (rig.slide) rig.slide.position.z = (w.slideLock ? 1 : bt) * (rig.slideStroke || .02);
       if (rig.charge && !w.slideLock) rig.charge.position.z = rig.zr + .005;
     }
+    if (rig.toggleR && rig.slide) { const th = Math.acos(Math.max(0, 1 - rig.slide.position.z / .064)); rig.toggleR.rotation.x = th; rig.toggleF.rotation.x = -2 * th; } // Luger knee breaks upward
     if (rig.trigger) rig.trigger.rotation.x = this.fireHeld ? .35 : 0;
     if (rig.hammer) rig.hammer.rotation.x = (this.fireHeld && bt > 0) ? .2 : -.6 * (1 - bt);
     if (rig.cyl && rig.cyl.userData.turn) { const tgt = rig.cyl.userData.turn * PI / 3; rig.cyl.rotation.z += (tgt - rig.cyl.rotation.z) * Math.min(1, dt * 20); }

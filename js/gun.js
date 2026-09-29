@@ -133,9 +133,18 @@ G.buildGun = function (wp, L, opt = {}) {
   else if (rev) { zr = .05; zf = -.075; }
   else { zr = RL * .38; zf = -RL * .62; }
   const top = RH * .32, bot = -RH * .68;
-  const blen = pistol ? m.B[0] : m.B[0] * S.blen, br = m.B[1] * S.bthick;
+  const blen = pistol ? m.B[0] : Math.max(.02, m.B[0] * S.blen - (m.bi || 0)), br = m.B[1] * S.bthick;
   let muzzleZ = pistol ? zf - .002 : zf - blen;
   rig.zr = zr; rig.zf = zf; rig.top = top; rig.bot = bot;
+  // pistol layout: slide bottom, dust-cover depth, grip height/depth/rake measured from real handguns
+  // (grip hangs ~0.5x the slide length below the slide, backstrap sits just under the slide's rear)
+  const PS = pistol ? (() => {
+    const sB = -RH * .3, dcH = Math.min(RH * .5, .018), gH = Math.max(.072, Math.min(.105, RL * .5)), gd = Math.max(.034, Math.min(.044, RL * .2));
+    const rk = m.grip === 'pst_raked' ? .62 : m.grip === 'broom' ? .2 : m.grip === 'pst_poly' ? .38 : .3;
+    const bz = zr - .004, fz = zr - .006 - gd;
+    return { sB, dcH, gH, gd, rk, bz, fz, yb: sB - gH, front: y => fz + (sB - dcH - y) * rk, back: y => bz + (sB - .015 - y) * rk };
+  })() : null;
+  rig.ps = PS;
   const woodStock = MT.hasWood;
   const furn = woodStock ? MT.wood : MT.poly;
 
@@ -181,9 +190,34 @@ G.buildGun = function (wp, L, opt = {}) {
       add(gBox(.003, RH * .12, .04), MT.steel, -RW * .51, RH * .12, zr - .03); // brass deflector edge
     }
   } else if (t === 'pistol') {
-    // frame
-    add(gRBox(RW * .95, RH * .9, RL * .82, .004), pistolFrameMat(), 0, -RH * .8, zf + RL * .45);
-    if (has('railP') && small) for (let i = 0; i < 3; i++) add(gBox(RW * .9, .004, .006), pistolFrameMat(), 0, -RH * 1.28, zf + .03 + i * .012);
+    // frame: dust cover under the slide, running back over the grip
+    const P = PS, fm = pistolFrameMat(), bh0 = m.bh;
+    const tgF = P.front(P.sB - P.dcH) - .04; // front of trigger guard
+    const c96 = bh0 === 'hammer_only' && has('magwell_front');
+    const f0 = bh0 === 'toggle' ? zf + RL * .42 : c96 ? tgF : zf + RL * .05, f1 = zr - .008;
+    add(gRBox(RW * .9, P.dcH, f1 - f0, .004), fm, 0, P.sB - P.dcH / 2 + .001, (f0 + f1) / 2);
+    if (small) {
+      add(gBox(.003, .004, .026), MT.steel, -RW * .47, P.sB - .005, P.fz - .004); // slide stop
+      add(gCylX(.0028, .0028, RW * .93, 8), MT.steel, 0, P.sB - .006, tgF + .01); // takedown pin
+      add(gRBox(.004, .007, .007, .002), MT.steel, -RW * .47, P.sB - P.dcH + .002, P.fz + .002); // mag release
+    }
+    if (has('railP') && small) for (let i = 0; i < 3; i++) add(gBox(RW * .9, .004, .006), fm, 0, P.sB - P.dcH - .001, zf + .03 + i * .012);
+    if (bh0 === 'hammer_only' && !c96) add(gRBox(RW, RH * .8, RL, .004), MT.metal, 0, RH * .1, (zr + zf) / 2); // fixed upper (Gyrojet etc.)
+    if (c96) { // Mauser C96: milled receiver, exposed barrel, fixed box magazine ahead of the trigger guard
+      const r0 = zf + RL * .32;
+      add(gRBox(RW, RH * .8, zr - r0, .003), MT.metal, 0, RH * .1, (zr + r0) / 2);
+      add(gCyl(.0095, .0085, r0 - zf + .01, 16), MT.metal, 0, 0, (zf + r0) / 2);
+      add(gRBox(RW * .95, .048, .046, .004), MT.metal, 0, P.sB - .022, tgF - .022); // magazine box
+      if (small) { add(gBox(RW * 1.02, .003, .04), MT.steel, 0, P.sB - .03, tgF - .022); add(gRBox(RW * .6, .008, .04, .003), MT.metal, 0, P.sB - .05, tgF - .022); }
+      if (small) for (let i = 0; i < 2; i++) add(gBox(RW * 1.02, RH * .5, .002), MT.steel, 0, RH * .05, r0 + .02 + i * .05); // milled panels
+    }
+    if (bh0 === 'toggle') { // Luger: exposed tapered barrel, receiver with recoiling barrel extension
+      const r0 = zf + RL * .45;
+      add(gCyl(.0085, .0072, r0 - zf + .01, 16), MT.metal, 0, 0, (zf + r0) / 2);
+      add(gCyl(.011, .011, .014, 16), MT.metal, 0, 0, r0 - .004); // barrel shank
+      add(gRBox(RW * .82, RH * .25 - P.sB, zr - r0 - .01, .003), MT.metal, 0, (RH * .25 + P.sB) / 2, (r0 + zr - .01) / 2);
+      for (const sd of [-1, 1]) add(gRBox(.004, .016, .016, .002), MT.metal, sd * RW * .42, RH * .3, zr - .006); // toggle ears on frame
+    }
   } else if (t === 'rev') {
     add(gRBox(RW * .75, RH * 1.1, .12, .006), MT.metal, 0, -RH * .2, -.02);
     add(gRBox(RW * .6, RH * .3, .05, .004), MT.metal, 0, RH * .45, .005); // top strap
@@ -195,6 +229,10 @@ G.buildGun = function (wp, L, opt = {}) {
     if (tube) {
       add(gCyl(RW * .5, RW * .5, RL, 20), MT.metal, 0, 0, (zr + zf) / 2);
       if (small) add(gBox(.003, RW * .35, RL * .5), MT.steel, RW * .45, RW * .1, zr - RL * .55); // cocking slot
+    } else if (m.hg && m.hg[0] === 'vector') { // KRISS Vector: slim upper with rail, big raked lower housing for the Super V recoil block
+      add(gRBox(RW * .9, RH * .38, RL, .004), MT.metal, 0, RH * .16, (zr + zf) / 2);
+      add(gProf([[zr, RH * .02], [zf + .015, RH * .02], [zf, -RH * .08], [zf + .03, -RH * .3], [-.03, -RH * .6], [-.03, bot], [.03, bot], [.06, -RH * .5], [zr, -RH * .45]], RW, .01, false), MT.poly);
+      if (small) add(gRBox(RW * 1.02, .004, .08, .002), MT.rubber, 0, -RH * .2, zf + .06);
     } else if (t === 'scar') {
       add(gRBox(RW, RH * .5, RL, .004), MT.metal, 0, RH * .08, (zr + zf) / 2);
       add(gRBox(RW * .92, RH * .52, RL * .5, .006), MT.poly, 0, -RH * .42, zr - RL * .32);
@@ -269,10 +307,12 @@ G.buildGun = function (wp, L, opt = {}) {
       add(gCyl(.01, .01, hgL * 1.1, 10), MT.metal, 0, .02, hgZ);
       break; }
     case 'ar_tri': case 'ar_round': {
-      const hgMesh = add(gCyl(.02, .018, hgL, hgT === 'ar_tri' ? 3 : 16), MT.poly, 0, .006, hgZ);
+      const hgMesh = add(gCyl(.026, .022, hgL, hgT === 'ar_tri' ? 3 : 16), MT.poly, 0, .004, hgZ);
+      if (hgT === 'ar_tri') hgMesh.scale.set(1, .95, 1);
       if (hgT === 'ar_tri') hgMesh.rotation.z = PI / 2;
-      if (small) for (let i = 0; i < 6; i++) add(gBox(.042, .002, .003), MT.poly, 0, .006, zf - .02 - i * hgL / 7);
-      add(gCyl(.022, .022, .012, 16), MT.metal, 0, .006, zf - .006); // delta ring
+      if (small) for (let i = 0; i < 6; i++) add(gBox(.046, .003, .004), MT.poly, 0, -.006, zf - .03 - i * hgL / 7); // vent holes / ribs
+      add(gCyl(.027, .027, .008, 16), MT.metal, 0, .004, zf - hgL + .002); // handguard cap
+      add(gCyl(.029, .029, .014, 16), MT.metal, 0, .004, zf - .006); // delta ring
       break; }
     case 'quad': case 'quad_long': case 'mlok': case 'mlok_long': case 'mlok_short': case 'ebr': case 'scar': case 'l85': case 'g36': case 'ump': case 'mp5': case 'evo': case 'vector': case 'saw': case 'm240': case 'm60': case 'ai': case 'barrett': case 'poly': case 'galil': case 'fal': case 'g3': {
       const quad = hgT.startsWith('quad') || hgT === 'ebr' || hgT === 'barrett';
@@ -284,7 +324,7 @@ G.buildGun = function (wp, L, opt = {}) {
       if (quad) { railsOnHG = true; for (const [x, y, rz] of [[0, -h / 2 - .004, 0], [w / 2 + .004, 0, PI / 2], [-w / 2 - .004, 0, PI / 2]]) railStrip(hgL * .92, x, y + .002, hgZ, rz); }
       if (mlok && small) { railsOnHG = true; for (let i = 0; i < Math.floor(hgL / .04); i++) for (const s of [-1, 1]) add(gBox(.002, .007, .022), MT.rubber, s * (w / 2 + .0005), -.004, zf - .025 - i * .04); }
       if ((hgT === 'mp5' || hgT === 'g3' || hgT === 'ump' || hgT === 'poly' || hgT === 'fal' || hgT === 'galil') && small) for (let i = 0; i < 5; i++) add(gBox(w * 1.02, .002, .006), MT.poly, 0, -h * .2, zf - .02 - i * hgL / 6);
-      if (hgT === 'vector') add(gRBox(w * .9, .08, hgL * .9, .01), MT.poly, 0, -.05, hgZ);
+      if (hgT === 'vector') add(gRBox(w * .7, .03, hgL * .9, .008), MT.poly, 0, -.01, hgZ);
       break; }
     case 'perf': case 'jacket': case 'water': case 'mg42': {
       const r = hgR || .025;
@@ -411,13 +451,36 @@ G.buildGun = function (wp, L, opt = {}) {
       add(gRBox(w * 1.05, h * .9, .02, .006), MT.rubber, 0, -h * .22, zr + .01);
       return;
     }
-    // lower body profile (z from zf to zr)
-    const pts = [[zf, h * .25], [zf, -h * .45], [zf + len * .35, -h * .55], [zr - .02, -h * .7], [zr, -h * .75], [zr, h * .3], [zr - .03, h * .35], [zf + .05, h * .33]];
-    add(gProf(pts, w, .008, false), mat);
-    add(gRBox(w * .7, .015, len * .9, .004), MT.rubber, 0, -h * .1, (zr + zf) / 2 + len * .05); // grip texture band
-    add(gRBox(w * 1.05, h * .9, .02, .006), MT.rubber, 0, -h * .22, zr + .01); // butt pad
-    if (id === 'aug') { add(gCyl(w * .52, w * .52, len * .55, 18), MT.poly, 0, h * .05, zr - len * .35); }
-    if (id === 'p90') { add(gRBox(w * 1.1, h * .5, len * .45, .02), MT.poly, 0, -h * .5, zf + len * .3); }
+    if (id === 'p90') { // FN P90: one-piece shell, thumbhole behind the trigger, support-hand loop in front, magazine on top
+      const yT = top - .002, yB = -.075, gb = -.135;
+      add(gProf([[zf + .01, yT], [zf, yT - .02], [zf, -.03], [zf + .03, -.05], [.1, -.035], [.1, yT - .005]], w, .014, false), mat); // front upper body
+      add(gProf([[zf + .005, -.035], [zf + .05, -.04], [-.05, -.045], [-.04, gb + .01], [-.07, gb], [zf + .035, gb + .02], [zf + .005, -.06]], w * .92, .012, false), mat); // support-hand loop
+      add(gProf([[-.07, gb + .014], [.02, gb + .006], [.03, gb - .008], [-.07, gb - .004]], w * .8, .006, false), mat); // loop bottom bar joining the grip
+      add(gProf([[.07, yT], [zr, yT], [zr, yB + .01], [zr - .02, yB], [.1, yB], [.06, gb + .012], [.03, gb + .004], [.045, -.04], [.07, -.03]], w, .014, false), mat); // stock & rear thumbhole frame
+      add(gRBox(w * 1.02, .004, .12, .002), MT.rubber, 0, yT - .026, zr - .09); // parting line
+      add(gRBox(w * 1.04, h * .75, .016, .006), MT.rubber, 0, (yT + yB) / 2, zr + .005); // butt pad
+      for (const sx of [-1, 1]) add(gRBox(.006, .01, .02, .003), MT.poly, sx * (w * .5 + .002), -.02, .1); // ambi charging handles
+      return;
+    }
+    if (id === 'aug') { // Steyr AUG: rounded polymer stock tube, metal receiver on top, big hand-enclosing trigger guard
+      add(gProf([[zr, .02], [zr, -.07], [zr - .025, -.082], [.14, -.075], [.13, bot], [.055, bot], [-.02, -.052], [-.09, -.034], [zf + .01, -.02], [zf, -.005], [zf, .012], [.05, .022], [zr - .02, .026]], w, .016, true), mat);
+      add(gRBox(w * .82, .03, len * .72, .006), MT.metal, 0, .03, zf + len * .36); // receiver
+      add(gRBox(w * .5, .01, len * .5, .003), MT.metal, 0, .048, zf + len * .3); // barrel lock/collar rail
+      add(gProf([[.06, bot], [.048, bot - .105], [.03, bot - .115], [-.08, bot - .112], [-.085, bot - .1], [-.07, -.045], [-.055, -.047], [-.066, bot - .095], [.035, bot - .098], [.044, bot]], w * .7, .006, false), mat); // enclosing trigger guard
+      add(gRBox(w * 1.02, h * .78, .02, .008), MT.rubber, 0, -.03, zr + .008);
+      if (small) for (let i = 0; i < 4; i++) add(gBox(w * 1.03, .002, .04), MT.rubber, 0, -.06 + i * .018, zr - .05); // cheek texture
+      return;
+    }
+    // generic bullpup: narrower front handguard stepping up into the trigger housing, magwell block behind the grip,
+    // raised cheek rest and a thick recoil pad
+    const hgE = zf + len * .34;
+    const pts = [[zf, h * .16], [zf, -h * .3], [zf + .03, -h * .42], [hgE - .02, -h * .46], [hgE, -h * .62], [zr - .02, -h * .78], [zr, -h * .74], [zr, h * .28], [zr - .03, h * .36], [hgE + .03, h * .34], [hgE, h * .22], [zf + .02, h * .2]];
+    add(gProf(pts, w, .01, false), mat);
+    add(gProf([[zf + .01, h * .1], [zf + .01, -h * .25], [hgE - .01, -h * .38], [hgE - .01, h * .12]], w * 1.04, .004, false), id === 'l85' ? MT.poly : MT.rubber); // handguard panel
+    if (id === 'l85') add(gRBox(w * .92, h * .5, len * .8, .004), MT.metal, 0, h * .1, zf + len * .45); // stamped steel receiver
+    if (small) for (let i = 0; i < 4; i++) add(gBox(w * 1.06, .006, .004), MT.poly, 0, -h * .12, zf + .03 + i * .025); // vent slots
+    add(gRBox(w * 1.05, h * .95, .022, .008), MT.rubber, 0, -h * .22, zr + .01); // butt pad
+    add(gRBox(w * 1.06, h * .5, .09, .006), mat, 0, bot + h * .2, (mz0 => mz0)(m.mag && m.mag[3] !== undefined ? m.mag[3] : .1)); // magwell housing
     if (has('famas_handle')) { // carry handle spanning the top
       add(gRBox(.012, .07, .012, .003), MT.poly, 0, h * .55, zr - .05); add(gRBox(.012, .07, .012, .003), MT.poly, 0, h * .55, zf + .06);
       add(gRBox(.02, .02, len * .8, .006), MT.poly, 0, h * .9, (zr + zf) / 2);
@@ -467,8 +530,15 @@ G.buildGun = function (wp, L, opt = {}) {
       if (['bolt', 'lever', 'semiw', 'battle'].includes(t) && ['wfull', 'wood', 'wood_top', 'perf'].includes(hgT)) {
         const fl = hgT === 'wfull' ? hgL + RL * .6 : RL * .7 + hgL * .9;
         const fz0 = z0, fz1 = zf - (hgT === 'wfull' ? hgL : hgL * .95);
-        const fpts = [[fz0, -RH * .02], [fz1 + .01, -br * .2], [fz1, -br * 1.2], [fz1 + .02, -br * 3.2], [zf - .02, -RH * .55], [fz0 - .02, -RH * .75]];
-        if (wp.id !== 'lewis' && wp.id !== 'bar1918' && wp.id !== 'bar1918a2') add(gProf(fpts, RW * 1.12, .006, false), woodStock ? MT.wood : MT.poly);
+        // real military stocks: forend ~35mm under the bore, swelling to a deep belly around the magazine,
+        // stepping up where the metal trigger guard/floorplate hangs below, then flowing into the wrist
+        const belly = -Math.max(.056, RH * 1.05), tgy = bot + .004, fmat = woodStock ? MT.wood : MT.poly;
+        const fpts = [[fz0 + .005, -RH * .02], [fz1 + .01, -br * .2], [fz1, -br * 1.2], [fz1 + .03, -Math.max(br * 4.2, .032)], [zf + .02, -Math.max(RH * .8, .042)], [-.07, belly], [-.03, belly], [-.024, tgy], [fz0 - .03, tgy], [fz0 + .01, wristBot + .004]];
+        if (wp.id !== 'lewis' && wp.id !== 'bar1918' && wp.id !== 'bar1918a2') {
+          add(gProf(fpts, RW * 1.12, .006, false), fmat);
+          add(gRBox(RW * .55, .004, .1, .002), MT.metal, 0, belly + .001, -.05 + .026); // floorplate / guard strip
+          if (small) { add(gTor(.005, .0012), MT.steel, 0, -Math.max(br * 4.2, .032) + .002, zf - .01).rotation.y = PI / 2; } // front sling swivel
+        }
       }
       if (st === 'coll_w') { add(gCyl(.014, .014, .22, 12), MT.metal, 0, -.012, z0 + .11); add(gRBox(.04, .1, .07, .01), MT.poly, 0, -.04, z0 + .2); }
       rig.stockEnd = V3(0, (heel + toe) / 2 + .04, z0 + len);
@@ -483,7 +553,7 @@ G.buildGun = function (wp, L, opt = {}) {
     const mat = MT.poly;
     if (fam === 'fixedA' || fam === 'fixedS') {
       const len = st === 'ar_a1' ? .24 : st === 'mg42' ? .26 : fam === 'fixedS' ? .26 : .25;
-      const drop = st === 'g3' || st === 'fal' ? .015 : st === 'mg42' ? .045 : .01;
+      const drop = st === 'g3' || st === 'fal' ? .015 : st === 'mg42' ? .045 : st === 'ar_a1' || st === 'ar_a2' ? -RH * .12 : .01;
       const pts = [[z0, RH * .15], [z0 + len, -drop], [z0 + len, -drop - .12], [z0 + len * .7, -drop - .115], [z0, -RH * .6]];
       add(gProf(pts, RW * (st === 'g3' ? 1.1 : 1), .01, false), (st === 'fal' || st === 'lewis') && woodStock ? MT.wood : mat);
       add(gRBox(RW * 1.05, .125, .012, .006), MT.rubber, 0, -drop - .06, z0 + len + .006);
@@ -546,38 +616,49 @@ G.buildGun = function (wp, L, opt = {}) {
     const mat = g.includes('wood') || g === 'thompson' || g === 'rev_wood' ? MT.wood : g === 'pg_bake' ? MT.poly : g === 'pg_metal' ? MT.metal : (g === 'pst' ? (woodStock ? MT.wood : MT.poly) : MT.poly);
     if (g === 'st' || g === 'none') { rig.gripPos = V3(0, bot * .9 - .035, zr + .07); return; }
     if (g === 'magwell') { // grip houses magazine (Uzi / MAC / MP7)
-      add(gProf([[gz - .03, bot], [gz + .02, bot], [gz + .035, bot - .15], [gz - .025, bot - .15]], RW * 1.02, .006), MT.poly);
-      rig.gripPos = V3(0, bot - .06, gz); return;
+      add(gProf([[gz - .024, bot + .004], [gz + .02, bot + .004], [gz + .036, bot - .1], [gz - .014, bot - .1]], RW * 1.02, .008), MT.poly);
+      rig.gripPos = V3(0, bot - .05, gz + .006); return;
     }
     if (pistol) {
-      const rk = g === 'pst_raked' ? .5 : g === 'broom' ? .1 : .25;
-      const gh = .12;
-      pts = [[gz - .03, gy + .005], [gz + .035, gy + .008], [gz + .035 + gh * rk, gy - gh], [gz - .025 + gh * rk, gy - gh], [gz - .028, gy - .01]];
-      if (g === 'broom') { add(gProf([[gz - .02, gy], [gz + .04, gy], [gz + .06, gy - .1], [gz + .045, gy - .11], [gz - .01, gy - .1]], RW * 1.25, .008, true), MT.wood); }
-      else {
-        add(gProf(pts, RW * 1.12, .006, false), m.grip === 'pst_poly' ? MT.poly : MT.metal);
-        if (g !== 'pst_poly') for (const s of [-1, 1]) add(gProf(pts.map(p => [p[0] * 1 + .002, p[1] * .92 + gy * .05]), .004, .001, false), mat).position.x = s * RW * .58;
+      const P = PS, { sB, dcH, yb, fz, bz } = P, poly = g === 'pst_poly';
+      const tang = poly ? .006 : g === 'broom' ? .0 : .011;
+      pts = [[fz - .002, sB + .001], [bz, sB + .001], [bz + tang, sB - .007], [P.back(sB - .02), sB - .02], [P.back(yb) + .002, yb + .004], [P.back(yb) - .002, yb], [P.front(yb) + .002, yb], [P.front(sB - dcH), sB - dcH], [fz - .002, sB - dcH]];
+      const gw = g === 'broom' ? RW * 1.2 : RW * 1.1;
+      if (g === 'broom') { // round "broomhandle" wooden grip with horizontal grooves
+        const bp = [[fz + .004, sB - dcH + .002], [bz, sB + .001], [P.back(yb) + .004, yb + .006], [P.back(yb) - .006, yb - .002], [P.front(yb) + .004, yb + .002]];
+        add(gProf(bp, gw, .009, true), MT.wood);
+        if (small) for (let i = 1; i < 12; i++) { const y = sB - dcH - i * (yb - sB + dcH) / -12; const z0 = P.front(y) + .006, z1 = P.back(y) - .004; add(gBox(gw * 1.01, .0016, Math.max(.01, z1 - z0)), MT.rubber, 0, y, (z0 + z1) / 2).rotation.x = -Math.atan(P.rk); }
+      } else {
+        add(gProf(pts, gw, .006, false), poly ? MT.poly : pistolFrameMat());
+        // grip panels (wood/rubber) inset into the frame, or moulded stippling on polymer frames
+        const y0 = sB - dcH - .003, y1 = yb + .008;
+        const pp = [[P.front(y0) + .004, y0], [P.back(y0) - .004, y0], [P.back(y1) - .004, y1], [P.front(y1) + .004, y1]];
+        const pm = poly ? MT.poly : mat;
+        for (const s of [-1, 1]) { const pnl = add(gProf(pp, .003, .0009, false), pm); pnl.position.x = s * (gw / 2 - .0005); }
+        if (small && !poly) for (const s of [-1, 1]) for (const f of [.3, .75]) { const y = y0 + (y1 - y0) * f; add(gCylX(.0025, .0025, .0012, 8), MT.steel, s * (gw / 2 + .0012), y, (P.front(y) + P.back(y)) / 2); }
+        if (small && poly) for (let i = 0; i < 3; i++) { const y = sB - dcH - .01 - i * .016; add(gBox(gw * 1.01, .0025, .006), MT.poly, 0, y, P.front(y) + .002); } // finger grooves
       }
-      rig.gripPos = V3(0, gy - .05, gz + .015); return;
+      const hy = sB - P.gH * .42;
+      rig.gripPos = V3(0, hy, (P.front(hy) + P.back(hy)) / 2 + .006); return;
     }
     if (rev) {
-      pts = [[.02, bot], [.055, bot + .005], [.08, bot - .1], [.04, bot - .11], [.02, bot - .02]];
-      add(gProf(pts, RW * 1.05, .008, true), g === 'rev_wood' ? MT.wood : (woodStock ? MT.wood : MT.poly));
+      pts = [[.016, bot + .004], [.044, bot + .01], [.05, bot - .02], [.066, bot - .085], [.058, bot - .097], [.036, bot - .095], [.026, bot - .06], [.012, bot - .018]];
+      add(gProf(pts, RW * .95, .007, true), g === 'rev_wood' ? MT.wood : (woodStock ? MT.wood : MT.poly));
+      add(gProf([[.012, bot + .006], [.046, bot + .012], [.05, bot - .012], [.014, bot - .014]], RW * .75, .003, false), MT.metal); // frame grip strap
       rig.gripPos = V3(0, bot - .05, .05); return;
     }
     const rake = g === 'rake' ? .5 : g === 'thompson' || g === 'pg_wood' ? .35 : g === 'vector' ? .15 : g === 'aug' || g === 'famas' || g === 'l85' || g === 'tavor' || g === 'x95' || g === 'qbz' || g === 'p90' || g === 'ksg' ? .15 : .3;
-    const gh = .1, w = g === 'ar' || g === 'ar_poly' ? .026 : .028;
+    const gh = g === 'p90' ? .06 : .1, w = g === 'ar' || g === 'ar_poly' ? .026 : .028;
     pts = [[gz - .015, bot + .005], [gz + .02, bot + .005], [gz + .02 + gh * rake + .01, bot - gh], [gz - .02 + gh * rake, bot - gh - .004], [gz - .022, bot - .012]];
     add(gProf(pts, w, .007, g.startsWith('pg') || g === 'ak' || g === 'thompson'), mat);
     if (small && (g === 'ar' || g === 'ar_poly' || g === 'ak_poly')) for (let i = 0; i < 3; i++) add(gBox(w * .9, .002, .006), MT.poly, 0, bot - .02 - i * .025, gz - .02 + (i * .025) * rake);
-    if (g === 'p90') add(gRBox(.03, .05, .12, .02), MT.poly, 0, bot - .03, -.02); // thumbhole
     if (g === 'thompson' && small) {}
     rig.gripPos = V3(0, bot - .045, gz + .012 + .045 * rake);
   }
 
   function buildTrigger() {
-    const tz = pistol ? .0 : 0, ty = pistol ? bot * 1.25 : bot;
-    const tg = add(gTor(.022, .0025, PI * 1.05), (pistol && m.grip === 'pst_poly') ? MT.poly : MT.metal, 0, ty - .002, tz - .002);
+    const tR = pistol ? .019 : .022, tz = pistol ? PS.front(PS.sB - PS.dcH) - tR : 0, ty = pistol ? PS.sB - PS.dcH + .003 : bot;
+    const tg = add(gTor(tR, pistol ? .0028 : .0025, PI * 1.05), (pistol && m.grip === 'pst_poly') ? MT.poly : MT.metal, 0, ty - .002, tz - .002);
     tg.rotation.set(0, PI / 2, PI); tg.scale.set(1, .75, 1);
     if (m.grip === 'magwell' || bullpup) tg.position.z = -.005;
     rig.trigger = grp(0, ty + .004, tz + .004);
@@ -586,6 +667,25 @@ G.buildGun = function (wp, L, opt = {}) {
       // hammer spur sits just under the rear sight so it never intrudes on the sight picture
       rig.hammer = grp(0, pistol ? RH * .5 - .016 : rev ? RH * .6 - .02 : top * .5, pistol ? zr - .004 : zr - .01);
       add(gBox(.006, .016, .007), MT.steel, 0, .007, .004, rig.hammer);
+    }
+  }
+
+  // drum magazine body (axis across the gun): rolled edge seams, domed faces, winding key, spring-tension
+  // window and latch — reads as a stamped steel drum rather than a flat disc
+  // drum magazine body: axis along the bore so the flat faces point to the muzzle and the stock; rolled edge
+  // seams, domed faces, winding key on the front face, pressed ribs round the rim and a latch
+  function drumBody(g, r, th, x, y, z, mat) {
+    add(gCyl(r, r, th, 32), mat, x, y, z, g);
+    for (const s of [-1, 1]) {
+      add(gCyl(r * 1.035, r * 1.035, .006, 32), mat, x, y, z + s * (th / 2 - .003), g); // rolled seam
+      add(gCyl(r * .82, r * .9, .006, 28), mat, x, y, z + s * (th / 2 + .002), g); // raised face
+      if (small) add(gCyl(r * .28, r * .28, .008, 18), MT.steel, x, y, z + s * (th / 2 + .006), g); // centre hub
+    }
+    if (small) {
+      const k = add(gBox(r * .5, .004, .004), MT.steel, x, y, z - th / 2 - .011, g); k.rotation.z = .6; // winding key
+      add(gCyl(.004, .004, .012, 8), MT.steel, x, y, z - th / 2 - .008, g);
+      for (let i = 0; i < 5; i++) { const a = -1 + i * .5; const rb = add(gBox(.012, .003, th * .7), MT.steel, x + Math.sin(a) * r * 1.005, y + Math.cos(a) * r * 1.005, z, g); rb.rotation.z = -a; } // pressed ribs
+      add(gRBox(.012, .016, .01, .003), MT.steel, x + r * .7, y + r * .55, z + th / 2 + .004, g); // latch
     }
   }
 
@@ -630,11 +730,13 @@ G.buildGun = function (wp, L, opt = {}) {
         if (small && G.isAK(wp)) for (const s of [-1, 1]) add(gProf(pts.map(p => [p[0] * .4, p[1] * .92]), .002, .0005), mat, s * mw * .52, 0, 0, g);
         if (type.includes('pair')) { const g2 = sgm(pts, mw); g2.position.set(mw * 1.2, 0, .01); add(gBox(mw * 2.4, .03, .02), MT.cloth, mw * .6, -l * .5, 0, g); }
         break; }
-      case 'drum': {
-        const r = wp.id === 'ppsh' ? .1 : wp.c === 'LMG' ? .085 : .075;
-        add(gRBox(mw, .05, depth * .9, .004), MT.metal, 0, -.02, 0, g);
-        add(gCylX(r, r, .055, 26), MT.metal, 0, -.045 - r, -.01, g);
-        if (small) { add(gCylX(r * .3, r * .3, .062, 16), MT.steel, 0, -.045 - r, -.01, g); add(gBox(.064, .004, r * 1.4), MT.metal, 0, -.045 - r, -.01, g); }
+      case 'drum': { // pressed-steel drum: short feed tower, drum top tucked right under the receiver
+        const sub = ['ppsh', 'ppd40', 'suomi', 'type100', 'lanchester'].includes(wp.id) || (wp.c === 'SMG' && G.CAL[wp.cal].cs[0] < .03);
+        const r = wp.id === 'ppsh' || wp.id === 'ppd40' ? .095 : wp.id === 'suomi' ? .09 : wp.id === 'thompson' || wp.id === 'thompson1928' ? .085 : wp.id === 'mg34' ? .062 : wp.c === 'LMG' ? .08 : wp.c === 'SG' ? .078 : sub ? .08 : .07;
+        const th = wp.id === 'mg34' ? .075 : wp.c === 'SG' ? .085 : wp.c === 'AR' || wp.c === 'CAR' || wp.c === 'BR' || wp.c === 'LMG' ? .07 : .075;
+        const tower = .026;
+        add(gRBox(mw, tower + .012, depth * .9, .004), MT.metal, 0, -tower / 2, 0, g);
+        drumBody(g, r, th, 0, -tower - r * .92, sub ? -.012 : 0, wp.c === 'SG' || wp.c === 'AR' || wp.c === 'CAR' ? MT.poly : MT.metal);
         break; }
       case 'cmag': {
         add(gRBox(mw, .06, depth, .004), MT.poly, 0, -.02, 0, g);
@@ -648,9 +750,9 @@ G.buildGun = function (wp, L, opt = {}) {
         rig.panSpin = true;
         break; }
       case 'snail': {
-        pos = V3(-RW * .5, bot + .01, mz);
+        pos = pistol ? V3(-RW * .5, PS.yb + .02, PS.back(PS.yb) - .02) : V3(-RW * .5, bot + .01, mz);
         add(gRBox(.03, .03, .06, .004), MT.metal, -.02, 0, 0, g);
-        add(gCylX(.075, .075, .07, 24), MT.metal, -.075, -.06, .01, g);
+        if (pistol) drumBody(g, .05, .055, -.045, -.04, -.02, MT.metal); else drumBody(g, .07, .065, -.075, -.06, .01, MT.metal);
         break; }
       case 'sidebox_l': {
         pos = V3(-RW * .5, -.005, mz);
@@ -681,7 +783,7 @@ G.buildGun = function (wp, L, opt = {}) {
       case 'belt': case 'beltdrum': case 'beltbox': case 'beltpouch': {
         const box = type === 'beltdrum' ? 'drum' : type === 'beltpouch' ? 'pouch' : 'box';
         pos = V3(-RW * .5 - .01, bot + .01, mz + .01);
-        if (box === 'drum') { add(gCylX(.075, .075, .06, 24), MT.metal, -.035, -.07, 0, g); }
+        if (box === 'drum') { drumBody(g, .065, .07, -.035, -.068, 0, MT.metal); }
         else if (box === 'pouch') { add(gRBox(.07, .12, .1, .02), MT.cloth, -.04, -.08, 0, g); }
         else { add(gRBox(.08, .12, .16, .006), MT.metal, -.045, -.085, 0, g); if (small) add(gBox(.05, .01, .02), MT.steel, -.045, -.02, 0, g); }
         // belt: row of rounds into the feed tray
@@ -716,13 +818,13 @@ G.buildGun = function (wp, L, opt = {}) {
         if (small) for (let i = 0; i < 6; i++) add(gCyl(.0285, .0285, .004, 20), MT.poly, 0, -.028, -.03 - i * len / 6.5, g);
         add(gRBox(.024, .02, .03, .006), MT.poly, 0, -.005, -.01, g);
         break; }
-      case 'pst': {
-        pos = V3(0, bot * 1.25 - .002, .045);
-        const l = len * ext;
-        const rk = m.grip === 'pst_raked' ? .5 : .25;
-        const pts = [[-.012, 0], [.012, 0], [.012 + l * rk, -l], [-.012 + l * rk, -l]];
-        sgm(pts, RW * .7);
-        add(gRBox(RW * .9, .01, .032, .003), MT.poly, 0, -l + .004, l * rk, g);
+      case 'pst': { // magazine lives inside the grip; only the base plate shows (extended mags protrude)
+        const P = PS, y0 = P.sB - P.dcH * .3, rk = P.rk;
+        pos = V3(0, y0, (P.front(y0) + P.back(y0)) / 2 + .002);
+        const l = (y0 - P.yb + .004) * (ext > 1 ? 1.35 : 1), hw = P.gd * .3;
+        sgm([[-hw, 0], [hw, 0], [hw + l * rk, -l], [-hw + l * rk, -l]], RW * .7);
+        add(gRBox(RW * 1.05, .008, hw * 2 + .012, .003), MT.poly, 0, -l - .002, l * rk + .002, g);
+        rig.magGrab = V3(0, -l - .012, l * rk + .004); // base plate: where the support hand pushes the mag home
         break; }
       default: break;
     }
@@ -810,7 +912,13 @@ G.buildGun = function (wp, L, opt = {}) {
       case 'handle': case 'g36_handle': case 'qbz_handle': case 'famas': case 'p90': case 'aug_scope': {
         if (s === 'handle' || s === 'famas' || s === 'qbz_handle') {
           const hTop = s === 'famas' ? RH * .9 : top + .045;
-          if (s === 'handle') add(gProf([[zr - .01, top], [zr - RL * .88, top], [zr - RL * .82, hTop], [zr - .035, hTop]], .016, .003), MT.metal);
+          if (s === 'handle') { // M16 carry handle: two legs + top bar with the sight window open between them
+            const zA = zr - RL * .8, zB = zr - .035;
+            add(gRBox(.018, .011, zB - zA + .02, .004), MT.metal, 0, hTop - .0055, (zA + zB) / 2 + .01);
+            add(gProf([[zA - .022, top], [zA + .012, top], [zA + .012, hTop - .004], [zA - .004, hTop - .004]], .018, .003), MT.metal);
+            add(gProf([[zB - .02, top], [zr - .004, top], [zr - .01, hTop - .004], [zB - .016, hTop - .004]], .018, .003), MT.metal);
+            if (small) for (const sx of [-1, 1]) add(gCylX(.004, .004, .004, 8), MT.steel, sx * .011, top + .01, zA - .01); // mounting screws
+          }
           if (s === 'qbz_handle') add(gRBox(.02, .02, RL * .45, .006), MT.poly, 0, hTop - .01, (zr + zf) / 2 + .02);
           const y = hTop + .012;
           rearRing(y, zr - .045, hTop);
@@ -821,7 +929,7 @@ G.buildGun = function (wp, L, opt = {}) {
         } else {
           // integral optic housings (AUG, G36, P90). The magnified optic is the default; with irons chosen
           // (or on the P90) the housing becomes an open window with a 1× reflex ring.
-          const oy = s === 'aug_scope' ? RH * .8 : s === 'p90' ? top + .05 : top + .045;
+          const oy = s === 'aug_scope' ? RH * .8 : s === 'p90' ? top + .034 : top + .045;
           const oz = zr - RL * .45;
           const scopeOn = L.optic === 'g36_dual' || L.optic === 'aug_scope';
           if (s === 'aug_scope') { add(gRBox(.03, .05, RL * .35, .012), MT.poly, 0, oy - .045, oz); }
@@ -887,7 +995,7 @@ G.buildGun = function (wp, L, opt = {}) {
         const g = rig.slide || root;
         const prev = cur; cur = g;
         rearNotch(y, zr - .012, sy, .0035, .02);
-        add(gBox(.003, .007, .008), MT.steel, 0, y - .0035, zf + .012);
+        { const base = m.bh === 'toggle' || m.bh === 'hammer_only' ? m.B[1] * 1.3 : RH * .5, fh = Math.max(.007, y - base + .001); add(gBox(.003, fh, .008), MT.steel, 0, y - fh / 2, zf + .012); }
         if (small) { add(gSph(.0011, 6), MT.tritium, 0, y - .0015, zf + .0075); for (const s2 of [-1, 1]) add(gSph(.0011, 6), MT.tritium, s2 * .0055, y - .003, zr - .0155); }
         cur = prev;
         sh = y; sz = zr - .012; eye = .42;
@@ -976,11 +1084,15 @@ G.buildGun = function (wp, L, opt = {}) {
       case 'slide': case 'slide_open': case 'slide_deagle': case 'slide_comp': case 'cock_knob': case 'toggle': {
         const s = rig.slide = grp(0, 0, 0);
         const sh = RH * .8, sy = RH * .1;
-        if (bh === 'toggle') { // Luger toggle
-          add(gRBox(RW * .8, sh * .6, RL * .55, .004), MT.metal, 0, sy - .004, zf + RL * .3, root);
-          add(gCyl(.006, .006, .06, 10), MT.bright, 0, sy + .008, zr - .03, s);
-          for (const sd of [-1, 1]) add(gCylX(.009, .009, .006, 12), MT.bright, sd * RW * .45, sy + .008, zr - .005, s);
-          rig.slideStroke = .0; rig.toggle = true;
+        if (bh === 'toggle') { // Luger toggle-lock: breechblock + two links that break upward at the knee
+          const a = .032, ty = RH * .3, pz = zr - .008;
+          add(gRBox(RW * .6, .012, .03, .003), MT.bright, 0, ty - .001, pz - 2 * a - .012, s); // breechblock
+          const tr = rig.toggleR = grp(0, ty, pz, root);
+          add(gRBox(RW * .62, .011, a, .003), MT.bright, 0, 0, -a / 2, tr);
+          for (const sd of [-1, 1]) { const k = add(gCylX(.0095, .0095, .007, 16), MT.bright, sd * RW * .47, .002, -a, tr); if (small) for (let i = 0; i < 8; i++) add(gBox(.0072, .002, .002), MT.steel, sd * RW * .47, .002 + Math.sin(i * .785) * .0095, -a + Math.cos(i * .785) * .0095, tr); }
+          const tf = rig.toggleF = grp(0, 0, -a, tr);
+          add(gRBox(RW * .62, .011, a, .003), MT.bright, 0, 0, -a / 2, tf);
+          rig.slideStroke = .022; rig.toggle = true;
         } else {
           const sm = MT.metal;
           add(gRBox(RW, sh, RL, .004), sm, 0, sy, (zr + zf) / 2, s);
@@ -1094,10 +1206,14 @@ G.buildGun = function (wp, L, opt = {}) {
     if (has('bayo_spike')) { add(gCyl(.003, .003, .2, 6), MT.bright, br * 1.8, -br * 1.5, zf - blen * .45); }
     if (has('resthook')) add(gRBox(.012, .03, .04, .004), MT.poly, 0, -br * 2 - .012, zf - .03);
     if (has('magwell_long')) add(gRBox(RW * .95, .045, .045, .004), MT.metal, 0, bot - .015, -.07);
-    if (has('frontgrip')) add(gProf([[-.01, 0], [.02, 0], [.03, -.08], [0, -.085]], .026, .006, true), MT.wood, 0, bot, zf - .08);
+    if (has('frontgrip')) { // integral front grip under the front of the frame/receiver (Beretta M12, 93R fold-down grip)
+      const fy = pistol ? PS.sB - PS.dcH + .002 : bot + .004, fz = pistol ? zf + .03 : zf + .045, fh = pistol ? .05 : .08;
+      add(gProf([[-.012, 0], [.016, 0], [.022, -fh], [-.006, -fh - .004]], pistol ? .02 : .026, .006, true), pistol ? MT.metal : (woodStock ? MT.wood : MT.poly), 0, fy, fz);
+      rig.hgPos = V3(0, fy - fh * .5, fz + .005);
+    }
     if (has('uzi_body')) add(gRBox(.05, .02, RL * .9, .006), MT.poly, 0, bot - .005, (zr + zf) / 2);
     if (has('mac_strap')) add(gRBox(.006, .012, .05, .002), MT.cloth, 0, br * 2, muzzleZ + .02);
-    if (has('foldgrip')) { add(gProf([[-.012, 0], [.012, 0], [.012, -.07], [-.012, -.07]], .022, .005), MT.poly, 0, bot, zf - .05); rig.hgPos = V3(0, bot - .05, zf - .05); }
+    if (has('foldgrip')) { const fz = zf + .035; add(gRBox(.026, .012, .03, .004), MT.poly, 0, bot + .002, fz); add(gProf([[-.011, 0], [.011, 0], [.014, -.075], [-.01, -.075]], .022, .005), MT.poly, 0, bot, fz); rig.hgPos = V3(0, bot - .05, fz); }
     if (has('claw') && small) { add(gBox(.02, .012, .02), MT.steel, 0, top + .01, zr - .08); add(gBox(.02, .012, .02), MT.steel, 0, top + .01, zf + .02); }
     if (has('topbreak') && small) add(gBox(.012, .006, .02), MT.steel, 0, RH * .5, .03);
     if (has('sling_oiler') && small) add(gRBox(.03, .012, .008, .004), MT.cloth, 0, bot - .02, zr + .15);
@@ -1302,7 +1418,7 @@ G.buildGun = function (wp, L, opt = {}) {
     if (Sd === 'laser' || Sd === 'dbal' || Sd === 'light') {
       const sz = zf - Math.min(hgL || .12, blen) * .5;
       const sx = pistol ? 0 : (hgT === 'quad' || hgT === 'quad_long' || hgT.startsWith('mlok') ? .032 : RW * .5 + .02);
-      const sy = pistol ? -RH * 1.3 : 0;
+      const sy = pistol ? PS.sB - PS.dcH - .012 : 0;
       if (Sd === 'light') { add(gCyl(.013, .013, .1, 16), MT.metal, sx, sy, sz); add(gCyl(.012, .012, .002, 16), MT.glass, sx, sy, sz - .05); }
       else { add(gRBox(.03, .03, .08, .006), MT.poly, sx, sy, sz); add(gCyl(.004, .004, .003, 10), MT.glow, sx - .006, sy + .006, sz - .041); }
       rig.laserPos = V3(sx - .006, sy + .006, sz - .045);

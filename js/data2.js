@@ -152,11 +152,11 @@ w({ id:'bizon', n:'PP-19 Bizon', e:'mod', c:'SMG', y:1996, co:'Russia', cal:'9×
 w({ id:'vityaz', n:'PP-19-01 Vityaz', e:'mod', c:'SMG', y:2004, co:'Russia', cal:'9×19mm', act:'auto', modes:['auto','semi'], rpm:750, mag:30, v:390, dmg:25, rec:[.35,.25], rl:[2.3,2.9], acc:5, wt:2.9,
   m:{ t:'ak', R:[.30,.07,.045], B:[.237,.0075], hg:['ak_poly',.16], stk:'ak_side', grip:'ak_poly', mag:['box',.19,.1,-.06], sgt:'ak', bh:'ak', mz:'crown', pl:'black', mt:'black', x:['dust','siderail','railT'] }});
 w({ id:'pp2000', n:'PP-2000', e:'mod', c:'SMG', y:2004, co:'Russia', cal:'9×19mm', act:'auto', modes:['auto','semi'], rpm:700, mag:20, v:400, dmg:24, rec:[.45,.35], rl:[1.8,2.3], acc:7, wt:1.4,
-  m:{ t:'smg', R:[.22,.075,.035], B:[.182,.0075], hg:['none',0], stk:'none', grip:'magwell', mag:['box',.14,0,.02], sgt:'flat', bh:'top', mz:'crown', pl:'black', mt:'black', x:['railT','foldgrip'] }});
+  m:{ t:'smg', R:[.22,.055,.035], B:[.182,.0075], hg:['none',0], stk:'none', grip:'magwell', mag:['box',.14,0,.02], sgt:'flat', bh:'top', mz:'crown', pl:'black', mt:'black', x:['railT','foldgrip'] }});
 w({ id:'tmp', n:'Steyr TMP', e:'mod', c:'SMG', y:1992, co:'Austria', cal:'9×19mm', act:'auto', modes:['auto','semi'], rpm:900, mag:30, v:380, dmg:24, rec:[.45,.38], rl:[1.8,2.3], acc:7, wt:1.3,
-  m:{ t:'smg', R:[.24,.08,.04], B:[.13,.0075], hg:['none',0], stk:'none', grip:'magwell', mag:['box',.2,0,.02], sgt:'pst', bh:'top', mz:'crown', pl:'black', mt:'black', x:['foldgrip'] }});
+  m:{ t:'smg', R:[.24,.06,.04], B:[.13,.0075], hg:['none',0], stk:'none', grip:'magwell', mag:['box',.2,0,.02], sgt:'pst', bh:'top', mz:'crown', pl:'black', mt:'black', x:['foldgrip'] }});
 w({ id:'mp9', n:'B&T MP9', e:'mod', c:'SMG', y:2004, co:'Switzerland', cal:'9×19mm', act:'auto', modes:['auto','semi'], rpm:1100, mag:30, v:390, dmg:24, rec:[.42,.35], rl:[1.8,2.3], acc:6, wt:1.4,
-  m:{ t:'smg', R:[.24,.08,.04], B:[.13,.0075], hg:['none',0], stk:'wire', grip:'magwell', mag:['box',.2,0,.02], sgt:'flat', bh:'top', mz:'crown', pl:'black', mt:'black', x:['railT','foldgrip'] }});
+  m:{ t:'smg', R:[.24,.06,.04], B:[.13,.0075], hg:['none',0], stk:'wire', grip:'magwell', mag:['box',.2,0,.02], sgt:'flat', bh:'top', mz:'crown', pl:'black', mt:'black', x:['railT','foldgrip'] }});
 w({ id:'aa12', n:'AA-12', e:'mod', c:'SG', y:2005, co:'United States', cal:'12 gauge', act:'auto', modes:['auto','semi'], rpm:300, mag:20, v:400, dmg:15, pellets:9, rec:[1.2,.5], rl:[3.2,3.8], acc:36, wt:5.2,
   m:{ t:'battle', R:[.42,.1,.06], B:[.33,.012], hg:['poly',.2], stk:'fixedS', grip:'pg', mag:['drum',.08,0,-.07], sgt:'flat', bh:'side_l', mz:'cone', pl:'black', mt:'black', x:['railT','carry_saw'] }});
 w({ id:'vepr12', n:'Vepr-12 Molot', e:'mod', c:'SG', y:2003, co:'Russia', cal:'12 gauge', act:'semi', modes:['semi'], rpm:250, mag:8, v:400, dmg:15, pellets:9, rec:[2.6,.9], rl:[2.4,3.0], acc:36, wt:4.1,
@@ -210,7 +210,7 @@ w({ id:'qbz191', n:'QBZ-191', e:'now', c:'AR', y:2019, co:'China', cal:'5.8×42m
 w({ id:'evolys', n:'FN EVOLYS', e:'now', c:'LMG', y:2021, co:'Belgium', cal:'7.62×51mm', act:'auto_ob', modes:['auto'], rpm:750, mag:100, v:830, dmg:56, rec:[.9,.45], rl:[4.4,5.2], acc:3, wt:6.2, heavy:true,
   m:{ t:'mg', R:[.40,.085,.052], B:[.46,.011], hg:['mlok',.3], stk:'mcx', grip:'ar', mag:['beltpouch',.14], sgt:'flat', bh:'side_l', mz:'bird', bip:1, pl:'black', mt:'black', x:['railT'] }});
 w({ id:'uzipro', n:'IWI Uzi Pro', e:'now', c:'SMG', y:2010, co:'Israel', cal:'9×19mm', act:'auto', modes:['auto','semi'], rpm:1200, mag:32, v:350, dmg:24, rec:[.45,.38], rl:[1.8,2.3], acc:7, wt:1.5,
-  m:{ t:'smg', R:[.24,.075,.04], B:[.12,.0075], hg:['none',0], stk:'wire', grip:'magwell', mag:['box',.22,0,.02], sgt:'flat', bh:'top', mz:'crown', pl:'black', mt:'black', x:['railT','foldgrip'] }});
+  m:{ t:'smg', R:[.24,.06,.04], B:[.12,.0075], hg:['none',0], stk:'wire', grip:'magwell', mag:['box',.22,0,.02], sgt:'flat', bh:'top', mz:'crown', pl:'black', mt:'black', x:['railT','foldgrip'] }});
 w({ id:'mpx_k', n:'SIG MPX-K', e:'now', c:'SMG', y:2016, co:'United States', cal:'9×19mm', act:'auto', modes:['auto','semi'], rpm:850, mag:30, v:350, dmg:24, rec:[.38,.28], rl:[2.0,2.5], acc:4.5, wt:2.3,
   m:{ t:'ar', R:[.27,.08,.036], B:[.114,.0075], hg:['mlok_short',.12], stk:'mcx', grip:'ar', mag:['box',.17,.1,-.05], sgt:'flat', bh:'ar', mz:'crown', pl:'coyote', mt:'black', x:['railT'] }});
 w({ id:'dp12', n:'SM DP-12', e:'now', c:'SG', y:2015, co:'United States', cal:'12 gauge', act:'pump', modes:['pump'], rpm:150, mag:16, v:400, dmg:15, pellets:9, rec:[2.7,.8], rl:[.5,.5], acc:40, wt:4.3, cyc:.4, tubeLoad:true,

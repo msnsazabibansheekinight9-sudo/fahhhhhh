@@ -38,7 +38,7 @@ w({ id:'win1907', n:'Winchester Model 1907', e:'ww1', c:'CAR', y:1907, co:'Unite
 w({ id:'villarperosa', n:'Villar-Perosa M1915', e:'ww1', c:'SMG', y:1915, co:'Kingdom of Italy', cal:'9mm Glisenti', act:'auto_ob', modes:['auto'], rpm:1500, mag:50, v:320, dmg:22, rec:[.7,.6], rl:[4.0,4.6], acc:9, wt:6.5, salvo:2,
   m:{ t:'smg', R:[.26,.06,.04], B:[.32,.008], hg:['none',0], stk:'none', grip:'pg_metal', mag:['top_curve',.13,.2,-.04], sgt:'rifle', bh:'side_r', mz:'crown', bip:1, mt:'blued', x:['twin_side'] }});
 w({ id:'lp08', n:'Luger Artillery LP 08', e:'ww1', c:'PST', y:1913, co:'German Empire', cal:'9×19mm', act:'semi', modes:['semi'], rpm:320, mag:32, v:380, dmg:32, rec:[1.1,.5], rl:[2.8,3.2], acc:4, wt:1.06,
-  m:{ t:'pistol', R:[.2,.03,.026], B:[.2,.0065], stk:'none', grip:'pst_raked', mag:['snail',.1,0,.04], sgt:'tall', bh:'toggle', mz:'crown', wd:'wood', mt:'blued', x:[] }});
+  m:{ t:'pistol', R:[.31,.03,.026], B:[.2,.0065], stk:'none', grip:'pst_raked', mag:['snail',.1,0,.04], sgt:'tall', bh:'toggle', mz:'crown', wd:'wood', mt:'blued', x:[] }});
 w({ id:'glisenti', n:'Glisenti M1910', e:'ww1', c:'PST', y:1910, co:'Kingdom of Italy', cal:'9mm Glisenti', act:'semi', modes:['semi'], rpm:320, mag:7, v:320, dmg:26, rec:[1,.4], rl:[1.7,2.1], acc:6, wt:.82,
   m:{ t:'pistol', R:[.2,.034,.028], B:[.1,.006], stk:'none', grip:'pst_raked', mag:['pst',.11], sgt:'pst', bh:'slide', mz:'crown', wd:'wood_dark', mt:'blued', x:[] }});
 w({ id:'sw1917', n:'S&W M1917 Revolver', e:'ww1', c:'PST', y:1917, co:'United States', cal:'.45 ACP', act:'rev', modes:['semi'], rpm:150, mag:6, v:250, dmg:40, rec:[1.7,.6], rl:[2.2,2.2], acc:6, wt:1.02,
