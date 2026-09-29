@@ -79,7 +79,6 @@ UI.show = function (name) {
   if (name === 'armory') renderArmory(root);
   if (name === 'battle') renderBattle(root);
   $('#hud').hidden = true;
-  $('#touch').hidden = true;
 };
 function renderMenu(root) {
   G.Game.mode = 'menu';
@@ -319,7 +318,6 @@ UI.showHUD = function (mode) {
   UI.screen = 'game';
   $('#ui').innerHTML = ''; UI.closeOverlay();
   const h = $('#hud'); h.hidden = false;
-  if (G.Input.touch) $('#touch').hidden = false;
   h.innerHTML = `<canvas id="scope"></canvas><div id="supp"></div><div id="vign"></div>
     <div id="xhair"><i class="t"></i><i class="b"></i><i class="l"></i><i class="r"></i><i class="d"></i></div>
     <div id="hit"><i></i><i></i><i></i><i></i></div><div id="dmgdir"></div>

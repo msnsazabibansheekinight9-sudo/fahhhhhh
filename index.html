@@ -179,11 +179,6 @@ input[type=range] { width: 100%; accent-color: var(--brass); }
 #rmenu .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
 #rmenu .card b { font-size: 16px; } #rmenu .card span { font-size: 12px; }
 #loading { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(8, 9, 7, .85); font: 900 42px var(--f-display); letter-spacing: .04em; }
-#touch { position: fixed; inset: 0; z-index: 6; }
-#touch .stick { position: absolute; left: 40px; bottom: 40px; width: 120px; height: 120px; border-radius: 50%; border: 1px solid rgba(255,255,255,.25); opacity: .35; }
-#touch .stick.on { opacity: .8; } #touch .knob { position: absolute; left: 40px; top: 40px; width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,.4); }
-#touch .tb { position: absolute; width: 62px; height: 62px; border-radius: 50%; border: 1px solid rgba(255,255,255,.35); background: rgba(0,0,0,.3); font: 600 12px var(--f-mono); color: #fff; display: flex; align-items: center; justify-content: center; }
-#touch .tb.on { background: rgba(201,162,75,.5); }
 @media (max-width: 900px) {
   #armory { grid-template-columns: 1fr; grid-template-rows: 38vh 1fr auto; overflow-y: auto; }
   #armory .col.left { max-height: 38vh; } #armory .stage { min-height: 42vh; } #armory .col.right { border-left: 0; }
@@ -196,17 +191,6 @@ input[type=range] { width: 100%; accent-color: var(--brass); }
 <canvas id="c" aria-label="3D view"></canvas>
 <div id="ui"></div>
 <div id="hud" hidden></div>
-<div id="touch" hidden>
-  <div class="stick"><div class="knob"></div></div>
-  <button class="tb" data-t="fire" style="right:28px;bottom:120px;width:78px;height:78px">FIRE</button>
-  <button class="tb" data-t="ads" data-toggle="1" style="right:118px;bottom:40px">AIM</button>
-  <button class="tb" data-t="reload" style="right:28px;bottom:32px">RLD</button>
-  <button class="tb" data-t="jump" style="right:196px;bottom:32px">JUMP</button>
-  <button class="tb" data-t="crouch" style="right:122px;bottom:120px">CRCH</button>
-  <button class="tb" data-t="swap" style="right:28px;top:200px">SWAP</button>
-  <button class="tb" data-t="mode" style="right:100px;top:200px">MODE</button>
-  <button class="tb" data-t="sprint" data-toggle="1" style="left:40px;bottom:180px">RUN</button>
-</div>
 <div id="loading">Loading armory…</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>

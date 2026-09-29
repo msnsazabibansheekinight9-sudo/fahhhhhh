@@ -1,5 +1,5 @@
 // ============================================================================
-// Input: keyboard, mouse with pointer lock, wheel, and on-screen touch controls.
+// Input: keyboard, mouse with pointer lock, wheel (PC only).
 // ============================================================================
 'use strict';
 (function () {
@@ -32,8 +32,6 @@ I.init = function (canvas) {
     const was = I.locked; I.locked = document.pointerLockElement === canvas;
     if (was && !I.locked && G.Game.mode !== 'menu' && G.Game.state === 'play' && !I.touch) G.UI.pause(true);
   });
-  // touch
-  if ('ontouchstart' in window || navigator.maxTouchPoints > 0) setupTouch();
 };
 I.lock = function () { try { const p = I.canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) {} };
 I.unlock = function () { try { document.exitPointerLock(); } catch (e) {} };
@@ -67,37 +65,4 @@ I.frame = function () {
 };
 I.clear = function () { I.keys = {}; I.edge = {}; I.mb = [false, false, false]; I.dx = I.dy = 0; };
 
-// ------------------------------------------------------------------ touch
-function setupTouch() {
-  I.touch = true;
-  const root = document.getElementById('touch');
-  if (!root) return;
-  root.hidden = false;
-  const stick = root.querySelector('.stick'), knob = root.querySelector('.knob');
-  let stickId = null, lookId = null, sx = 0, sy = 0, lx = 0, ly = 0;
-  root.addEventListener('touchstart', ev => {
-    for (const t of ev.changedTouches) {
-      const btn = t.target.closest('[data-t]');
-      if (btn) { const n = btn.dataset.t; I.tbtn[n] = !I.tbtn[n] || !btn.dataset.toggle ? true : false; if (btn.dataset.toggle) { btn.classList.toggle('on', I.tbtn[n]); } I.tEdge[n] = true; btn.dataset.id = t.identifier; continue; }
-      if (t.clientX < window.innerWidth * .4 && stickId === null) { stickId = t.identifier; sx = t.clientX; sy = t.clientY; stick.style.left = (sx - 60) + 'px'; stick.style.top = (sy - 60) + 'px'; stick.classList.add('on'); }
-      else if (lookId === null) { lookId = t.identifier; lx = t.clientX; ly = t.clientY; }
-    }
-    ev.preventDefault();
-  }, { passive: false });
-  root.addEventListener('touchmove', ev => {
-    for (const t of ev.changedTouches) {
-      if (t.identifier === stickId) { const dx = t.clientX - sx, dy = t.clientY - sy; const m = Math.min(1, Math.hypot(dx, dy) / 50); const a = Math.atan2(dy, dx); I.tv.r = Math.cos(a) * m; I.tv.f = -Math.sin(a) * m; knob.style.transform = `translate(${Math.cos(a) * m * 40}px, ${Math.sin(a) * m * 40}px)`; }
-      else if (t.identifier === lookId) { I.dx += (t.clientX - lx) * 2.2; I.dy += (t.clientY - ly) * 2.2; lx = t.clientX; ly = t.clientY; }
-    }
-    ev.preventDefault();
-  }, { passive: false });
-  const end = ev => {
-    for (const t of ev.changedTouches) {
-      if (t.identifier === stickId) { stickId = null; I.tv.f = I.tv.r = 0; knob.style.transform = ''; stick.classList.remove('on'); }
-      if (t.identifier === lookId) lookId = null;
-      root.querySelectorAll('[data-t]').forEach(b => { if (b.dataset.id == t.identifier && !b.dataset.toggle) { I.tbtn[b.dataset.t] = false; b.dataset.id = ''; } });
-    }
-  };
-  root.addEventListener('touchend', end); root.addEventListener('touchcancel', end);
-}
 })();
