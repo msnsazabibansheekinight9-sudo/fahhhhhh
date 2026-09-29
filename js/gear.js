@@ -16,7 +16,7 @@
 const G = window.G;
 const GEAR = G.GEAR = [];
 const add = (slot, list) => { for (const o of list) GEAR.push(Object.assign({ slot, wt: 0, y: 2000, co: '—', d: '' }, o)); };
-G.GEAR_SLOTS = [['uniform', 'Uniform / camouflage'], ['helmet', 'Helmet / headwear'], ['face', 'Eyes & face'], ['nvg', 'Night vision'], ['armor', 'Body armour / carrier'], ['plates', 'Armour plates'], ['gloves', 'Gloves'], ['boots', 'Boots'], ['pack', 'Pack']];
+G.GEAR_SLOTS = [['uniform', 'Uniform / camouflage'], ['helmet', 'Helmet / headwear'], ['face', 'Eyes & face'], ['nvg', 'Night vision'], ['comms', 'Headset / comms'], ['armor', 'Body armour / carrier'], ['plates', 'Armour plates'], ['gloves', 'Gloves'], ['boots', 'Boots'], ['pack', 'Pack']];
 
 // ------------------------------------------------------------------ uniforms (pattern: solid colour or generated camouflage)
 add('uniform', [
@@ -53,7 +53,7 @@ add('uniform', [
   { id: 'u_kryptek', n: 'Kryptek Typhon', co: 'Special units', y: 2012, pat: ['blob', ['#262626', '#3a3a3a', '#151515', '#4a4a46']], wt: 1.4 },
   { id: 'u_au_amcu', n: 'Australian AMCU', co: 'Australia', y: 2014, pat: ['blob', ['#8a8a5a', '#5a6a3e', '#a09470', '#3a3a2a']], wt: 1.4 },
   { id: 'u_us_ocp', n: 'US Army OCP (Scorpion W2)', co: 'United States', y: 2015, pat: ['blob', ['#9a8e6a', '#6e6a4a', '#586246', '#bdb08a']], wt: 1.4 },
-  { id: 'u_civ_jeans', n: 'Civilian: jacket & jeans', co: 'Civilian', y: 1970, pat: ['solid', ['#3a4250']], wt: 1.2 },
+  { id: 'u_civ_jeans', n: 'Civilian: jacket & jeans', co: 'Civilian', y: 1970, pat: ['solid', ['#4e3c2c']], pants: '#34465e', wt: 1.2 },
   { id: 'u_civ_hoodie', n: 'Civilian: grey hoodie', co: 'Civilian', y: 1990, pat: ['solid', ['#5a5a5e']], wt: 1.1 },
   { id: 'u_civ_track', n: 'Civilian: tracksuit', co: 'Civilian', y: 1985, pat: ['solid', ['#1e2a44']], wt: 1 },
   { id: 'u_civ_suit', n: 'Civilian: business suit', co: 'Civilian', y: 1950, pat: ['solid', ['#2a2a30']], wt: 1.4 },
@@ -72,25 +72,25 @@ add('helmet', [
   { id: 'h_adrian', n: 'Adrian M1915', co: 'France', y: 1915, model: 'adrian', col: '#6b7a86', rating: 1.4, cut: 'mid', wt: .77 },
   { id: 'h_stahl16', n: 'Stahlhelm M1916', co: 'German Empire', y: 1916, model: 'stahl16', col: '#55594c', rating: 1.9, cut: 'full', wt: 1.2 },
   { id: 'h_m35', n: 'Stahlhelm M35', co: 'Germany', y: 1935, model: 'm35', col: '#4c5046', rating: 1.9, cut: 'full', wt: 1.1 },
-  { id: 'h_ssh40', n: 'SSh-40', co: 'Soviet Union', y: 1940, model: 'ssh68', col: '#4d563b', rating: 1.9, cut: 'full', wt: 1.25 },
+  { id: 'h_ssh40', n: 'SSh-40', co: 'Soviet Union', y: 1940, model: 'ssh40', col: '#4d563b', rating: 1.9, cut: 'full', wt: 1.25 },
   { id: 'h_m1', n: 'M1 steel pot', co: 'United States', y: 1941, model: 'm1', col: '#4b5234', rating: 1.8, cut: 'mid', wt: 1.36 },
   { id: 'h_m1_cover', n: 'M1 with Mitchell cover', co: 'United States', y: 1960, model: 'm1cover', col: '#4f5a36', rating: 1.8, cut: 'mid', wt: 1.45 },
   { id: 'h_ssh68', n: 'SSh-68', co: 'Soviet Union', y: 1968, model: 'ssh68', col: '#4d563b', rating: 2, cut: 'full', wt: 1.3 },
   { id: 'h_pasgt', n: 'PASGT "Fritz" (Kevlar)', co: 'United States', y: 1983, model: 'pasgt', col: 'uniform', rating: 3.4, cut: 'full', wt: 1.45, d: 'First US Kevlar helmet; roughly NIJ IIIA.' },
-  { id: 'h_mk6', n: 'Mk6 combat helmet', co: 'United Kingdom', y: 1985, model: 'pasgt', col: 'uniform', rating: 3.2, cut: 'full', wt: 1.4 },
-  { id: 'h_type88', n: 'Type 88 Kevlar helmet', co: 'Japan', y: 1988, model: 'pasgt', col: 'uniform', rating: 3.3, cut: 'full', wt: 1.4 },
+  { id: 'h_mk6', n: 'Mk6 combat helmet', co: 'United Kingdom', y: 1985, model: 'mk6', col: 'uniform', rating: 3.2, cut: 'full', wt: 1.4 },
+  { id: 'h_type88', n: 'Type 88 Kevlar helmet', co: 'Japan', y: 1988, model: 'type88', col: 'uniform', rating: 3.3, cut: 'full', wt: 1.4 },
   { id: 'h_altyn', n: 'Altyn titanium helmet + visor', co: 'Russia', y: 1990, model: 'altyn', col: '#4a5236', rating: 4.6, cut: 'full', visor: 4.2, wt: 4.3, d: 'Titanium shell with a hinged armoured-glass visor; very heavy.' },
   { id: 'h_ach', n: 'ACH / MICH 2000', co: 'United States', y: 2002, model: 'ach', col: 'uniform', rating: 4, cut: 'mid', wt: 1.36, d: 'Mid-cut Kevlar; NIJ IIIA.' },
-  { id: 'h_gallet', n: 'Gallet F1 / SPECTRA', co: 'France', y: 1998, model: 'pasgt', col: '#5a6040', rating: 3.6, cut: 'full', wt: 1.4 },
-  { id: 'h_qgf03', n: 'QGF-03', co: 'China', y: 2003, model: 'ach', col: 'uniform', rating: 3.8, cut: 'mid', wt: 1.5 },
-  { id: 'h_mk7', n: 'Mk7 combat helmet', co: 'United Kingdom', y: 2009, model: 'ach', col: 'uniform', rating: 3.8, cut: 'mid', wt: 1.3 },
+  { id: 'h_gallet', n: 'Gallet F1 / SPECTRA', co: 'France', y: 1998, model: 'gallet', col: '#5a6040', rating: 3.6, cut: 'full', wt: 1.4 },
+  { id: 'h_qgf03', n: 'QGF-03', co: 'China', y: 2003, model: 'qgf03', col: 'uniform', rating: 3.8, cut: 'mid', wt: 1.5 },
+  { id: 'h_mk7', n: 'Mk7 combat helmet', co: 'United Kingdom', y: 2009, model: 'mk7', col: 'uniform', rating: 3.8, cut: 'mid', wt: 1.3 },
   { id: 'h_fast', n: 'Ops-Core FAST high-cut', co: 'United States', y: 2010, model: 'fast', col: 'uniform', rating: 4, cut: 'high', wt: 1.1, d: 'Bump-and-ballistic high-cut shell with ARC rails and NVG shroud.' },
-  { id: 'h_airframe', n: 'Crye AirFrame', co: 'United States', y: 2011, model: 'fast', col: '#8a7a58', rating: 3.8, cut: 'high', wt: 1.05 },
+  { id: 'h_airframe', n: 'Crye AirFrame', co: 'United States', y: 2011, model: 'airframe', col: '#8a7a58', rating: 3.8, cut: 'high', wt: 1.05 },
   { id: 'h_ech', n: 'ECH (Enhanced Combat Helmet)', co: 'United States', y: 2013, model: 'ach', col: 'uniform', rating: 5.5, cut: 'mid', wt: 1.55, d: 'UHMWPE shell that stops some rifle fragments and pistol-calibre SMG fire.' },
   { id: 'h_6b47', n: '6B47 Ratnik', co: 'Russia', y: 2015, model: '6b47', col: 'uniform', rating: 4.2, cut: 'full', wt: 1.2 },
-  { id: 'h_lshz', n: 'LShZ-1+ (with visor)', co: 'Russia', y: 2014, model: 'altyn', col: '#4a5236', rating: 4.4, cut: 'full', visor: 3.6, wt: 3.1 },
-  { id: 'h_ihps', n: 'IHPS (Integrated Head Protection)', co: 'United States', y: 2019, model: 'fast', col: 'uniform', rating: 5.8, cut: 'high', wt: 1.4 },
-  { id: 'h_rf1', n: 'Ops-Core RF1 (rifle-rated)', co: 'United States', y: 2017, model: 'fast', col: '#3a3d34', rating: 7.2, cut: 'high', wt: 1.9, d: 'Stops 7.62×39 MSC and 5.56 M193 at the muzzle.' },
+  { id: 'h_lshz', n: 'LShZ-1+ (with visor)', co: 'Russia', y: 2014, model: 'lshz', col: '#4a5236', rating: 4.4, cut: 'full', visor: 3.6, wt: 3.1 },
+  { id: 'h_ihps', n: 'IHPS (Integrated Head Protection)', co: 'United States', y: 2019, model: 'ihps', col: 'uniform', rating: 5.8, cut: 'high', wt: 1.4 },
+  { id: 'h_rf1', n: 'Ops-Core RF1 (rifle-rated)', co: 'United States', y: 2017, model: 'rf1', col: '#3a3d34', rating: 7.2, cut: 'high', wt: 1.9, d: 'Stops 7.62×39 MSC and 5.56 M193 at the muzzle.' },
   { id: 'h_psy_visor', n: 'Blackline Aegis full-face helmet', co: 'Blackline PMC', y: 2032, model: 'visor', col: '#1b1c1f', rating: 9, cut: 'full', visor: 7, wt: 2.6 },
   { id: 'h_psy_gasmask', n: 'Rust Syndicate hood & respirator', co: 'Rust Syndicate', y: 2030, model: 'gasmask', col: '#5a4636', rating: 0, cut: 'none', wt: 1.1 },
 ]);
@@ -107,7 +107,7 @@ add('face', [
   { id: 'f_visor', n: 'Ops-Core ballistic visor', co: 'United States', y: 2014, model: 'bvisor', face: 3.8, wt: 1.3, d: 'Full-face IIIA polycarbonate visor.' },
   { id: 'f_gp5', n: 'GP-5 gas mask', co: 'Soviet Union', y: 1962, model: 'gp5', wt: .6 },
   { id: 'f_m50', n: 'M50 JSGPM gas mask', co: 'United States', y: 2009, model: 'm50', wt: .8 },
-  { id: 'f_s10', n: 'S10 respirator', co: 'United Kingdom', y: 1986, model: 'm50', wt: .8 },
+  { id: 'f_s10', n: 'S10 respirator', co: 'United Kingdom', y: 1986, model: 's10', wt: .8 },
 ]);
 
 // ------------------------------------------------------------------ night vision
@@ -123,6 +123,16 @@ add('nvg', [
 
 // ------------------------------------------------------------------ body armour / carriers
 // soft: soft-armour rating; cov: extra coverage; plates: accepts plate inserts; fixed: built-in hard armour
+// ------------------------------------------------------------------ headsets
+add('comms', [
+  { id: 'c_none', n: 'None', model: null, y: 1900 },
+  { id: 'c_comtac', n: 'Peltor ComTac III (boom mic)', co: 'United States / Sweden', y: 2012, model: 'comtac', col: '#4a4e3a', boom: true, wt: .45, d: 'Active hearing protection on ARC rail adapters, or a headband without a railed helmet.' },
+  { id: 'c_sordin', n: 'MSA Sordin Supreme Pro-X', co: 'Sweden', y: 2008, model: 'sordin', col: '#3a4032', boom: false, wt: .35, d: 'Slim cups on a neckband so they fit under a helmet.' },
+  { id: 'c_liberator', n: 'TCI Liberator II', co: 'United States', y: 2010, model: 'liberator', col: '#1e1e1e', boom: true, wt: .4 },
+  { id: 'c_prr', n: 'H4855 Personal Role Radio headset', co: 'United Kingdom', y: 2002, model: 'prr', col: '#2a2a26', boom: true, wt: .2, d: 'Single earpiece with boom mic, worn under the helmet.' },
+  { id: 'c_gssh', n: 'GSSh-01 active headset', co: 'Russia', y: 2014, model: 'sordin', col: '#1a1a1a', boom: false, wt: .35 },
+]);
+
 add('armor', [
   { id: 'a_none', n: 'None (belt & suspenders)', model: 'belt', y: 1900, soft: 0, cov: {}, plates: false },
   { id: 'a_sappenpanzer', n: 'Sappenpanzer M1916 trench armour', co: 'German Empire', y: 1916, model: 'steel', col: '#55594c', soft: 0, cov: {}, plates: false, fixed: { rating: 3.6, front: true, back: false, deg: .03 }, wt: 9, d: 'Overlapping steel plates worn by sentries and machine-gunners.' },
@@ -206,19 +216,19 @@ G.gearFor = slot => GEAR.filter(g => g.slot === slot);
 
 // ------------------------------------------------------------------ presets: real-world kits
 G.KIT_PRESETS = [
-  { id: 'us2020', n: 'US Army rifleman, 2020', kit: { uniform: 'u_us_ocp', helmet: 'h_ihps', face: 'f_glasses', nvg: 'n_envgb', armor: 'a_msv', plates: 'p_esapi', gloves: 'g_oakley', boots: 'b_salomon', pack: 'k_assault' } },
-  { id: 'usmc2008', n: 'USMC, Helmand 2008', kit: { uniform: 'u_us_marpat_d', helmet: 'h_ach', face: 'f_goggles', nvg: 'n_pvs14', armor: 'a_spc', plates: 'p_esapi', gloves: 'g_mechanix', boots: 'b_desert', pack: 'k_hydro' } },
-  { id: 'sof2015', n: 'Special operations assaulter, 2015', kit: { uniform: 'u_multicam', helmet: 'h_airframe', face: 'f_glasses', nvg: 'n_gpnvg18', armor: 'a_cpc', plates: 'p_rf2', gloves: 'g_mechanix', boots: 'b_salomon', pack: 'k_none' } },
-  { id: 'ratnik', n: 'Russian "Ratnik" motor rifleman', kit: { uniform: 'u_ru_emr', helmet: 'h_6b47', face: 'f_none', nvg: 'n_1pn138', armor: 'a_6b45', plates: 'p_granit', gloves: 'g_black', boots: 'b_combat', pack: 'k_rd54' } },
-  { id: 'uk2010', n: 'British Army, Afghanistan 2010', kit: { uniform: 'u_uk_mtp', helmet: 'h_mk7', face: 'f_glasses', nvg: 'n_pvs14', armor: 'a_osprey', plates: 'p_mk4', gloves: 'g_oakley', boots: 'b_desert', pack: 'k_assault' } },
-  { id: 'bw', n: 'Bundeswehr infantry', kit: { uniform: 'u_de_fleck', helmet: 'h_ach', face: 'f_none', nvg: 'n_none', armor: 'a_idz', plates: 'p_esapi', gloves: 'g_black', boots: 'b_combat', pack: 'k_assault' } },
-  { id: 'pla', n: 'PLA infantry, 2019', kit: { uniform: 'u_cn_type07', helmet: 'h_qgf03', face: 'f_none', nvg: 'n_none', armor: 'a_type19', plates: 'p_sapi', gloves: 'g_none', boots: 'b_combat', pack: 'k_assault' } },
-  { id: 'swat', n: 'Counter-terror entry team', kit: { uniform: 'u_black', helmet: 'h_rf1', face: 'f_visor', nvg: 'n_pvs31', armor: 'a_avs', plates: 'p_esapi', gloves: 'g_black', boots: 'b_combat', pack: 'k_none' } },
-  { id: 'vietnam', n: 'US grunt, Vietnam 1968', kit: { uniform: 'u_us_og107', helmet: 'h_m1_cover', face: 'f_none', nvg: 'n_none', armor: 'a_m69', plates: 'p_none', gloves: 'g_none', boots: 'b_jungle', pack: 'k_alice' } },
-  { id: 'afghan', n: 'Soviet paratrooper, Afghanistan 1985', kit: { uniform: 'u_su_amoeba', helmet: 'h_ssh68', face: 'f_none', nvg: 'n_none', armor: 'a_6b3', plates: 'p_none', gloves: 'g_none', boots: 'b_kirza', pack: 'k_rd54' } },
-  { id: 'ww2us', n: 'US paratrooper, 1944', kit: { uniform: 'u_us_m43', helmet: 'h_m1', face: 'f_none', nvg: 'n_none', armor: 'a_m1928', plates: 'p_none', gloves: 'g_none', boots: 'b_legging', pack: 'k_haversack' } },
-  { id: 'ww1de', n: 'German Stoßtruppe, 1917', kit: { uniform: 'u_de_feldgrau', helmet: 'h_stahl16', face: 'f_none', nvg: 'n_none', armor: 'a_sappenpanzer', plates: 'p_none', gloves: 'g_leather', boots: 'b_jack', pack: 'k_tornister' } },
-  { id: 'blackline', n: 'Blackline PMC operator (fictional)', kit: { uniform: 'u_psy_black', helmet: 'h_psy_visor', face: 'f_none', nvg: 'n_gpnvg18', armor: 'a_psy_black', plates: 'p_psy_aegis', gloves: 'g_black', boots: 'b_combat', pack: 'k_none' } },
+  { id: 'us2020', n: 'US Army rifleman, 2020', kit: { uniform: 'u_us_ocp', helmet: 'h_ihps', face: 'f_glasses', nvg: 'n_envgb', comms: 'c_comtac', armor: 'a_msv', plates: 'p_esapi', gloves: 'g_oakley', boots: 'b_salomon', pack: 'k_assault' } },
+  { id: 'usmc2008', n: 'USMC, Helmand 2008', kit: { uniform: 'u_us_marpat_d', helmet: 'h_ach', face: 'f_goggles', nvg: 'n_pvs14', comms: 'c_none', armor: 'a_spc', plates: 'p_esapi', gloves: 'g_mechanix', boots: 'b_desert', pack: 'k_hydro' } },
+  { id: 'sof2015', n: 'Special operations assaulter, 2015', kit: { uniform: 'u_multicam', helmet: 'h_airframe', face: 'f_glasses', nvg: 'n_gpnvg18', comms: 'c_comtac', armor: 'a_cpc', plates: 'p_rf2', gloves: 'g_mechanix', boots: 'b_salomon', pack: 'k_none' } },
+  { id: 'ratnik', n: 'Russian "Ratnik" motor rifleman', kit: { uniform: 'u_ru_emr', helmet: 'h_6b47', face: 'f_none', nvg: 'n_1pn138', comms: 'c_gssh', armor: 'a_6b45', plates: 'p_granit', gloves: 'g_black', boots: 'b_combat', pack: 'k_rd54' } },
+  { id: 'uk2010', n: 'British Army, Afghanistan 2010', kit: { uniform: 'u_uk_mtp', helmet: 'h_mk7', face: 'f_glasses', nvg: 'n_pvs14', comms: 'c_prr', armor: 'a_osprey', plates: 'p_mk4', gloves: 'g_oakley', boots: 'b_desert', pack: 'k_assault' } },
+  { id: 'bw', n: 'Bundeswehr infantry', kit: { uniform: 'u_de_fleck', helmet: 'h_ach', face: 'f_none', nvg: 'n_none', comms: 'c_none', armor: 'a_idz', plates: 'p_esapi', gloves: 'g_black', boots: 'b_combat', pack: 'k_assault' } },
+  { id: 'pla', n: 'PLA infantry, 2019', kit: { uniform: 'u_cn_type07', helmet: 'h_qgf03', face: 'f_none', nvg: 'n_none', comms: 'c_none', armor: 'a_type19', plates: 'p_sapi', gloves: 'g_none', boots: 'b_combat', pack: 'k_assault' } },
+  { id: 'swat', n: 'Counter-terror entry team', kit: { uniform: 'u_black', helmet: 'h_rf1', face: 'f_visor', nvg: 'n_pvs31', comms: 'c_liberator', armor: 'a_avs', plates: 'p_esapi', gloves: 'g_black', boots: 'b_combat', pack: 'k_none' } },
+  { id: 'vietnam', n: 'US grunt, Vietnam 1968', kit: { uniform: 'u_us_og107', helmet: 'h_m1_cover', face: 'f_none', nvg: 'n_none', comms: 'c_none', armor: 'a_m69', plates: 'p_none', gloves: 'g_none', boots: 'b_jungle', pack: 'k_alice' } },
+  { id: 'afghan', n: 'Soviet paratrooper, Afghanistan 1985', kit: { uniform: 'u_su_amoeba', helmet: 'h_ssh68', face: 'f_none', nvg: 'n_none', comms: 'c_none', armor: 'a_6b3', plates: 'p_none', gloves: 'g_none', boots: 'b_kirza', pack: 'k_rd54' } },
+  { id: 'ww2us', n: 'US paratrooper, 1944', kit: { uniform: 'u_us_m43', helmet: 'h_m1', face: 'f_none', nvg: 'n_none', comms: 'c_none', armor: 'a_m1928', plates: 'p_none', gloves: 'g_none', boots: 'b_legging', pack: 'k_haversack' } },
+  { id: 'ww1de', n: 'German Stoßtruppe, 1917', kit: { uniform: 'u_de_feldgrau', helmet: 'h_stahl16', face: 'f_none', nvg: 'n_none', comms: 'c_none', armor: 'a_sappenpanzer', plates: 'p_none', gloves: 'g_leather', boots: 'b_jack', pack: 'k_tornister' } },
+  { id: 'blackline', n: 'Blackline PMC operator (fictional)', kit: { uniform: 'u_psy_black', helmet: 'h_psy_visor', face: 'f_none', nvg: 'n_gpnvg18', comms: 'c_comtac', armor: 'a_psy_black', plates: 'p_psy_aegis', gloves: 'g_black', boots: 'b_combat', pack: 'k_none' } },
 ];
 G.KIT_DEFAULT = Object.assign({}, G.KIT_PRESETS[0].kit);
 G.kitWeight = kit => G.GEAR_SLOTS.reduce((s, [slot]) => { const g = G.GEARID[kit[slot]]; if (!g) return s; if (slot === 'plates') { const A = G.GEARID[kit.armor]; if (!A || !A.plates) return s; return s + g.wt * ((A.cov && A.cov.sides) ? 1.25 : 1); } return s + (g.wt || 0); }, 0);
