@@ -1,0 +1,103 @@
+// ============================================================================
+// Input: keyboard, mouse with pointer lock, wheel, and on-screen touch controls.
+// ============================================================================
+'use strict';
+(function () {
+const G = window.G;
+const I = G.Input = { keys: {}, edge: {}, mb: [false, false, false], mbEdge: [false, false, false], dx: 0, dy: 0, lastDx: 0, lastDy: 0, wheel: 0, locked: false, touch: false, tv: { f: 0, r: 0 }, tbtn: {}, tEdge: {} };
+const MAP = { KeyW: 'f', ArrowUp: 'f', KeyS: 'b', ArrowDown: 'b', KeyA: 'l', ArrowLeft: 'l', KeyD: 'r', ArrowRight: 'r' };
+
+I.init = function (canvas) {
+  I.canvas = canvas;
+  window.addEventListener('keydown', e => {
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
+    if (!I.keys[e.code]) I.edge[e.code] = true;
+    I.keys[e.code] = true;
+    if (G.Game.mode !== 'menu' && ['Space', 'Tab', 'PageUp', 'PageDown', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault();
+    if (e.code === 'Escape' || e.code === 'KeyP') G.UI.onEscape(e.code);
+    if (e.code === 'KeyH' && G.Game.mode !== 'menu') G.UI.toggleHelp();
+  });
+  window.addEventListener('keyup', e => { I.keys[e.code] = false; });
+  window.addEventListener('blur', () => { I.keys = {}; I.mb = [false, false, false]; });
+  canvas.addEventListener('mousedown', e => {
+    if (G.Game.mode === 'menu' || G.Game.state !== 'play') return;
+    if (!I.locked && !I.touch) { I.lock(); return; }
+    I.mb[e.button] = true; I.mbEdge[e.button] = true; e.preventDefault();
+  });
+  window.addEventListener('mouseup', e => { I.mb[e.button] = false; });
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+  window.addEventListener('mousemove', e => { if (I.locked) { I.dx += e.movementX || 0; I.dy += e.movementY || 0; } });
+  window.addEventListener('wheel', e => { if (I.locked) I.wheel += Math.sign(e.deltaY); }, { passive: true });
+  document.addEventListener('pointerlockchange', () => {
+    const was = I.locked; I.locked = document.pointerLockElement === canvas;
+    if (was && !I.locked && G.Game.mode !== 'menu' && G.Game.state === 'play' && !I.touch) G.UI.pause(true);
+  });
+  // touch
+  if ('ontouchstart' in window || navigator.maxTouchPoints > 0) setupTouch();
+};
+I.lock = function () { try { const p = I.canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) {} };
+I.unlock = function () { try { document.exitPointerLock(); } catch (e) {} };
+function k(c) { return !!I.keys[c]; }
+function e(c) { const v = !!I.edge[c]; return v; }
+// Build the per-frame input snapshot; consumes edges
+I.frame = function () {
+  const t = I.tv;
+  const f = (k('KeyW') || k('ArrowUp') ? 1 : 0) - (k('KeyS') || k('ArrowDown') ? 1 : 0) + t.f;
+  const r = (k('KeyD') || k('ArrowRight') ? 1 : 0) - (k('KeyA') || k('ArrowLeft') ? 1 : 0) + t.r;
+  const tb = I.tbtn, te = I.tEdge;
+  const out = {
+    f: Math.max(-1, Math.min(1, f)), r: Math.max(-1, Math.min(1, r)),
+    dx: I.dx, dy: I.dy,
+    sprint: k('ShiftLeft') || k('ShiftRight') || tb.sprint,
+    jump: e('Space') || te.jump, jumpHeld: k('Space'), downHeld: k('KeyC') || k('ControlLeft'),
+    crouch: e('KeyC') || e('ControlLeft') || te.crouch, prone: e('KeyZ') || te.prone,
+    leanL: k('KeyQ'), leanR: k('KeyE'),
+    fire: I.mb[0] || tb.fire, firePressed: I.mbEdge[0] || te.fire,
+    ads: I.mb[2] || tb.ads,
+    reload: e('KeyR') || te.reload, inspect: e('KeyF'), melee: e('KeyV'), gl: e('KeyG'), mode: e('KeyB') || te.mode, light: e('KeyL'),
+    zeroUp: e('BracketRight') || e('PageUp'), zeroDown: e('BracketLeft') || e('PageDown'), bipod: e('KeyX'),
+    fly: e('KeyN'), menu: e('KeyT'), reset: e('KeyY'),
+  };
+  if (e('Digit1')) out.swap = 0; if (e('Digit2')) out.swap = 1;
+  if (I.wheel !== 0 && G.Game.player) { out.swap = (G.Game.player.cur + 1) % Math.max(1, G.Game.player.weapons.length); I.wheel = 0; }
+  if (te.swap && G.Game.player) out.swap = (G.Game.player.cur + 1) % Math.max(1, G.Game.player.weapons.length);
+  I.lastDx = I.dx; I.lastDy = I.dy;
+  I.dx = 0; I.dy = 0; I.edge = {}; I.mbEdge = [false, false, false]; I.tEdge = {};
+  return out;
+};
+I.clear = function () { I.keys = {}; I.edge = {}; I.mb = [false, false, false]; I.dx = I.dy = 0; };
+
+// ------------------------------------------------------------------ touch
+function setupTouch() {
+  I.touch = true;
+  const root = document.getElementById('touch');
+  if (!root) return;
+  root.hidden = false;
+  const stick = root.querySelector('.stick'), knob = root.querySelector('.knob');
+  let stickId = null, lookId = null, sx = 0, sy = 0, lx = 0, ly = 0;
+  root.addEventListener('touchstart', ev => {
+    for (const t of ev.changedTouches) {
+      const btn = t.target.closest('[data-t]');
+      if (btn) { const n = btn.dataset.t; I.tbtn[n] = !I.tbtn[n] || !btn.dataset.toggle ? true : false; if (btn.dataset.toggle) { btn.classList.toggle('on', I.tbtn[n]); } I.tEdge[n] = true; btn.dataset.id = t.identifier; continue; }
+      if (t.clientX < window.innerWidth * .4 && stickId === null) { stickId = t.identifier; sx = t.clientX; sy = t.clientY; stick.style.left = (sx - 60) + 'px'; stick.style.top = (sy - 60) + 'px'; stick.classList.add('on'); }
+      else if (lookId === null) { lookId = t.identifier; lx = t.clientX; ly = t.clientY; }
+    }
+    ev.preventDefault();
+  }, { passive: false });
+  root.addEventListener('touchmove', ev => {
+    for (const t of ev.changedTouches) {
+      if (t.identifier === stickId) { const dx = t.clientX - sx, dy = t.clientY - sy; const m = Math.min(1, Math.hypot(dx, dy) / 50); const a = Math.atan2(dy, dx); I.tv.r = Math.cos(a) * m; I.tv.f = -Math.sin(a) * m; knob.style.transform = `translate(${Math.cos(a) * m * 40}px, ${Math.sin(a) * m * 40}px)`; }
+      else if (t.identifier === lookId) { I.dx += (t.clientX - lx) * 2.2; I.dy += (t.clientY - ly) * 2.2; lx = t.clientX; ly = t.clientY; }
+    }
+    ev.preventDefault();
+  }, { passive: false });
+  const end = ev => {
+    for (const t of ev.changedTouches) {
+      if (t.identifier === stickId) { stickId = null; I.tv.f = I.tv.r = 0; knob.style.transform = ''; stick.classList.remove('on'); }
+      if (t.identifier === lookId) lookId = null;
+      root.querySelectorAll('[data-t]').forEach(b => { if (b.dataset.id == t.identifier && !b.dataset.toggle) { I.tbtn[b.dataset.t] = false; b.dataset.id = ''; } });
+    }
+  };
+  root.addEventListener('touchend', end); root.addEventListener('touchcancel', end);
+}
+})();
