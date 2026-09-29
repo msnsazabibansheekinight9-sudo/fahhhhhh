@@ -562,8 +562,9 @@ G.buildGun = function (wp, L, opt = {}) {
     rig.trigger = grp(0, ty + .004, tz + .004);
     const tr = add(gBox(.004, .018, .005), MT.steel, 0, -.009, 0, rig.trigger); tr.rotation.x = .25;
     if (has('hammer') || pistol) {
-      rig.hammer = grp(0, pistol ? .015 : top * .5, pistol ? zr - .004 : zr - .01);
-      add(gBox(.006, .018, .007), MT.steel, 0, .008, .004, rig.hammer);
+      // hammer spur sits just under the rear sight so it never intrudes on the sight picture
+      rig.hammer = grp(0, pistol ? RH * .5 - .016 : rev ? RH * .6 - .02 : top * .5, pistol ? zr - .004 : zr - .01);
+      add(gBox(.006, .016, .007), MT.steel, 0, .007, .004, rig.hammer);
     }
   }
 
@@ -843,14 +844,15 @@ G.buildGun = function (wp, L, opt = {}) {
         break; }
       case 'pst': {
         if (rev) {
-          const strap = RH * .6, y = Math.max(strap + .006, rig.sightH);
+          const strap = RH * .6, y = Math.max(strap + .01, rig.sightH + .004, corridorTop(rig.muzzleZ + .03, .2, 0, .006) + .003);
           rearNotch(y, .02, strap - .002, .0035, .016);
           const by = rig.muzzleY || 0, bt = by + m.B[1] * 1.6;
           add(gProf([[rig.muzzleZ + .006, bt], [rig.muzzleZ + .03, bt], [rig.muzzleZ + .012, y], [rig.muzzleZ + .006, y]], .004, .0008), MT.metal);
           sh = y; sz = .02; eye = .42; break;
         }
-        const sy = RH * .5 + .002, y = sy + .007;
-        const bz = rig.slide ? null : null;
+        const sy = RH * .5 + .002;
+        // clear anything (hammer, rails, top-mounted parts) between the eye and the front sight
+        const y = Math.max(sy + .007, corridorTop(zf + .02, zr - .02, 0, .006) + .003, corridorTop(zr - .005, zr + .25, 0, .006) + .003);
         const g = rig.slide || root;
         const prev = cur; cur = g;
         rearNotch(y, zr - .012, sy, .0035, .02);
