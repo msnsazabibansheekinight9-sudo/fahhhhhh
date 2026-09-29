@@ -43,6 +43,7 @@ function initShowroom() {
 }
 SR.show = function (wp, L) {
   if (SR.rig) { SR.turn.remove(SR.rig.root); }
+  if (SR.kitS) { SR.turn.remove(SR.kitS.root); SR.kitS = null; }
   const rig = SR.rig = G.buildGun(wp, L);
   rig.root.rotation.y = -PI / 2; rig.root.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(rig.root); const size = box.getSize(V3()), ctr = box.getCenter(V3());
@@ -53,18 +54,28 @@ SR.show = function (wp, L) {
   SR.dist = SR.fit;
   SR.wp = wp;
 };
+SR.showKit = function (kit, wp) {
+  if (SR.rig) { SR.turn.remove(SR.rig.root); SR.rig = null; }
+  if (SR.kitS) SR.turn.remove(SR.kitS.root);
+  const S = SR.kitS = G.buildSoldier({ era: 'now', team: 0, tier: 'elite', weapon: wp || null, loadout: wp ? UI.loadoutFor(wp) : null, kit, skin: '#c99a78', hair: '#3a2a1e' });
+  S.root.position.y = -.35; S.root.rotation.y = PI; SR.turn.add(S.root);
+  G.animateSoldier(S, { dt: 1, speed: 0, aimPitch: 0, aim: false });
+  S.root.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  SR.target = V3(0, .55, 0); SR.fit = SR.dist = 3.2;
+};
 SR.render = function (dt) {
   const R = G.E.renderer, w = G.E.W, h = G.E.H;
   if (SR.auto) { SR.t = (SR.t || 0) + dt; SR.yaw = .35 + Math.sin(SR.t * .35) * .6; }
   // frame the gun inside the visible gap between side panels
   const mode = UI.screen;
   let off = 0;
-  if (mode === 'armory' && w > 900) off = (Math.min(300, w * .22) - Math.min(380, w * .28)) / 2 / w;
+  if ((mode === 'armory' || mode === 'kit') && w > 900) off = (Math.min(300, w * .22) - Math.min(380, w * .28)) / 2 / w;
   if (mode === 'menu') off = w > 700 ? .18 : 0;
   SR.cam.aspect = w / h; SR.cam.setViewOffset(w, h, -off * w, mode === 'armory' && w <= 900 ? -h * .15 : 0, w, h); SR.cam.updateProjectionMatrix();
   const d = SR.dist;
-  SR.cam.position.set(Math.sin(SR.yaw) * Math.cos(SR.pitch) * d, Math.sin(SR.pitch) * d, Math.cos(SR.yaw) * Math.cos(SR.pitch) * d);
-  SR.cam.lookAt(0, 0, 0);
+  const tg = UI.screen === 'kit' && SR.kitS ? SR.target : V3(0, 0, 0);
+  SR.cam.position.set(tg.x + Math.sin(SR.yaw) * Math.cos(SR.pitch) * d, tg.y + Math.sin(SR.pitch) * d, tg.z + Math.cos(SR.yaw) * Math.cos(SR.pitch) * d);
+  SR.cam.lookAt(tg);
   R.toneMappingExposure = 1.05;
   R.clear(); R.render(SR.scene, SR.cam);
 };
@@ -78,6 +89,8 @@ UI.show = function (name) {
   if (name === 'menu') renderMenu(root);
   if (name === 'armory') renderArmory(root);
   if (name === 'battle') renderBattle(root);
+  if (name === 'kit') renderKit(root);
+  if (name === 'missions') renderMissions(root);
   $('#hud').hidden = true;
 };
 function renderMenu(root) {
@@ -93,7 +106,9 @@ function renderMenu(root) {
       <button class="menu-item" data-go="armory"><span class="n">01</span><b>Armory</b><i>Inspect and customise every weapon</i></button>
       <button class="menu-item" data-go="range"><span class="n">02</span><b>Firing range</b><i>Paper, steel, gel, armour plates and mannequins out to 1,000 m</i></button>
       <button class="menu-item" data-go="battle"><span class="n">03</span><b>Battle 5v5</b><i>Two maps per era and four enemy tiers</i></button>
-      <button class="menu-item" data-go="settings"><span class="n">04</span><b>Settings</b><i>Sensitivity, field of view, audio, graphics</i></button>
+      <button class="menu-item" data-go="missions"><span class="n">04</span><b>Solo missions</b><i>Clear terrorists from ships, rigs, embassies and trains — dawn to night</i></button>
+      <button class="menu-item" data-go="kit"><span class="n">05</span><b>Kit locker</b><i>Helmets, armour, plates, camo and night vision from armies worldwide</i></button>
+      <button class="menu-item" data-go="settings"><span class="n">06</span><b>Settings</b><i>Sensitivity, field of view, audio, graphics</i></button>
     </nav>
     <div class="menu-foot">Click the view to capture the mouse · H in game for controls<br>Headphones recommended</div>
   </div></section>
@@ -163,6 +178,106 @@ function renderArmory(root) {
 }
 function massOf(cal) { const M = { '12 gauge': 32 }; return M[cal] || ((G.CAL[cal].cs[0] * G.CAL[cal].cs[1] * G.CAL[cal].cs[1]) * 7.9e6 * .9); }
 
+// ------------------------------------------------------------ KIT LOCKER
+const REF_ROUNDS = [['9×19mm', 360, false, '9 mm'], ['7.62×39mm', 715, false, '7.62×39'], ['5.56×45mm', 940, false, '5.56'], ['7.62×51mm', 850, false, '7.62×51'], ['.30-06', 850, true, '.30-06 AP'], ['.50 BMG', 880, false, '.50 BMG']];
+function protSummary(kit) {
+  const reg = [['Head (crown)', 'head', { x: 0, y: .09, z: 0 }], ['Face', 'head', { x: 0, y: .01, z: -.1 }], ['Chest, front', 'chest', { x: 0, y: 0, z: -.15 }], ['Back', 'chest', { x: 0, y: 0, z: .15 }], ['Sides', 'chest', { x: .2, y: -.05, z: 0 }], ['Neck', 'chest', { x: 0, y: .21, z: -.08 }], ['Groin', 'stomach', { x: 0, y: -.4, z: -.12 }]];
+  return reg.map(([n, zone, loc]) => { let best = null, by = ''; for (const [cal, v, ap, lab] of REF_ROUNDS) { const r = G.armorHit(kit, zone, loc, { cal, v0: v, ap }, v, G.newArmorState()); if (r.stopped) { best = lab; by = r.by; } } return [n, best, by]; });
+}
+function renderKit(root) {
+  G.Game.mode = 'menu';
+  const kit = G.Kit.current;
+  const wp = G.WEAPON[UI.sel.wp];
+  let open = UI.kitOpen || null;
+  root.innerHTML = `<section class="screen" id="armory">
+    <div class="col left"><div class="colhead"><div class="eyebrow">Kit locker</div><div class="muted" style="font:12px var(--f-mono)">Everything you wear, from WW1 to today</div></div><div class="scroll" id="kslots"></div></div>
+    <div class="stage"><div class="top"><div><div class="eyebrow">Personal equipment</div><h2 id="kname">Your kit</h2><div class="sub" id="ksub"></div></div><button class="btn small" id="back">Main menu</button></div>
+      <div><div class="actions"><button class="btn primary" id="ktest">Test it on a mannequin</button><button class="btn" id="kmis">Solo missions</button><button class="btn" id="krnd">Random kit</button></div><p class="hint">Drag to rotate · scroll to zoom · your kit protects you in battles and missions</p></div></div>
+    <div class="col right"><div class="scroll" id="kinfo"></div></div>
+  </section>`;
+  const refresh = () => {
+    SR.showKit(kit, wp && wp.c !== 'PST' ? wp : null); SR.auto = true;
+    const kg = G.kitWeight(kit), mob = Math.round(Math.max(.72, Math.min(1.04, 1.04 - Math.max(0, kg - 5) * .012)) * 100);
+    $('#ksub').textContent = `${kg.toFixed(1)} kg carried · movement ${mob}%`;
+    $('#kslots').innerHTML = G.GEAR_SLOTS.map(([slot, name]) => { const cur = G.GEARID[kit[slot]]; const opts = G.gearFor(slot).slice().sort((a, b) => a.y - b.y);
+      return `<div class="slot"><button data-kslot="${slot}"><span class="sn">${name}</span><span class="sv">${esc(cur ? cur.n : '—')}</span><span class="sc">${opts.length}</span></button>${open === slot ? `<div class="opts">${opts.map(o => `<button class="opt ${o.id === kit[slot] ? 'on' : ''}" data-kid="${o.id}"><b>${esc(o.n)}</b><span>${esc(o.co || '')}${o.y > 1900 ? ' · ' + o.y : ''}${o.wt ? ' · ' + o.wt + ' kg' : ''}${o.rating ? ' · rating ' + o.rating : ''}${o.soft ? ' · soft ' + o.soft : ''}</span></button>`).join('')}</div>` : ''}</div>`; }).join('');
+    const prot = protSummary(kit);
+    const A = G.GEARID[kit.armor], P = G.GEARID[kit.plates];
+    $('#kinfo').innerHTML = `<p class="blurb">Pick a preset or change any single piece. Every item has its real protection level: rounds are checked against the plate, soft armour, side plate, collar, groin protector, helmet or visor they actually hit, and plates crack with each hit.</p>
+      <div class="lbl" style="margin:8px 0 4px">Stops at the muzzle (first hit)</div>
+      <dl class="spec">${prot.map(([n, best, by]) => `<div><dt>${n}</dt><dd>${best ? esc(best) : '<span style="opacity:.55">nothing</span>'}</dd></div>`).join('')}</dl>
+      ${A && A.plates && (!P || !P.rating) ? '<p class="muted">This carrier has empty plate pockets — pick plates.</p>' : ''}${A && !A.plates && P && P.rating ? '<p class="muted">This vest has no plate pockets, so the plates slot is ignored.</p>' : ''}
+      <div class="lbl" style="margin:12px 0 4px">Real-world presets</div>
+      <div class="opts" style="display:grid;gap:4px">${G.KIT_PRESETS.map(p => `<button class="opt" data-preset="${p.id}"><b>${esc(p.n)}</b></button>`).join('')}</div>
+      ${open ? `<div class="lbl" style="margin:12px 0 4px">About</div><p class="muted">${esc(G.GEARID[kit[open]].d || G.GEARID[kit[open]].n)}</p>` : ''}`;
+    root.querySelectorAll('[data-kslot]').forEach(b => b.onclick = () => { open = UI.kitOpen = open === b.dataset.kslot ? null : b.dataset.kslot; G.Audio.ui(); refresh(); });
+    root.querySelectorAll('[data-kid]').forEach(b => b.onclick = () => { kit[open] = b.dataset.kid; G.Kit.save(kit); G.Audio.ui('attach'); refresh(); });
+    root.querySelectorAll('[data-preset]').forEach(b => b.onclick = () => { Object.assign(kit, G.KIT_PRESETS.find(p => p.id === b.dataset.preset).kit); G.Kit.save(kit); G.Audio.ui('attach'); refresh(); });
+  };
+  refresh();
+  $('#back').onclick = () => UI.show('menu');
+  $('#kmis').onclick = () => UI.show('missions');
+  $('#krnd').onclick = () => { for (const [slot] of G.GEAR_SLOTS) { const o = G.gearFor(slot); kit[slot] = o[Math.floor(Math.random() * o.length)].id; } G.Kit.save(kit); refresh(); };
+  $('#ktest').onclick = () => { UI.startRange({ kitTest: true }); };
+}
+
+// ------------------------------------------------------------ SOLO MISSIONS
+UI.mis = store.get('mis', { mission: 'ship', tod: 'night', tier: 'regular', primary: 'm4a1', secondary: 'glock19' });
+function renderMissions(root) {
+  G.Game.mode = 'menu';
+  const C = UI.mis;
+  if (!G.MISSION[C.mission]) C.mission = G.MISSIONS[0].id;
+  if (!G.WEAPON[C.primary] || G.WEAPON[C.primary].c === 'PST') C.primary = 'm4a1';
+  if (!G.WEAPON[C.secondary] || G.WEAPON[C.secondary].c !== 'PST') C.secondary = 'glock19';
+  store.set('mis', C);
+  const kit = G.Kit.current, nv = G.GEARID[kit.nvg];
+  const opts = (filter, cur) => G.ERAS.map(e => `<optgroup label="${esc(e.name)}">${G.WEAPONS.filter(w => w.e === e.id && filter(w)).map(w => `<option value="${w.id}" ${w.id === cur ? 'selected' : ''}>${esc(w.n)}</option>`).join('')}</optgroup>`).join('');
+  const L = UI.loadoutFor(G.WEAPON[C.primary]);
+  root.innerHTML = `<section class="screen" id="battle"><div class="setup">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap"><div><div class="eyebrow">Counter-terror · solo</div><h1>Missions</h1></div><button class="btn small" id="back">Main menu</button></div>
+    <div><span class="lbl">Structure</span><div class="row">${G.MISSIONS.map(m => `<button class="card ${m.id === C.mission ? 'on' : ''}" data-mis="${m.id}"><small>${esc(m.loc)} · ${m.guards.length} hostiles · ${m.hostages.length} hostages</small><b>${esc(m.name)}</b><span>${esc(m.blurb)}</span></button>`).join('')}</div></div>
+    <div><span class="lbl">Time of day</span><div class="row">${Object.entries(G.TOD).map(([k, t]) => `<button class="card ${k === C.tod ? 'on' : ''}" data-tod="${k}"><b>${t.n}</b><span>${t.d}</span></button>`).join('')}</div></div>
+    <div><span class="lbl">Hostile tier</span><div class="row">${G.TIERS.map(t => `<button class="card ${C.tier === t.id ? 'on' : ''}" data-tier="${t.id}"><small style="color:${t.color}">Tier ${G.TIERS.indexOf(t) + 1}</small><b>${t.n}</b><span>${t.d}</span></button>`).join('')}<button class="card ${C.tier === 'mixed' ? 'on' : ''}" data-tier="mixed"><small>All tiers</small><b>Mixed cell</b><span>A mix of recruits and hardened fighters.</span></button></div></div>
+    <div class="loadrow">
+      <div><span class="lbl">Primary (any era)</span><div class="pick"><select id="mprim">${opts(w => w.c !== 'PST', C.primary)}</select><button class="btn small" data-cust="prim">Customise</button></div></div>
+      <div><span class="lbl">Sidearm</span><div class="pick"><select id="msec">${opts(w => w.c === 'PST', C.secondary)}</select><button class="btn small" data-cust="sec">Customise</button></div></div>
+      <div><span class="lbl">Your kit</span><div class="pick"><span class="muted" style="font-size:13px">${esc(G.GEARID[kit.helmet].n)} · ${esc(G.GEARID[kit.armor].n)}${G.GEARID[kit.armor].plates ? ' + ' + esc(G.GEARID[kit.plates].n) : ''} · NVG: ${esc(nv.n)}</span><button class="btn small" id="mkit">Kit locker</button></div></div>
+    </div>
+    <div class="deploy"><span class="muted" style="max-width:62ch">No respawns. Don't hit the hostages. Hostiles hold their posts and react to gunfire — a suppressor keeps them unaware longer.${C.tod === 'night' ? ` Night: ${nv.nv ? 'press J (or N) for night vision' : 'your kit has no night vision — pick some in the Kit locker'}${L.side === 'laser' || L.side === 'dbal' || L.side === 'peq2' ? ', L cycles your laser' : ''}.` : ''}</span><button class="btn primary" id="mgo" style="font-size:20px;padding:14px 36px">Infiltrate</button></div>
+  </div></section>`;
+  const re = () => { store.set('mis', C); renderMissions(root); };
+  root.querySelectorAll('[data-mis]').forEach(b => b.onclick = () => { C.mission = b.dataset.mis; G.Audio.ui(); re(); });
+  root.querySelectorAll('[data-tod]').forEach(b => b.onclick = () => { C.tod = b.dataset.tod; G.Audio.ui(); re(); });
+  root.querySelectorAll('[data-tier]').forEach(b => b.onclick = () => { C.tier = b.dataset.tier; G.Audio.ui(); re(); });
+  $('#mprim').onchange = e => { C.primary = e.target.value; store.set('mis', C); };
+  $('#msec').onchange = e => { C.secondary = e.target.value; store.set('mis', C); };
+  root.querySelectorAll('[data-cust]').forEach(b => b.onclick = () => { const id = b.dataset.cust === 'prim' ? C.primary : C.secondary; UI.sel.era = G.WEAPON[id].e; UI.sel.wp = id; store.set('sel', UI.sel); UI.show('armory'); });
+  $('#mkit').onclick = () => UI.show('kit');
+  $('#back').onclick = () => UI.show('menu');
+  $('#mgo').onclick = () => { G.Audio.init(); UI.deployMission(); };
+}
+UI.deployMission = function () {
+  const C = UI.mis, p = G.WEAPON[C.primary], s = G.WEAPON[C.secondary];
+  const cfg = { mission: C.mission, tod: C.tod, tier: C.tier, primary: { wp: p, L: UI.loadoutFor(p) }, secondary: s ? { wp: s, L: UI.loadoutFor(s) } : null };
+  UI.lastMission = cfg;
+  loading('Inserting…', () => G.Game.startMission(cfg));
+};
+UI.showMissionResults = function () {
+  const Gm = G.Game, Ms = Gm.mission; G.Input.unlock();
+  const acc = Gm.stats && Gm.stats.shots ? Math.round(Gm.stats.hits / Gm.stats.shots * 100) : 0;
+  const tm = Math.round(Ms.t), mm = `${(tm / 60) | 0}:${String(tm % 60).padStart(2, '0')}`;
+  const stars = !Ms.ok ? 0 : 1 + (Ms.dmgTaken < 60 ? 1 : 0) + (acc >= 45 ? 1 : 0);
+  overlay(`<div class="dialog" style="width:min(560px,100%)"><div class="eyebrow">${esc(Ms.M.name)} · ${esc(G.TOD[Ms.cfg.tod].n)}</div><h2>${Ms.ok ? 'Mission complete' : 'Mission failed'}</h2>
+    <p class="muted">${esc(Ms.reason || '')}</p>
+    ${Ms.ok ? `<div style="font:700 34px var(--f-ui);color:var(--accent,#c9a24b)">${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}</div>` : ''}
+    <dl class="spec">${[['Time', mm], ['Hostiles neutralised', `${Ms.killed} / ${Ms.total}`], ['Headshots', Ms.heads], ['Accuracy', `${acc}% (${Gm.stats ? Gm.stats.hits : 0}/${Gm.stats ? Gm.stats.shots : 0})`], ['Damage taken', Math.round(Ms.dmgTaken)], ['Hostages safe', `${Ms.hostages - Ms.hostagesLost} / ${Ms.hostages}`]].map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(String(v))}</dd></div>`).join('')}</dl>
+    <div class="btns"><button class="btn primary" id="x-again">Retry</button><button class="btn" id="x-setup">Change mission</button><button class="btn" id="x-kit">Kit locker</button><button class="btn" id="x-menu">Main menu</button></div></div>`);
+  $('#x-again').onclick = () => { UI.closeOverlay(); loading('Inserting…', () => G.Game.startMission(UI.lastMission)); };
+  $('#x-setup').onclick = () => { UI.closeOverlay(); Gm.cleanup(); Gm.player = null; UI.show('missions'); };
+  $('#x-kit').onclick = () => { UI.closeOverlay(); Gm.cleanup(); Gm.player = null; UI.show('kit'); };
+  $('#x-menu').onclick = () => { UI.closeOverlay(); Gm.cleanup(); Gm.player = null; UI.show('menu'); };
+};
+
 // ------------------------------------------------------------ BATTLE SETUP
 function renderBattle(root) {
   G.Game.mode = 'menu';
@@ -205,13 +320,13 @@ UI.deploy = function () {
   const cfg = { map: B.map, enemyTier: B.enemyTier, allyTier: B.allyTier, scoreLimit: B.score, minutes: B.minutes, primary: { wp: p, L: UI.loadoutFor(p) }, secondary: s ? { wp: s, L: UI.loadoutFor(s) } : null };
   loading('Deploying…', () => { G.Game.startBattle(cfg); UI.lastBattle = cfg; });
 };
-UI.startRange = function () {
+UI.startRange = function (o = {}) {
   const wp = G.WEAPON[UI.sel.wp] || G.WEAPONS[0];
   const list = [{ wp, L: UI.loadoutFor(wp) }];
   const side = G.WEAPONS.find(w => w.e === wp.e && w.c === 'PST' && w.id !== wp.id);
   if (side && wp.c !== 'PST') list.push({ wp: side, L: UI.loadoutFor(side) });
   G.Audio.init();
-  loading('Walking to the firing line…', () => G.Game.startRange(list));
+  loading('Walking to the firing line…', () => { G.Game.startRange(list); if (o.kitTest) { G.Game.clearTargets(); G.Game.addTarget('kitdummy', 10, { orient: 'front' }); G.Game.addTarget('kitdummy', 25, { orient: 'rear' }); UI.rangeSel = Object.assign({ era: wp.e, tier: 'regular', veh: 'sedan' }, UI.rangeSel || {}, { type: 'kitdummy', dist: 10, orient: 'front' }); G.Game.toast('Your kit is on the mannequins — front at 10 m, back at 25 m. T for more targets.', 5); } });
 };
 function loading(msg, fn) { const l = $('#loading'); l.textContent = msg; l.hidden = false; setTimeout(() => { try { fn(); } catch (e) { console.error(e); } l.hidden = true; }, 40); }
 
@@ -280,6 +395,7 @@ UI.toggleRangeMenu = function (force) {
       <div class="grid">${G.TARGETS.map(t => `<button class="card ${st.type === t.id ? 'on' : ''}" data-ty="${t.id}"><b>${t.n}</b><span>${t.d}</span></button>`).join('')}</div>
       ${st.type === 'vehicle' ? `<div><span class="lbl">Vehicle</span><div class="grid">${G.VEHICLES.map(v => `<button class="card ${st.veh === v.id ? 'on' : ''}" data-veh="${v.id}"><small>${G.ERA[v.era].name}</small><b>${esc(v.n)}</b><span>${esc(v.d)}</span></button>`).join('')}</div></div>
       <div><span class="lbl">Facing you</span><div class="eras">${[['side', 'Side'], ['front', 'Front'], ['rear', 'Rear'], ['quarter', '45° quarter']].map(([k, n]) => `<button class="chip ${st.orient === k ? 'on' : ''}" data-or="${k}">${n}</button>`).join('')}</div></div>` : ''}
+      ${st.type === 'kitdummy' ? `<div><span class="lbl">Facing you</span><div class="eras">${[['front', 'Front'], ['rear', 'Back'], ['side', 'Side'], ['quarter', '45° quarter']].map(([k, n]) => `<button class="chip ${st.orient === k ? 'on' : ''}" data-or="${k}">${n}</button>`).join('')}</div><p class="muted" style="margin:6px 0 0">Wearing: ${esc(G.GEAR_SLOTS.map(([sl]) => G.GEARID[G.Kit.current[sl]]).filter(g => g && !/^(None|No plates|Bare hands)/.test(g.n)).map(g => g.n).join(' · '))}</p></div>` : ''}
       ${st.type === 'dummy' || st.type === 'walker' ? `<div class="loadrow"><div><span class="lbl">Mannequin era</span><select id="r-era">${G.ERAS.map(e => `<option value="${e.id}" ${st.era === e.id ? 'selected' : ''}>${e.name}</option>`).join('')}</select></div><div><span class="lbl">Enemy tier</span><select id="r-tier">${G.TIERS.map(t => `<option value="${t.id}" ${st.tier === t.id ? 'selected' : ''}>${t.n}${t.armor < 1 ? ' (armoured from 1990)' : ''}</option>`).join('')}</select></div></div>` : ''}
       <div><span class="lbl">Distance</span><div class="eras">${G.RANGE_DISTS.map(d => `<button class="chip ${st.dist === d ? 'on' : ''}" data-d="${d}">${d} m</button>`).join('')}</div></div>
       <label class="field">Crosswind<input type="range" id="r-wind" min="-10" max="10" step=".5" value="${G.rangeWind || 0}"><output>${(G.rangeWind || 0).toFixed(1)} m/s</output></label>
@@ -328,7 +444,7 @@ UI.showHUD = function (mode) {
     <div id="hit"><i></i><i></i><i></i><i></i></div><div id="dmgdir"></div>
     <div class="hudbox" id="ammo"><div class="wn"></div><div id="rounds"></div><div class="mag"></div><div class="md"></div></div>
     <div class="hudbox" id="hp"><div class="v">100</div><div class="b"><i></i></div><div class="st"></div></div>
-    ${mode === 'battle' ? '<div class="hudbox" id="score"><span class="a">0</span><span class="t">10:00</span><span class="e">0</span></div><canvas class="hudbox" id="mini" width="168" height="168"></canvas><div class="hudbox" id="feed"></div>' : '<div class="hudbox" id="tcam" hidden><b></b></div><div class="hudbox" id="rstats"></div><div class="hudbox" id="rhint">T targets & wind · N fly · Y reset · [ ] zero · H controls</div>'}
+    ${mode === 'mission' ? '<div class="hudbox" id="score"><span class="a">0</span><span class="t">0:00</span><span class="e">0</span></div><div class="hudbox" id="feed"></div>' : ''}${mode === 'battle' ? '<div class="hudbox" id="score"><span class="a">0</span><span class="t">10:00</span><span class="e">0</span></div><canvas class="hudbox" id="mini" width="168" height="168"></canvas><div class="hudbox" id="feed"></div>' : '<div class="hudbox" id="tcam" hidden><b></b></div><div class="hudbox" id="rstats"></div><div class="hudbox" id="rhint">T targets & wind · N fly · Y reset · [ ] zero · H controls</div>'}
     <div class="hudbox" id="compass"><div class="strip"></div></div>
     <div class="hudbox" id="toast"></div><div class="hudbox" id="center"></div><div class="hudbox" id="board" hidden></div>`;
   const strip = $('#compass .strip'); let s = '';
@@ -386,6 +502,11 @@ UI.updateHUD = function (dt) {
   // compass
   const deg = ((-P.yaw * 180 / PI) % 360 + 360) % 360;
   const strip = $('#compass .strip'); if (strip) strip.style.transform = `translateX(${180 - 15 - (deg + 360) * 2}px)`;
+  // mission objective
+  if (Gm.mode === 'mission' && Gm.mission) {
+    const Ms = Gm.mission, sc = $('#score'); if (sc) { sc.children[0].textContent = Ms.killed; sc.children[2].textContent = Ms.total - Ms.killed; const t = Ms.t | 0; sc.children[1].textContent = `${(t / 60) | 0}:${String(t % 60).padStart(2, '0')} · hostiles left · hostages ${Ms.hostages - Ms.hostagesLost}`; }
+    if (UI.dirty) { const f = $('#feed'); if (f) f.innerHTML = Gm.killfeed.map(k => `<div><span class="${k.kt === 0 ? 'a' : 'e'}">${esc(k.k)}</span><span class="w">${esc(k.w)}${k.head ? ' ⌖' : ''}</span><span class="${k.vt === 0 ? 'a' : 'e'}">${esc(k.v)}</span></div>`).join(''); UI.dirty = false; }
+  }
   // battle
   if (Gm.mode === 'battle') {
     const sc = $('#score'); if (sc) { sc.children[0].textContent = Gm.score[0]; sc.children[2].textContent = Gm.score[1]; const s = Math.max(0, Gm.timeLeft | 0); sc.children[1].textContent = `${(s / 60) | 0}:${String(s % 60).padStart(2, '0')} · first to ${Gm.scoreLimit}`; }
@@ -393,7 +514,7 @@ UI.updateHUD = function (dt) {
     drawMini();
     const c = $('#center'); if (c) c.textContent = !P.alive && Gm.state === 'play' ? `Killed by ${Gm.deathBy ? Gm.deathBy.name : '—'} · respawn in ${Math.max(0, Gm.respawnT).toFixed(1)}` : '';
     const b = $('#board'); if (b) { const show = G.Input.keys.Tab; b.hidden = !show; if (show && Gm.frame % 15 === 0) b.innerHTML = boardHTML(); }
-  } else if (UI.dirty || Gm.frame % 10 === 0) {
+  } else if (Gm.mode === 'range' && (UI.dirty || Gm.frame % 10 === 0)) {
     const s = Gm.stats, L = s && s.last, r = $('#rstats');
     if (r) r.innerHTML = `<h4>Ballistics · last hit</h4>${L ? `
       <div class="kv"><span>Range</span><b>${L.dist.toFixed(1)} m</b></div>
@@ -544,6 +665,28 @@ function renderTargetCam(R, Gm) {
   const lab = el.querySelector('b'); const txt = `TARGET CAM · ${T.dist} M · ${T.type.toUpperCase()}`; if (lab.textContent !== txt) lab.textContent = txt;
 }
 
+// ============================================================ NIGHT VISION
+// phosphor tint on the 3D canvas, tube mask (mono / binocular / panoramic quad) and scintillation noise
+UI.nvgFx = function (nv) {
+  const key = nv ? nv.view + (nv.white ? 'w' : 'g') + (nv.thermal ? 't' : '') + G.E.W + 'x' + G.E.H : '';
+  let ov = document.getElementById('nvgov');
+  if (!ov) { ov = document.createElement('canvas'); ov.id = 'nvgov'; ov.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:3'; document.body.appendChild(ov); UI.nvNoise = document.createElement('canvas'); UI.nvNoise.width = 160; UI.nvNoise.height = 90; UI.nvNoise.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:3;mix-blend-mode:screen;opacity:.16;image-rendering:pixelated'; document.body.appendChild(UI.nvNoise); }
+  const c = G.E.renderer.domElement;
+  if (key !== UI.nvKey) {
+    UI.nvKey = key;
+    c.style.filter = !nv ? '' : nv.white ? `grayscale(1) sepia(.3) hue-rotate(150deg) saturate(.9) contrast(${nv.thermal ? 1.45 : 1.15})` : 'sepia(1) saturate(4.5) hue-rotate(52deg) contrast(1.12)';
+    ov.hidden = UI.nvNoise.hidden = !nv;
+    if (nv) {
+      const W = ov.width = Math.round(G.E.W / 2), H = ov.height = Math.round(G.E.H / 2), x = ov.getContext('2d');
+      x.fillStyle = 'rgba(0,0,0,.97)'; x.fillRect(0, 0, W, H); x.globalCompositeOperation = 'destination-out';
+      const r = H * .5, holes = nv.view === 'mono' ? [[.5, r * .98]] : nv.view === 'quad' ? [[.32, r * .92], [.44, r * .96], [.56, r * .96], [.68, r * .92]] : [[.42, r * .95], [.58, r * .95]];
+      for (const [fx, rr] of holes) { const g = x.createRadialGradient(W * fx, H / 2, rr * .82, W * fx, H / 2, rr); g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.beginPath(); x.arc(W * fx, H / 2, rr, 0, 7); x.fill(); }
+      x.globalCompositeOperation = 'source-over';
+    }
+  }
+  if (nv && G.Game.frame % 2 === 0) { const n = UI.nvNoise.getContext('2d'), im = n.createImageData(160, 90), q = (1 - nv.q) * 180 + 40; for (let i = 0; i < im.data.length; i += 4) { const v = Math.random() * q; im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 255; } n.putImageData(im, 0, 0); }
+};
+
 // ============================================================ MAIN LOOP
 function boot() {
   const canvas = $('#c');
@@ -561,11 +704,14 @@ function boot() {
     const dt = Math.min(.05, (now - last) / 1000); last = now;
     G.Game.frame++;
     const R = G.E.renderer;
-    if (G.Game.mode === 'menu' || !G.Game.player) { SR.render(dt); return; }
+    if (G.Game.mode === 'menu' || !G.Game.player) { if (UI.nvKey) UI.nvgFx(null); SR.render(dt); return; }
     const Gm = G.Game;
     if (Gm.state === 'play' || Gm.state === 'end') Gm.update(dt, now / 1000);
     else if (Gm.state === 'pause') { G.Input.frame(); }
-    R.toneMappingExposure = (G.ENV[G.E.map.env] || {}).exp || 1;
+    const P0 = Gm.player, nv = P0 && P0.nvgOn && P0.alive ? (G.GEARID[P0.kit.nvg] || {}).nv : null;
+    let ex = (G.ENV[G.E.map.env] || {}).exp || 1;
+    if (nv) ex *= ({ night: 4.2, dusk: 2.4, dawn: 2.4 }[G.E.map.env] || 1.6) * (.8 + nv.q * .3); // image intensifier gain
+    R.toneMappingExposure = ex; UI.nvgFx(nv);
     R.clear();
     R.render(G.E.scene, G.E.camera);
     if (Gm.player && Gm.player.vm.pivot.visible) { R.clearDepth(); R.render(G.E.vmScene, G.E.vmCam); }

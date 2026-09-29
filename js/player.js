@@ -36,6 +36,8 @@ class Player {
     this.kick = { z: 0, rx: 0, ry: 0, rz: 0, vz: 0, vrx: 0 }; this.swayL = { x: 0, y: 0 }; this.aimOff = { x: 0, y: 0 }; this.breath = 1; this.holding = false;
     this.bob = 0; this.heat = 0; this.stepT = 0; this.lastHurt = 0; this.kills = 0; this.deaths = 0; this.score = 0; this.recoilBank = 0; this.shake = 0;
     this.lightOn = false; this.bipod = false; this.inspecting = false; this.suppress = 0;
+    this.kit = Object.assign({}, G.Kit.current); this.armorState = G.newArmorState(); this.sideMode = 0; this.nvgOn = false; this.laserMode = null;
+    const kg = G.kitWeight(this.kit); this.kitK = Math.max(.72, Math.min(1.04, 1.04 - Math.max(0, kg - 5) * .012)); this.kitKg = kg;
     this.vm = this.buildVM();
   }
   get eye() { return V3(this.pos.x, this.pos.y + this.stanceH, this.pos.z); }
@@ -50,14 +52,13 @@ class Player {
   }
   buildArms(era) {
     if (this.vm && this.vm.arms) for (const a of this.vm.arms) { G.E.vmScene.remove(a.upper); G.E.vmScene.remove(a.fore); G.E.vmScene.remove(a.hand); G.E.vmScene.remove(a.cuff); }
-    const sleeveCol = { ww1: '#6e6040', ww2: '#5f5a3e', cold: '#4b5638', mod: '#b09f7c', now: '#7d7658', psycho: '#26282c' }[era];
-    const gloves = era === 'mod' || era === 'now';
-    const sleeve = G.mat({ color: sleeveCol, roughness: 1 });
-    if (era === 'now') { sleeve.map = G.texCamo('multicam'); sleeve.color.set('#ffffff'); }
-    if (era === 'mod') { sleeve.map = G.texCamo('desert'); sleeve.color.set('#ffffff'); }
-    const skin = G.mat({ color: gloves ? '#2c2a27' : '#c4937a', roughness: gloves ? .9 : .55 });
+    // sleeves and gloves come from the personal kit (Kit locker)
+    const kit = this.kit || G.Kit.current, uni = G.GEARID[kit.uniform], gl = G.GEARID[kit.gloves] || {};
+    const gloves = !!gl.col;
+    const sleeve = G.kitPatternMat(uni).clone(); if (sleeve.map) { sleeve.map = sleeve.map.clone(); sleeve.map.needsUpdate = true; sleeve.map.repeat.set(1, 1); }
+    const skin = G.mat({ color: gloves ? gl.col : '#c4937a', roughness: gloves ? .9 : .55 });
     const knuckle = G.mat({ color: gloves ? '#1d1c1a' : '#b98670', roughness: .7 });
-    const cuffM = G.mat({ color: gloves ? '#2c2a27' : '#3a3528', roughness: 1 });
+    const cuffM = gloves ? skin : sleeve;
     const arms = [];
     for (const side of [1, -1]) {
       const upper = new THREE.Mesh(gCylY(.055, .047, 1, 14), sleeve), fore = new THREE.Mesh(gCylY(.047, .036, 1, 14), sleeve);
@@ -403,7 +404,7 @@ class Player {
     const eye = cam.getWorldPosition(V3());
     const moving = Math.hypot(this.vel.x, this.vel.z);
     const ads = this.ads;
-    let spreadDeg = lerp((HIPSPREAD[wp.c] || 3) * S.hip, 0, ss(ads)) * (1 + moving / 5) * (this.stance === 1 ? .8 : this.stance === 2 ? .6 : 1) * (this.onGround ? 1 : 3);
+    let spreadDeg = lerp((HIPSPREAD[wp.c] || 3) * S.hip * (this.laserMode && (this.laserMode === 'vis' || this.nvgOn) ? S.laserHip || 1 : 1), 0, ss(ads)) * (1 + moving / 5) * (this.stance === 1 ? .8 : this.stance === 2 ? .6 : 1) * (this.onGround ? 1 : 3);
     spreadDeg += ads * moving * .15;
     const pellets = S.pellets * salvo;
     const cal = G.CAL[wp.cal];
@@ -499,6 +500,17 @@ class Player {
   damage(b, zone, energy, dir, p) {
     if (!this.alive || this.god) return { dmg: 0 };
     let d = b.dmg * energy * (ZONE_MUL[zone] || 1) * .8;
+    // resolve the hit against the exact piece of kit it strikes (see gear.js)
+    if (p) {
+      const c = Math.cos(this.yaw), s = Math.sin(this.yaw);
+      const o = zone === 'head' ? this.eye.clone().setY(this.eye.y - .026) : V3(this.pos.x, this.pos.y + this.stanceH * .8, this.pos.z);
+      const dx = p.x - o.x, dz = p.z - o.z;
+      const loc = { x: dx * c - dz * s, y: p.y - o.y, z: dx * s + dz * c };
+      const speed = (b.v0 || 1) * Math.pow(Math.max(0, energy), 1 / 1.5);
+      const r = G.armorHit(this.kit, zone, loc, b, speed, this.armorState);
+      d *= r.mult;
+      if (r.stopped) { G.Audio.impact(p, 'metal', false); G.UI.toast(r.info, 1.2); this.shake = Math.min(1, this.shake + .25); }
+    }
     this.hp -= d; this.lastHurt = performance.now() / 1000;
     G.Audio.hurt();
     G.Game && G.Game.onPlayerHurt && G.Game.onPlayerHurt(d, dir, b);
@@ -525,7 +537,7 @@ class Player {
     // movement
     const f = (input.f || 0), r = (input.r || 0);
     this.sprinting = input.sprint && f > 0 && this.stance === 0 && !this.adsHeld && !this.fireHeld;
-    let speed = [4.3, 2.3, .9][this.stance] * (this.sprinting ? 1.6 : 1) * lerp(1, .55, this.ads) * (S ? .82 + S.mob * .025 : 1);
+    let speed = [4.3, 2.3, .9][this.stance] * (this.sprinting ? 1.6 : 1) * lerp(1, .55, this.ads) * (S ? .82 + S.mob * .025 : 1) * (this.kitK || 1);
     speed *= W.slowAt(this.pos);
     const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
     const wishX = (-sy * f + cy * r), wishZ = (-cy * f - sy * r);
@@ -563,7 +575,16 @@ class Player {
     if (input.melee && (!this.action || this.action.cancel)) { this.finishAction(true); this.startAction('melee'); }
     if (input.gl && w && w.S.gl && !this.action && w.glAmmo > 0) this.startAction('gl');
     if (input.mode && w && S.modes.length > 1 && (!this.action || this.action.keepAds)) { w.mode = (w.mode + 1) % S.modes.length; this.startAction('mode'); this.hudDirty = true; G.Game && G.Game.toast(S.modes[w.mode].replace('burst', 'Burst ').replace('semi', 'Semi-auto').replace('auto', 'Full auto').replace('bolt', 'Bolt action').replace('pump', 'Pump')); }
-    if (input.light && w && S.light) { this.lightOn = !this.lightOn; G.Audio.mech('mode'); }
+    if (input.light && w && (S.light || S.laser)) { // cycle the side device: visible laser → IR laser → light → laser + light → off
+      const modes = [null];
+      if (S.laser && S.laser.includes('vis')) modes.push('vis'); if (S.laser && S.laser.includes('ir')) modes.push('ir');
+      if (S.light) modes.push('light'); if (S.light && S.laser && S.laser.includes('vis')) modes.push('vis+light');
+      this.sideMode = (this.sideMode + 1) % modes.length; const m = modes[this.sideMode];
+      this.lightOn = !!m && m.includes('light'); this.laserMode = m === 'vis' || m === 'vis+light' ? 'vis' : m === 'ir' ? 'ir' : null;
+      G.Audio.mech('mode'); G.UI.toast({ null: 'Laser / light off', vis: 'Visible laser on', ir: 'IR laser on (night vision)', light: 'Weapon light on', 'vis+light': 'Laser + light on' }[m], 1);
+    }
+    const nvItem = G.GEARID[this.kit.nvg];
+    if ((input.nvg || (input.fly && G.Game.mode !== 'range')) && nvItem && nvItem.nv) { this.nvgOn = !this.nvgOn; G.Audio.mech('mode'); G.UI.toast(this.nvgOn ? nvItem.n + ' down' : 'Night vision up', 1); }
     if (input.zeroUp && w) { w.zero = Math.min(1000, w.zero + (w.zero >= 300 ? 100 : w.zero >= 100 ? 50 : 25)); this.computeZero(w); this.hudDirty = true; G.Game.toast('Zero ' + w.zero + ' m'); }
     if (input.zeroDown && w) { w.zero = Math.max(25, w.zero - (w.zero > 300 ? 100 : w.zero > 100 ? 50 : 25)); this.computeZero(w); this.hudDirty = true; G.Game.toast('Zero ' + w.zero + ' m'); }
     if (input.bipod && w && S.bip) { this.bipod = !this.bipod; G.Audio.mech('bipod'); G.Game.toast(this.bipod ? 'Bipod deployed' : 'Bipod stowed'); }
@@ -649,6 +670,36 @@ class Player {
     // weapon light
     const L = G.E.vmLight;
     if (this.lightOn && S && S.light) { L.intensity = 3; L.position.copy(cam.position); L.target.position.copy(cam.position).add(V3(0, 0, -10).applyQuaternion(cam.quaternion)); } else L.intensity = 0;
+    this.updateLaser(w, S, cam);
+  }
+  // aiming laser: a beam from the module on the rail, parallel to the bore, and a dot where it lands
+  updateLaser(w, S, cam) {
+    const E = G.E;
+    if (!E.laser) {
+      const beam = new THREE.Mesh(new THREE.CylinderGeometry(.0012, .0012, 1, 6, 1, true), new THREE.MeshBasicMaterial({ color: '#40ff40', transparent: true, opacity: .1, blending: THREE.AdditiveBlending, depthWrite: false }));
+      const dot = new THREE.Sprite(new THREE.SpriteMaterial({ map: G.texSprite('glow'), color: '#50ff50', blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+      beam.frustumCulled = false; E.scene.add(beam); E.scene.add(dot); E.laser = { beam, dot };
+    }
+    const Lz = E.laser, mode = this.alive && w && S && S.laser && this.laserMode && w.rig.laserPos ? this.laserMode : null;
+    const seen = mode === 'vis' || (mode === 'ir' && this.nvgOn);
+    Lz.beam.visible = Lz.dot.visible = !!seen;
+    if (!seen) return;
+    const rig = w.rig;
+    const from = this.vmToWorld(rig.root.localToWorld(rig.laserPos.clone()));
+    const q = cam.getWorldQuaternion(new THREE.Quaternion());
+    const off = this.scoped ? { x: 0, y: 0 } : this.aimOff;
+    const d = V3(0, 0, -1).applyAxisAngle(V3(1, 0, 0), off.y).applyAxisAngle(V3(0, 1, 0), -off.x).applyQuaternion(q).normalize();
+    let t = 400; const h = E.world.raycast(from, d, t); if (h) t = h.t;
+    for (const a of (G.Game.agents || [])) { if (a === this || !a.alive) continue; for (const hb of a.hitboxes()) { const tt = G.rayCapsule(from, d, hb.a, hb.b, hb.r); if (tt >= 0 && tt < t) t = tt; } }
+    if (G.Game.mode === 'range' || G.Game.mode === 'mission') for (const T of (G.Game.targets || [])) { const tt = T.rayTest(from, d, t, { cal: '5.56×45mm' }); if (tt >= 0 && tt < t) t = tt; }
+    const to = from.clone().addScaledVector(d, t - .01);
+    const night = this.nvgOn || (E.map && ['night', 'dawn', 'dusk'].includes(E.map.env));
+    const col = mode === 'ir' ? '#d8ffd8' : (S.laser === 'vis' ? '#ff3020' : '#40ff40');
+    Lz.beam.material.color.set(col); Lz.dot.material.color.set(col);
+    Lz.beam.material.opacity = mode === 'ir' ? .55 : night ? .18 : .035;
+    Lz.beam.position.copy(from).lerp(to, .5); Lz.beam.scale.set(1, t, 1); Lz.beam.quaternion.setFromUnitVectors(V3(0, 1, 0), d);
+    const sz = Math.max(.03, Math.min(.7, t * .01)) * (mode === 'ir' ? 1.4 : 1);
+    Lz.dot.position.copy(to); Lz.dot.scale.set(sz, sz, sz);
   }
   updateVM(dt, now) {
     const vm = this.vm, w = this.W; if (!w) return;

@@ -419,9 +419,11 @@ a({ id:'thompson_vfg', slot:'under', n:'M1928 vertical foregrip', e0:0, e1:2, on
 a({ id:'sd_none', slot:'side', n:'None', e0:0, s:{}, d:'' });
 a({ id:'bayonet', slot:'side', n:'Bayonet', e0:0, e1:3, cls:['RIF','AR','BR','CAR','SG','DMR'], s:{ melee:2, ads:1.05 }, d:'Fixed blade. Press V to strike with extra reach.' });
 a({ id:'wirecut', slot:'side', n:'Wire-cutter attachment', e0:0, e1:0, cls:['RIF'], s:{ melee:1.2 }, d:'WW1 muzzle wire cutter for barbed-wire obstacles.' });
-a({ id:'laser', slot:'side', n:'PEQ-15 visible laser', e0:3, cls:['AR','CAR','BR','SMG','SG','LMG','DMR','PST'], needs:'rail', s:{ hip:.65 }, d:'Visible laser improves hip-fire accuracy.' });
+a({ id:'laser', slot:'side', n:'AN/PEQ-15 ATPIAL (visible + IR laser)', e0:3, cls:['AR','CAR','BR','SMG','SG','LMG','DMR','PST'], needs:'rail', s:{ laser:'vis+ir', laserHip:.6 }, d:'Press L to cycle: visible laser, IR laser (only visible through night vision), off. A lit laser tightens hip-fire.' });
+a({ id:'peq2', slot:'side', n:'AN/PEQ-2A (IR laser + illuminator)', e0:3, cls:['AR','CAR','BR','SMG','LMG','DMR'], needs:'rail', s:{ laser:'ir', laserHip:.7 }, d:'Infrared-only aiming laser. Invisible to the naked eye; bright through night vision.' });
+a({ id:'lasergrip', slot:'side', n:'Crimson Trace pistol laser', e0:3, cls:['PST'], needs:'rail', s:{ laser:'vis', laserHip:.6 }, d:'Red laser under the frame. Press L to toggle.' });
 a({ id:'light', slot:'side', n:'SureFire M600 weapon light', e0:3, cls:['AR','CAR','BR','SMG','SG','LMG','PST'], needs:'rail', s:{ light:1 }, d:'Press L to toggle the light.' });
-a({ id:'dbal', slot:'side', n:'DBAL-A3 laser/light', e0:4, cls:['AR','CAR','BR','SMG','LMG','DMR'], needs:'rail', s:{ hip:.7, light:1 }, d:'Combined laser and light. Press L for the light.' });
+a({ id:'dbal', slot:'side', n:'DBAL-A3 laser/light', e0:4, cls:['AR','CAR','BR','SMG','LMG','DMR'], needs:'rail', s:{ laser:'vis+ir', laserHip:.65, light:1 }, d:'Green visible laser, IR laser and white light. Press L to cycle modes.' });
 
 // ---- Magazines
 a({ id:'mag_std', slot:'mag', n:'Standard', e0:0, s:{}, d:'Issued capacity.' });
@@ -553,6 +555,7 @@ G.resolveStats = function (wp, L) {
     if (s.flech) { S.flech = 1; S.pellets = 20; S.dmg = 8; S.acc *= .7; S.k = .0015; S.pen += 1; }
     if (s.dragon) { S.dragon = 1; }
     if (s.inc) S.inc = 1;
+    if (s.laser) { S.laser = s.laser; S.laserHip = s.laserHip || 1; }
     if (s.he) S.he = S.he ? { r: Math.max(S.he.r, s.he.r), dmg: S.he.dmg + s.he.dmg * .5 } : s.he;
     if (s.homing) S.homing = Math.max(S.homing, s.homing);
     if (s.rpmMul) S.rpm *= s.rpmMul;

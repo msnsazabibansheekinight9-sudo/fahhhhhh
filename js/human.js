@@ -65,9 +65,30 @@ function uniformMats(era, team) {
     brass: G.mat({ color: '#b08a3a', metalness: .9, roughness: .35 }), glove: mat(U.glove || '#26241f', .8), leather: mat('#4a3322', .7) };
 }
 
-// Build a soldier. opts: { era, team, tier, weapon, loadout, skin, hair }
+// material set from a personal-kit loadout (see gear.js)
+function patternMat(g) {
+  if (!g || !g.pat) return fabric('#5a5a42');
+  const [style, pal] = g.pat;
+  if (style === 'solid') return fabric(pal[0]);
+  const k = 'kpat' + g.id; if (matCache[k]) return matCache[k];
+  const t = G.texPattern(g.id, style, pal).clone(); t.needsUpdate = true; t.repeat.set(2, 2);
+  return (matCache[k] = G.mat({ map: t, color: '#ffffff', roughness: .95 }));
+}
+G.kitPatternMat = patternMat;
+function kitMats(kit, era, team) {
+  const U = G.UNIFORMS[era] ? G.UNIFORMS[era][team] : G.UNIFORMS.now[0];
+  const GI = G.GEARID, uni = GI[kit.uniform], H = GI[kit.helmet] || {}, Bo = GI[kit.boots] || {}, Gl = GI[kit.gloves] || {};
+  const tunic = patternMat(uni);
+  const col = c => !c ? null : c === 'uniform' ? tunic : fabric(c);
+  return { U: Object.assign({}, U, { helmet: H.model }), tunic, pants: tunic, helm: H.col === 'uniform' ? tunic : mat(H.col || '#4b5234', .75, .15), gear: col((GI[kit.armor] || {}).col) || fabric('#5a5a42'),
+    boot: mat(Bo.col || '#231c16', .65), sole: mat('#141210', .9), dark: mat('#1a1a18', .8), metal: G.mat({ color: '#3a3d40', metalness: .8, roughness: .4 }),
+    brass: G.mat({ color: '#b08a3a', metalness: .9, roughness: .35 }), glove: mat(Gl.col || '#26241f', .8), leather: mat('#4a3322', .7), kitCol: col };
+}
+
+// Build a soldier. opts: { era, team, tier, weapon, loadout, skin, hair, kit }
 G.buildSoldier = function (opts) {
-  const era = opts.era, team = opts.team, M = uniformMats(era, team), U = M.U;
+  const era = opts.era, team = opts.team, kit = opts.kit || null, M = kit ? kitMats(kit, era, team) : uniformMats(era, team), U = M.U;
+  const KA = kit ? G.GEARID[kit.armor] || {} : null;
   const skinCol = opts.skin || SKIN[Math.floor(Math.random() * SKIN.length)];
   const skin = mat(skinCol, .72);
   const hairM = mat(opts.hair || HAIR[Math.floor(Math.random() * HAIR.length)], .95);
@@ -75,8 +96,8 @@ G.buildSoldier = function (opts) {
   const add = (geo, m, x, y, z, p) => { const o = new THREE.Mesh(geo, m); o.position.set(x || 0, y || 0, z || 0); o.castShadow = true; o.receiveShadow = false; p.add(o); o.userData.st = true; return o; };
   const bone = (x, y, z, p) => { const g = new THREE.Group(); g.position.set(x, y, z); p.add(g); return g; };
   const S = { root, era, team };
-  const gloved = era === 'mod' && team === 0 || era === 'now' || era === 'psycho';
-  const noVest = era === 'ww1' || era === 'ww2' || era === 'cold';
+  const gloved = kit ? !!(G.GEARID[kit.gloves] || {}).col : era === 'mod' && team === 0 || era === 'now' || era === 'psycho';
+  const noVest = kit ? ['belt', 'steel', 'rig'].includes(KA.model) && (G.GEARID[kit.uniform] || {}).y < 1975 : era === 'ww1' || era === 'ww2' || era === 'cold';
   // --- skeleton
   S.hips = bone(0, .96, 0, root);
   S.spine = bone(0, .08, 0, S.hips);
@@ -112,27 +133,28 @@ G.buildSoldier = function (opts) {
   const hair = add(gHemi(.102, 14), hairM, 0, .04, .012, S.head); hair.scale.set(.92, .8, 1.02); hair.rotation.x = .32; // short hair, hairline above the brow
   if (Math.random() < .35 && (era === 'ww1' || era === 'mod' && team === 1 || era === 'psycho' && team === 1)) add(gRBox(.05, .01, .012, .004), hairM, 0, -.034, -.096, S.head); // moustache
   if (era === 'mod' && team === 1 || era === 'psycho' && team === 1) add(gRBox(.12, .05, .1, .03), hairM, 0, -.06, -.03, S.head); // beard
-  helmet(U.helmet, S.head, M, add, era, team);
+  if (kit) { if (U.helmet) helmet(U.helmet, S.head, M, add, era, team); } else helmet(U.helmet, S.head, M, add, era, team);
   // --- uniform details (tunic eras): buttons, breast pockets, belt
   if (noVest) {
     for (const s of [-1, 1]) { add(gRBox(.085, .09, .012, .01), M.tunic, s * .085, .07, -.127, S.chest); add(gRBox(.09, .028, .016, .008), M.tunic, s * .085, .118, -.131, S.chest); add(gSph(.007, 6), era === 'ww1' || era === 'ww2' ? M.brass : M.dark, s * .085, .112, -.14, S.chest); }
     for (let i = 0; i < 4; i++) add(gSph(.0075, 6), era === 'ww1' || era === 'ww2' ? M.brass : M.dark, 0, .15 - i * .07, -.132 + (i > 2 ? .02 : 0), i < 3 ? S.chest : S.spine);
   }
-  gear(era, team, S, M, add);
+  if (kit) kitGear(S, kit, M, add); else gear(era, team, S, M, add);
   // --- legs: thigh, knee, calf, boot
   S.legs = [];
-  const pk = era === 'ww2' && team === 1 ? 'jack' : era === 'ww1' ? 'puttee' : era === 'ww2' ? 'legging' : 'modern';
+  const pk = kit ? ((G.GEARID[kit.boots] || {}).model || 'modern') : era === 'ww2' && team === 1 ? 'jack' : era === 'ww1' ? 'puttee' : era === 'ww2' ? 'legging' : 'modern';
+  const modernLegs = kit ? ['pc', 'pcslick', 'iotv'].includes(KA.model) : era === 'mod' || era === 'now' || era === 'psycho';
   for (const s of [-1, 1]) {
     const hip = bone(s * .095, -.05, 0, S.hips);
     add(gLathe('thigh', [[0, .04], [.082, .03], [.088, -.05], [.078, -.2], [.066, -.36], [.058, -.44], [0, -.46]]), M.pants, 0, 0, 0, hip).scale.set(1, 1, .96);
-    if (era === 'mod' || era === 'now' || era === 'psycho') { add(gRBox(.03, .1, .09, .012), M.pants, s * .082, -.2, .0, hip); add(gRBox(.034, .026, .094, .01), M.pants, s * .084, -.15, .0, hip); } // cargo pockets
+    if (modernLegs) { add(gRBox(.03, .1, .09, .012), M.pants, s * .082, -.2, .0, hip); add(gRBox(.034, .026, .094, .01), M.pants, s * .084, -.15, .0, hip); } // cargo pockets
     const knee = bone(0, -.44, 0, hip);
     add(gSph(.058, 10), M.pants, 0, 0, -.005, knee);
     add(gLathe('calf', [[0, .02], [.056, .0], [.062, -.1], [.056, -.2], [.046, -.32], [.042, -.42], [0, -.43]]), M.pants, 0, 0, 0, knee).scale.set(1, 1, .95);
     if (pk === 'puttee') for (let i = 0; i < 7; i++) { const r = add(gTorus(.054 - i * .002, .012), fabric('#6d6242'), 0, -.18 - i * .033, 0, knee); r.rotation.set(PI / 2 + (i % 2 ? .18 : -.18), 0, 0); }
     if (pk === 'legging') add(gLathe('gait', [[0, -.4], [.05, -.4], [.05, -.24], [.056, -.2], [0, -.2]], 12), fabric('#b9ad86'), 0, 0, 0, knee);
     if (pk === 'jack') add(gLathe('jboot', [[0, -.43], [.052, -.43], [.052, -.2], [.062, -.08], [.064, -.02], [0, -.02]], 14), M.boot, 0, 0, 0, knee); // marching jackboots
-    if (era === 'mod' || era === 'now' || era === 'psycho') { add(gRBox(.1, .1, .05, .02), M.dark, 0, -.01, -.058, knee); } // knee pads
+    if (modernLegs) { add(gRBox(.1, .1, .05, .02), M.dark, 0, -.01, -.058, knee); } // knee pads
     const ankle = bone(0, -.42, 0, knee);
     add(gLathe('bshaft', [[0, -.075], [.05, -.075], [.05, .06], [.046, .1], [0, .1]], 12), M.boot, 0, 0, 0, ankle);
     add(gRBox(.098, .07, .25, .032), M.boot, 0, -.045, -.05, ankle); // upper
@@ -259,6 +281,14 @@ function helmet(type, head, M, add, era, team) {
       for (const s of [-1, 1]) { add(G.geo.gCyl(.024, .024, .02, 16), M.metal, s * .036, .028, -.1, head); add(G.geo.gCyl(.02, .02, .004, 16), G.mat({ color: '#d06020', emissive: '#a03000', emissiveIntensity: .8, roughness: .1 }), s * .036, .028, -.112, head); }
       add(gRBox(.2, .02, .02, .008), M.leather, 0, .028, -.02, head); // goggle strap
       break; }
+    case 'adrian': { const d = add(gHemi(.118), h, 0, .045, 0, head); d.scale.set(1, .8, 1.08); add(gLathe('adbrim', [[.17, .034], [.166, .04], [.12, .05], [.118, .046]], 24), h, 0, 0, 0, head).scale.set(1, 1, 1.12); add(gRBox(.012, .04, .2, .006), h, 0, .135, 0, head); break; } // crested French helmet
+    case 'ach': { const d = add(gHemi(.13), h, 0, .036, 0, head); d.scale.set(1.04, .9, 1.1); add(skirt('achsk', [[.142, -.02], [.138, .005], [.132, .036]]), h, 0, 0, 0, head).scale.set(1.04, 1, 1.1); add(gLatheP('achv', [[.138, .03], [.132, .036]], 20, PI - .95, 1.9), h, 0, 0, 0, head); add(gRBox(.05, .03, .03, .008), M.metal, 0, .07, -.13, head); add(gRBox(.16, .03, .05, .01), M.dark, 0, .1, -.07, head); break; }
+    case 'altyn': { const d = add(gHemi(.132), h, 0, .04, 0, head); d.scale.set(1.06, .95, 1.1); add(skirt('altsk', [[.15, -.09], [.146, -.03], [.138, .04]]), h, 0, 0, 0, head).scale.set(1.06, 1, 1.1);
+      const v = add(new THREE.SphereGeometry(.13, 18, 10, PI * .66, PI * .68, PI * .3, PI * .42), G.mat({ color: '#3a4a48', roughness: .08, metalness: .6, transparent: true, opacity: .6, side: THREE.DoubleSide }), 0, .02, -.01, head); v.scale.set(1.05, 1, 1.08);
+      add(gRBox(.18, .04, .03, .01), h, 0, .07, -.13, head); for (const sx of [-1, 1]) add(G.geo.gCylX(.018, .018, .02, 12), M.metal, sx * .14, .05, -.03, head); break; }
+    case 'cap': { const d = add(gHemi(.108), h, 0, .05, .005, head); d.scale.set(1, .7, 1.05); add(gRBox(.12, .012, .07, .006), h, 0, .05, -.12, head); break; }
+    case 'boonie': { const d = add(gHemi(.108), h, 0, .05, .005, head); d.scale.set(1, .85, 1.05); add(gCylY(.18, .185, .012, 22), h, 0, .052, 0, head); add(gTorus(.1, .01), M.dark, 0, .07, 0, head).rotation.x = PI / 2; break; }
+    case 'beret': { const d = add(gSph(.11, 14), h, -.02, .09, .01, head); d.scale.set(1.05, .38, 1.05); d.rotation.z = .2; add(gTorus(.1, .01), M.leather, 0, .06, 0, head).rotation.x = PI / 2; add(gRBox(.02, .025, .006, .003), M.brass, .05, .09, -.09, head); break; }
     default: { const d = add(gHemi(.12), h, 0, .04, 0, head); d.scale.set(1, .85, 1.05); }
   }
 }
@@ -319,6 +349,91 @@ function gear(era, team, S, M, add) {
       add(gRBox(.36, .06, .25, .02), rub, 0, -.03, 0, S.spine);
       add(gRBox(.2, .22, .1, .04), fabric('#5a4636'), 0, .02, .18, S.chest);
     }
+  }
+}
+
+// ------------------------------------------------------------------ personal kit (gear.js items)
+function kitGear(S, kit, M, add) {
+  const GI = G.GEARID, A = GI[kit.armor] || {}, F = GI[kit.face] || {}, N = GI[kit.nvg] || {}, K = GI[kit.pack] || {}, P = GI[kit.plates] || {}, H = GI[kit.helmet] || {};
+  const g = M.gear, dark = M.dark, C = S.chest, SP = S.spine, HD = S.head;
+  const plates = A.plates && P.rating > 0;
+  const pouchRow = (y, z, n = 3, m = g) => { for (let i = 0; i < n; i++) { const x = (i - (n - 1) / 2) * .095; add(gRBox(.082, .12, .05, .015), m, x, y, z, C); add(gRBox(.084, .03, .054, .01), m, x, y + .065, z - .002, C); } };
+  switch (A.model) {
+    case 'belt': {
+      add(gRBox(.34, .05, .24, .02), g, 0, -.02, 0, SP); add(gRBox(.05, .04, .012, .006), M.metal, 0, -.02, -.122, SP);
+      for (const s of [-1, 1]) { for (let i = 0; i < 2; i++) add(gRBox(.055, .065, .05, .012), g, s * (.07 + i * .05), -.02, -.125 + i * .01, SP); const st = add(gBox(.035, .28, .014), g, s * .09, .03, -.128, C); st.rotation.z = s * .12; const bk = add(gBox(.035, .28, .014), g, s * .09, .03, .126, C); bk.rotation.z = -s * .12; }
+      add(gCylY(.042, .042, .14, 12), M.metal, .17, -.08, .05, SP);
+      break; }
+    case 'rig': { // AK / Ephod chest rig: mag pouches across the chest, X-harness on the back
+      add(gRBox(.3, .16, .06, .02), g, 0, -.02, -.135, C); for (let i = -1; i <= 1; i++) { add(gRBox(.075, .16, .02, .006), g, i * .085, .0, -.17, C); } add(gRBox(.07, .08, .05, .01), g, .15, -.06, -.13, C);
+      for (const s of [-1, 1]) { const st = add(gBox(.04, .34, .012), g, s * .08, .06, .125, C); st.rotation.z = s * .35; }
+      add(gRBox(.34, .05, .24, .02), g, 0, -.02, 0, SP);
+      break; }
+    case 'steel': { // breastplate of overlapping steel segments, with rivets and shoulder hooks
+      const st = M.kitCol(A.col) === g ? g : g; const mm = mat(A.col && A.col !== 'uniform' ? A.col : '#55594c', .55, .5);
+      for (let i = 0; i < 4; i++) { const pl = add(gRBox(.3 - i * .02, .1, .03, .012), mm, 0, .14 - i * .085, -.14 - i * .004, C); pl.rotation.x = .08; for (const sx of [-1, 1]) add(gSph(.006, 6), M.metal, sx * (.12 - i * .01), .14 - i * .085, -.158 - i * .004, C); }
+      for (const sx of [-1, 1]) add(gRBox(.05, .06, .2, .012), mm, sx * .13, .2, -.02, C);
+      if (A.fixed && A.fixed.back) for (let i = 0; i < 3; i++) add(gRBox(.28, .11, .03, .012), mm, 0, .12 - i * .1, .14, C);
+      add(gRBox(.34, .05, .24, .02), M.leather, 0, -.02, 0, SP);
+      break; }
+    case 'flak': { // quilted flak vest with vertical ribs
+      add(gRBox(.46, .38, .31, .07), g, 0, .0, 0, C); for (let i = -3; i <= 3; i++) add(gBox(.006, .34, .012), dark, i * .055, .0, -.157, C);
+      add(gRBox(.4, .12, .27, .05), g, 0, -.12, 0, SP); if (A.cov.neck) add(gTorus(.085, .025), g, 0, .205, 0, C).rotation.x = PI / 2;
+      break; }
+    case 'vest': { // clamshell soft vest (PASGT / 6B3 / 6B23) with collar and pockets
+      add(gRBox(.46, .36, .3, .07), g, 0, .01, 0, C); add(gRBox(.42, .14, .27, .06), g, 0, -.1, 0, SP);
+      if (A.cov.neck) add(gTorus(.085, .028), g, 0, .205, 0, C).rotation.x = PI / 2;
+      for (const sx of [-1, 1]) add(gRBox(.1, .08, .02, .012), g, sx * .1, -.06, -.155, C);
+      if (A.fixed) for (let r = 0; r < 3; r++) add(gBox(.36, .004, .01), dark, 0, .1 - r * .08, -.152, C);
+      break; }
+    case 'iotv': case 'pc': case 'pcslick': {
+      const slick = A.model === 'pcslick', thick = plates ? .018 : 0;
+      add(gRBox(slick ? .3 : .42, slick ? .3 : .34, .28 + thick * 2, .05), g, 0, .03, 0, C); // carrier with front & back panels
+      if (plates) { add(gRBox(.26, .31, .02, .03), g, 0, .035, -.155 - thick, C); add(gRBox(.26, .31, .02, .03), g, 0, .035, .155 + thick, C); }
+      if (!slick) add(gRBox(.46, .12, .26, .04), g, 0, -.1, 0, SP); // cummerbund
+      if (A.cov.sides && plates) for (const sx of [-1, 1]) add(gRBox(.03, .16, .16, .01), g, sx * .225, -.02, 0, C);
+      for (let r = 0; r < 3; r++) add(gBox(slick ? .24 : .36, .006, .01), dark, 0, -.05 + r * .05, -.18 - thick, C); // MOLLE
+      pouchRow(-.04, -.19 - thick, slick ? 3 : 3);
+      add(gRBox(.14, .09, .04, .012), g, 0, .11, -.18 - thick, C); // admin pouch
+      if (A.model === 'iotv') { if (A.cov.neck) add(gTorus(.088, .03), g, 0, .205, 0, C).rotation.x = PI / 2; if (A.cov.groin) add(gRBox(.16, .14, .03, .02), g, 0, -.2, -.14, SP); if (A.cov.shoulders) for (const sx of [-1, 1]) { const d = add(gSph(.08, 12), g, sx * .215, .12, 0, C); d.scale.set(1, .9, 1.1); } }
+      add(gRBox(.26, .22, .07, .03), g, 0, .0, .2 + thick, C); // back panel / hydration
+      add(gRBox(.38, .06, .25, .02), dark, 0, -.03, 0, SP); // war belt
+      add(gRBox(.07, .1, .05, .015), g, -.17, -.06, -.05, SP); // IFAK
+      add(G.geo.gCyl(.028, .028, .09, 10), mat('#3a4030', .6, .3), .15, -.02, -.19 - thick, C); // grenade
+      break; }
+  }
+  // face / eyes
+  switch (F.model) {
+    case 'glasses': add(gRBox(.12, .025, .02, .008), G.mat({ color: '#0e1216', roughness: .05, metalness: .8 }), 0, .026, -.1, HD); break;
+    case 'goggles': add(gRBox(.13, .04, .04, .015), dark, 0, .03, -.095, HD); add(gRBox(.11, .03, .01, .008), G.mat({ color: '#28323a', roughness: .05, metalness: .7 }), 0, .03, -.117, HD); add(gRBox(.21, .016, .19, .008), dark, 0, .03, 0, HD); break;
+    case 'balaclava': { const d = add(gHemi(.106, 14), dark, 0, .02, .006, HD); d.scale.set(.95, 1.1, 1.03); add(gRBox(.13, .09, .12, .04), dark, 0, -.05, -.02, HD); add(skirt('bals', [[.11, -.1], [.106, -.03], [.103, .02]]), dark, 0, 0, .006, HD); break; }
+    case 'shemagh': add(gRBox(.13, .07, .07, .03), fabric('#cdbf9f'), 0, -.05, -.06, HD); add(gTorus(.1, .025), fabric('#cdbf9f'), 0, -.07, 0, HD).rotation.x = PI / 2; break;
+    case 'skull': add(gRBox(.12, .07, .06, .025), mat('#d8d4c8', .7), 0, -.045, -.07, HD); for (let i = -2; i <= 2; i++) add(gBox(.006, .02, .004), dark, i * .014, -.04, -.1, HD); break;
+    case 'mandible': add(gRBox(.14, .06, .1, .03), M.helm, 0, -.055, -.05, HD); for (const sx of [-1, 1]) add(gRBox(.02, .06, .04, .006), dark, sx * .075, -.02, -.02, HD); break;
+    case 'bvisor': { const v = add(new THREE.SphereGeometry(.13, 18, 12, PI * .64, PI * .72, PI * .28, PI * .52), G.mat({ color: '#9ab0b8', roughness: .05, metalness: .3, transparent: true, opacity: .35, side: THREE.DoubleSide }), 0, .02, -.01, HD); v.scale.set(1.05, 1, 1.08); break; }
+    case 'gp5': case 'm50': {
+      add(gRBox(.12, .12, .07, .04), mat(F.model === 'gp5' ? '#3a3e32' : '#1a1a1a', .7), 0, -.01, -.08, HD);
+      if (F.model === 'gp5') { for (const sx of [-1, 1]) { add(G.geo.gCyl(.022, .022, .012, 16), M.metal, sx * .034, .026, -.115, HD); add(G.geo.gCyl(.018, .018, .002, 16), G.mat({ color: '#2a3238', roughness: .05, metalness: .6 }), sx * .034, .026, -.122, HD); } add(G.geo.gCyl(.03, .03, .05, 14), M.metal, 0, -.06, -.13, HD); }
+      else { add(gRBox(.12, .06, .02, .02), G.mat({ color: '#2a3238', roughness: .05, metalness: .6, transparent: true, opacity: .7 }), 0, .025, -.118, HD); for (const sx of [-1, 1]) { const f = add(G.geo.gCyl(.026, .028, .035, 14), mat('#2a2a2a', .6), sx * .06, -.05, -.1, HD); f.rotation.y = sx * .7; } }
+      break; }
+  }
+  // night vision, mounted and flipped down in front of the eyes
+  if (N.model && H.model) {
+    add(gRBox(.05, .04, .03, .01), M.metal, 0, .1, -.13, HD); // shroud & mount
+    const tube = (x, y, r = .016, l = .07) => { const t = add(G.geo.gCyl(r, r * .9, l, 14), dark, x, y, -.16, HD); add(G.geo.gCyl(r * .82, r * .82, .003, 14), G.mat({ color: '#1a3a2a', emissive: '#30ff60', emissiveIntensity: .25, roughness: .1 }), x, y, -.16 - l / 2 - .001, HD); return t; };
+    if (N.model === 'mono') tube(.034, .03);
+    else if (N.model === 'bino' || N.model === 'pvs7') { if (N.model === 'pvs7') { add(gRBox(.09, .05, .06, .015), dark, 0, .05, -.15, HD); tube(0, .05, .02, .05); } else { tube(-.032, .03); tube(.032, .03); add(gRBox(.05, .02, .03, .006), dark, 0, .05, -.15, HD); } }
+    else if (N.model === 'quad') { for (const [x, r] of [[-.05, .013], [-.018, .015], [.018, .015], [.05, .013]]) tube(x, .03, r, .065); add(gRBox(.12, .025, .04, .008), dark, 0, .055, -.15, HD); }
+    add(gRBox(.05, .07, .05, .012), dark, 0, .07, .13, HD); // counterweight / battery pack
+  }
+  // packs
+  switch (K.model) {
+    case 'haversack': add(gRBox(.24, .26, .1, .04), M.kitCol(K.col) || g, 0, .02, .19, C); break;
+    case 'assault': add(gRBox(.28, .36, .16, .05), M.kitCol(K.col) || g, 0, .0, .22, C); add(gRBox(.2, .12, .04, .02), M.kitCol(K.col) || g, 0, -.05, .31, C); break;
+    case 'alice': add(gRBox(.32, .34, .2, .06), M.kitCol(K.col) || g, 0, -.02, .24, C); for (const sx of [-1, 1]) add(gRBox(.1, .12, .08, .03), M.kitCol(K.col) || g, sx * .17, -.08, .24, C); add(gBox(.3, .02, .02), M.metal, 0, -.2, .18, C); break;
+    case 'ruck': add(gRBox(.34, .55, .26, .07), M.kitCol(K.col) || g, 0, .05, .27, C); add(gRBox(.3, .06, .2, .03), dark, 0, .36, .27, C); add(G.geo.gCyl(.05, .05, .36, 12), fabric('#3a3a2e'), 0, -.24, .3, C).rotation.z = PI / 2; break;
+    case 'radio': { add(gRBox(.26, .3, .14, .04), M.kitCol(K.col) || g, 0, .0, .21, C); add(gRBox(.2, .14, .08, .02), dark, 0, .02, .27, C); const ant = add(gCylY(.004, .004, .6, 5), dark, .1, .45, .24, C); ant.rotation.z = -.15; break; }
+    case 'hydro': add(gRBox(.22, .3, .06, .03), M.kitCol(K.col) || g, 0, .02, .19, C); break;
   }
 }
 
@@ -464,6 +579,13 @@ G.animateSoldier = function (S, st) {
   }
 };
 
+// hostage pose: kneeling, hands clasped behind the head, head bowed
+G.poseHostage = function (S) {
+  for (const L of S.legs) { L.hip.rotation.set(-.05, 0, -L.side * .1); L.knee.rotation.x = -1.6; L.ankle.rotation.x = 1.1; }
+  S.hips.position.set(0, .56, 0); S.spine.rotation.set(-.12, 0, 0); S.chest.rotation.set(0, 0, 0); S.neck.rotation.set(.35, 0, 0);
+  S.root.updateMatrixWorld(true);
+  for (const A of S.arms) { const t = S.head.localToWorld(new THREE.Vector3(A.side * .07, .05, .1)); S.root.worldToLocal(t); solveArm(A, t, tD.set(A.side, .2, -.4).normalize(), S.root); }
+};
 // seated pose (vehicle crew)
 G.poseSeated = function (S) {
   for (const L of S.legs) { L.hip.rotation.set(1.45, 0, -L.side * .08); L.knee.rotation.x = -1.4; L.ankle.rotation.x = -.05; }

@@ -343,10 +343,57 @@ Game.startBattle = function (cfg) {
   G.UI.showHUD('battle');
   Game.toast(map.name + ' — ' + G.UNIFORMS[map.era][0].name + ' vs ' + G.UNIFORMS[map.era][1].name, 4);
 };
+// ======================================================= SOLO MISSIONS
+// cfg: { mission, tod, tier, primary, secondary }
+Game.startMission = function (cfg) {
+  Game.mode = 'mission'; Game.state = 'play';
+  Game.cleanup(true);
+  const M = G.MISSION[cfg.mission], tod = G.TOD[cfg.tod] || G.TOD.day;
+  const map = { id: 'm_' + M.id, era: 'mod', name: M.name, env: tod.env, ground: M.ground, weather: (M.weather || {})[cfg.tod] || null, amb: M.amb, reverb: M.reverb, build: W => M.build(W) };
+  G.E.loadMap(map);
+  const P = Game.player = new G.Player();
+  P.setupWeapons([cfg.primary, cfg.secondary].filter(Boolean));
+  P.pos.set(...M.player.pos); P.yaw = M.player.yaw; P.pitch = 0; P.hp = 100; P.alive = true; P.armorState = G.newArmorState();
+  Game.bots = [];
+  const R = G.rng(cfg.mission.length * 97 + (cfg.seed || Date.now() % 1000));
+  M.guards.forEach((g, i) => {
+    const tier = cfg.tier === 'mixed' ? G.TIERS[Math.min(3, Math.floor(R() * 4))].id : cfg.tier;
+    const wid = G.TERROR_WEAPONS[Math.floor(R() * G.TERROR_WEAPONS.length)], wp = G.WEAPON[wid] || G.WEAPON.akm;
+    const kit = G.TERROR_KITS[Math.floor(R() * G.TERROR_KITS.length)];
+    const b = new G.Bot(Game, 1, tier, 'mod', i, { wp, kit, look: 'mod', name: G.TERROR_NAMES[i % G.TERROR_NAMES.length] });
+    b.guard = { pos: V3(g[0], g[1], g[2]), yaw: g[3], crouch: !!g[4] };
+    b.spawn(V3(g[0], g[1] + .05, g[2])); b.yaw = g[3]; b.spawnProt = 0;
+    Game.bots.push(b);
+  });
+  Game.agents = [P, ...Game.bots];
+  // hostages: civilians kneeling with their hands behind their heads — hitting one fails the mission
+  const civ = ['u_civ_suit', 'u_civ_crew', 'u_civ_jeans', 'u_civ_hoodie'];
+  M.hostages.forEach((h, i) => {
+    const kit = Object.assign({}, G.KIT_DEFAULT, { uniform: M.id === 'ship' ? 'u_civ_crew' : civ[i % civ.length], helmet: 'h_none', face: 'f_none', nvg: 'n_none', armor: 'a_none', plates: 'p_none', gloves: 'g_none', boots: 'b_combat', pack: 'k_none' });
+    const S = G.buildSoldier({ era: 'mod', team: 0, tier: 'regular', weapon: null, kit });
+    S.root.position.set(h[0], h[1], h[2]); S.root.rotation.y = h[3]; G.animateSoldier(S, { dt: 1, speed: 0 }); G.poseHostage(S);
+    const T = { type: 'hostage_m', g: S.root, S, focus: V3(h[0], h[1] + .9, h[2]), alive: true,
+      rayTest(ro, rd, maxT) { if (!this.alive) return -1; let best = -1; for (const hb of G.soldierHitboxes(S)) { const t = G.rayCapsule(ro, rd, hb.a, hb.b, hb.r); if (t >= 0 && t < maxT && (best < 0 || t < best)) best = t; } return best; },
+      onHit(b, p, dir) { if (!this.alive) return { pass: false }; this.alive = false; G.FX.impact(p, dir.clone().negate(), dir, 'flesh', 1); S.dead = .0001; S.deathKind = 'limp'; S.deathDir.set(0, 0, 1);
+        Game.mission.hostagesLost++; if (b.owner === Game.player || !b.owner) Game.endMission(false, 'You hit a hostage.'); else Game.endMission(false, 'A hostage was killed.'); return { pass: false }; },
+      update(dt) { if (S.dead > 0) G.animateSoldier(S, { dt, dead: true }); },
+    };
+    G.E.world.group.add(S.root); Game.targets.push(T);
+  });
+  Game.mission = { cfg, M, total: Game.bots.length, killed: 0, heads: 0, t: 0, dmgTaken: 0, hostages: M.hostages.length, hostagesLost: 0, done: false };
+  Game.stats = { shots: 0, hits: 0 };
+  Game.cfg = cfg; Game.map = map; Game.killfeed = [];
+  G.UI.showHUD('mission');
+  Game.toast(`${M.name} · ${tod.n} — ${Game.bots.length} hostiles, ${M.hostages.length} hostages. Clear the structure.`, 5);
+};
+Game.endMission = function (ok, reason) {
+  const Ms = Game.mission; if (!Ms || Ms.done) return; Ms.done = true; Ms.ok = ok; Ms.reason = reason;
+  Game.state = 'end'; setTimeout(() => G.UI.showMissionResults(), ok ? 1500 : 1100);
+};
 Game.spawnAll = function () {
   const W = G.E.world;
   const P = Game.player; const sp = W.spawns[0][2] || W.spawns[0][0];
-  P.pos.copy(sp); P.yaw = 0; P.pitch = 0; P.hp = 100; P.alive = true;
+  P.pos.copy(sp); P.yaw = 0; P.pitch = 0; P.hp = 100; P.alive = true; P.armorState = G.newArmorState();
   let i0 = 0, i1 = 0; const free0 = [0, 1, 3, 4];
   for (const b of Game.bots) { const list = W.spawns[b.team]; const p = list[(b.team ? i1++ : free0[i0++ % 4]) % list.length].clone(); p.x += (Math.random() - .5) * 2; p.z += (Math.random() - .5) * 2; b.spawn(p); }
 };
@@ -364,6 +411,16 @@ Game.cleanup = function (clearTargets) {
   if (clearTargets) Game.targets = [];
 };
 Game.onKill = function (killer, victim, weapon, head) {
+  if (Game.mode === 'mission') {
+    const Ms = Game.mission;
+    Game.killfeed.unshift({ k: killer ? killer.name : '—', kt: killer ? killer.team : -1, v: victim.name, vt: victim.team, w: weapon ? weapon.n : '', head, t: 5 }); if (Game.killfeed.length > 6) Game.killfeed.pop();
+    if (victim === Game.player) { Game.endMission(false, `Killed by ${killer ? killer.name : 'enemy fire'}.`); return; }
+    Ms.killed++; if (head) Ms.heads++;
+    if (killer === Game.player) { G.UI.hitmarker(true, head); G.Audio.hit(head, true); Game.toast(`${head ? 'Headshot' : 'Hostile down'} · ${Ms.total - Ms.killed} left`, 1.4); }
+    G.UI.dirty = true;
+    if (Ms.killed >= Ms.total) Game.endMission(true, 'Structure clear. All hostiles neutralised.');
+    return;
+  }
   if (Game.mode !== 'battle') return;
   if (killer && killer !== victim) { killer.kills = (killer.kills || 0) + 1; Game.score[killer.team]++; }
   Game.killfeed.unshift({ k: killer ? killer.name : '—', kt: killer ? killer.team : -1, v: victim.name, vt: victim.team, w: weapon ? weapon.n : '', head, t: 5 });
@@ -374,8 +431,11 @@ Game.onKill = function (killer, victim, weapon, head) {
   if (Game.score[0] >= Game.scoreLimit || Game.score[1] >= Game.scoreLimit) Game.endBattle();
 };
 Game.endBattle = function () { if (Game.state === 'end') return; Game.state = 'end'; setTimeout(() => G.UI.showResults(), 1200); };
-Game.onPlayerHurt = function (d, dir, b) { G.UI.damage(d, dir); Game.player.shake = Math.min(1, Game.player.shake + .3); };
-Game.onPlayerShot = function () { if (Game.stats) Game.stats.shots++; };
+Game.onPlayerHurt = function (d, dir, b) { G.UI.damage(d, dir); Game.player.shake = Math.min(1, Game.player.shake + .3); if (Game.mission) Game.mission.dmgTaken += d; };
+Game.onPlayerShot = function (w) {
+  if (Game.stats) Game.stats.shots++;
+  if (Game.mode === 'mission' && w) { const r = w.S.sup ? 14 : 45, P = Game.player; for (const b of Game.bots) if (b.alive && b.pos.distanceTo(P.pos) < r) b.lastHeard = P.pos.clone(); }
+};
 Game.toast = function (msg, t = 1.6) { G.UI.toast(msg, t); };
 Game.melee = function (P, eye, d, reach, dmg) {
   for (const b of Game.bots) {
@@ -404,7 +464,7 @@ Game.explode = function (p, owner, o = {}) {
     if (a === P && P.god) continue;
     a.damage({ dmg: D * Math.pow(1 - d / R, 1.5), pen: 1, owner, weapon: { n: o.name || 'HE' }, team }, 'chest', 1, a.pos.clone().sub(p).normalize(), a.pos);
   }
-  for (const T of Game.targets) if ((T.type === 'dummy' || T.type === 'walker') && T.S && !(T.S.dead > 0)) { const q = T.g.position, d = Math.hypot(q.x - p.x, q.z - p.z); if (d < R) { T._zone = 'chest'; T.onHit({ dmg: D * Math.pow(1 - d / R, 1.5), pen: 1 }, q.clone().setY(q.y + 1), V3(0, 0, -1), 1); } }
+  for (const T of Game.targets) if ((T.type === 'dummy' || T.type === 'walker' || T.type === 'kitdummy' || T.type === 'hostage_m') && T.S && !(T.S.dead > 0)) { const q = T.g.position, d = Math.hypot(q.x - p.x, q.z - p.z); if (d < R) { T._zone = 'chest'; T.onHit({ dmg: D * Math.pow(1 - d / R, 1.5), pen: 1 }, q.clone().setY(q.y + 1), V3(0, 0, -1), 1); } }
 };
 
 // ======================================================= UPDATE
@@ -424,19 +484,20 @@ Game.update = function (dt, now) {
       P.hideVM = true;
       Game.respawnT -= dt;
       const cam = G.E.camera; cam.position.y = Math.max(P.pos.y + .3, cam.position.y - dt * 2); cam.rotation.z += dt * .3;
-      if (Game.respawnT <= 0 && Game.state === 'play') { const s = Game.spawnPoint(0); P.pos.copy(s); P.hp = 100; P.alive = true; P.hideVM = false; P.yaw = 0; P.pitch = 0; P.stance = 0; for (const w of P.weapons) { w.mag = w.S.mag; w.reserve = w.S.mag * 6; } P.hudDirty = true; }
+      if (Game.respawnT <= 0 && Game.state === 'play' && Game.mode !== 'mission') { const s = Game.spawnPoint(0); P.pos.copy(s); P.hp = 100; P.alive = true; P.armorState = G.newArmorState(); P.hideVM = false; P.yaw = 0; P.pitch = 0; P.stance = 0; for (const w of P.weapons) { w.mag = w.S.mag; w.reserve = w.S.mag * 6; } P.hudDirty = true; }
       G.Input.lastDx = 0;
     }
     for (const b of Game.bots) b.update(dt, now);
     if (Game.mode === 'battle') { Game.timeLeft -= dt; if (Game.timeLeft <= 0) { Game.timeLeft = 0; Game.endBattle(); } }
+    if (Game.mode === 'mission' && Game.mission && !Game.mission.done) Game.mission.t += dt;
   } else if (Game.state === 'end') { for (const b of Game.bots) b.update(dt * .3, now); }
   // bullets
   G.Ballistics.update(dt, {
-    soldiers: Game.agents, targets: Game.mode === 'range' ? Game.targets : null,
+    soldiers: Game.agents, targets: Game.mode === 'range' || Game.mode === 'mission' ? Game.targets : null,
     listener: G.E.camera.position, listenerTeam: 0,
     onNearMiss: (d) => { P.suppress = Math.min(1.5, P.suppress + (3 - d) / 3); G.UI.suppress(P.suppress); },
     onSoldierHit: (b, S, zone, res) => { if (b.owner === P) { G.UI.hitmarker(res.killed, zone === 'head'); if (!res.killed) G.Audio.hit(zone === 'head', false); if (Game.stats) Game.stats.hits++; } },
-    onTargetHit: (b, T, p, speed, r) => { if (b.owner === P) rangeStat(b, T, p, speed, r); },
+    onTargetHit: (b, T, p, speed, r) => { if (b.owner === P && Game.mode === 'range') rangeStat(b, T, p, speed, r); },
   });
   // grenades
   for (let i = Game.grenades.length - 1; i >= 0; i--) {
@@ -482,5 +543,39 @@ function rangeStat(b, T, p, speed, r) {
   S.last = { target: T.type, dist, tof: b.t, v: speed, v0: b.v0, J: .5 * m * speed * speed, J0: .5 * m * b.v0 * b.v0, drop, wind, info: r ? r.info : '', group: T.group ? T.group() : 0 };
   G.UI.dirty = true;
 }
+// Kit test mannequin: wears YOUR current kit (Kit locker). Every hit is resolved against the exact
+// piece of equipment it strikes, leaves a mark on it, and plates crack as they take hits.
+TGT.kitdummy = function (x, z, dist, o = {}) {
+  const kit = Object.assign({}, o.kit || G.Kit.current);
+  const S = G.buildSoldier({ era: 'now', team: 0, tier: 'elite', weapon: null, kit, skin: '#c99a78' });
+  const face = { rear: 0, side: PI / 2, quarter: PI * .75 }[o.orient] ?? PI;
+  S.root.position.set(x, 0, z); S.root.rotation.y = face;
+  const marks = [];
+  G.animateSoldier(S, { dt: 1, speed: 0, aimPitch: 0 });
+  const mm = { stop: G.mat({ color: '#9a9a90', metalness: .6, roughness: .5 }), pen: G.mat({ color: '#1a0806', roughness: .9 }) };
+  const T = { type: 'kitdummy', g: S.root, S, kit, hp: 100, st: G.newArmorState(), focus: V3(x, 1.3, z),
+    rayTest(ro, rd, maxT) { if (S.dead > 0) return -1; let best = -1; for (const hb of G.soldierHitboxes(S)) { const t = G.rayCapsule(ro, rd, hb.a, hb.b, hb.r); if (t >= 0 && t < maxT && (best < 0 || t < best)) { best = t; this._zone = hb.zone; } } return best; },
+    onHit(b, p, dir, energy, speed) {
+      const zone = this._zone || 'chest';
+      const boneFor = zone === 'head' ? S.head : zone === 'chest' || zone === 'stomach' ? S.chest : null;
+      const loc = boneFor ? boneFor.worldToLocal(p.clone()) : { x: 0, y: 0, z: -1 };
+      const r = G.armorHit(kit, zone, loc, b, speed || b.v0, this.st);
+      const d = b.dmg * energy * (G.ZONE_MUL[zone] || 1) * r.mult;
+      this.hp -= d;
+      // leave a mark on the kit: a grey splash where the armour stopped it, a dark hole where it went through
+      if (boneFor) { const m = new THREE.Mesh(G.geo.gSph(r.stopped ? .012 : .007, 8), r.stopped ? mm.stop : mm.pen); m.position.copy(loc).multiplyScalar(1.02); boneFor.add(m); marks.push(m); }
+      G.FX.impact(p, dir.clone().negate(), dir, r.stopped ? 'metal' : 'flesh', r.stopped ? .8 : 1);
+      if (!r.stopped) { S.flinch = Math.min(1.2, S.flinch + .8); S.flinchDir = Math.sign(Math.random() - .5); }
+      const dead = this.hp <= 0;
+      if (dead) { S.dead = .0001; S.deathKind = null; S.headshot = zone === 'head'; S.deathDir.set(0, 0, 1); this.t = 0; }
+      const plates = `plates F${this.st.f} B${this.st.b}${this.st.sl + this.st.sr ? ` S${this.st.sl + this.st.sr}` : ''}${this.st.helm ? ` · helmet ${this.st.helm}` : ''}`;
+      return { pass: false, info: `${zone.toUpperCase()} · ${r.info || 'no armour here'} · ${Math.round(d)} dmg${dead ? ' · LETHAL' : ` · ${Math.max(0, Math.round(this.hp))} HP`} · ${plates}` };
+    },
+    update(dt) { if (S.dead > 0) { G.animateSoldier(S, { dt, dead: true }); this.t += dt; if (this.t > 3.5) this.reset(); } else G.animateSoldier(S, { dt, speed: 0, aimPitch: 0 }); },
+    reset() { this.hp = 100; this.st = G.newArmorState(); for (const m of marks) m.parent && m.parent.remove(m); marks.length = 0; G.resetSoldier(S); S.root.rotation.set(0, face, 0); G.animateSoldier(S, { dt: 1, speed: 0 }); },
+  };
+  return T;
+};
+G.TARGETS.push({ id: 'kitdummy', n: 'Your kit on a mannequin', d: 'Wears everything from your Kit locker. Shows which plate, vest, helmet or visor stopped each round.' });
 G.TGT = TGT;
 })();

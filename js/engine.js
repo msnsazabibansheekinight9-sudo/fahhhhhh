@@ -122,7 +122,7 @@ E.setEnv = function (key, groundKind, weather) {
   const hc = new THREE.Color(P.fog[0]).lerp(new THREE.Color(P.hemi[1]), .45);
   const hm = G.mat({ color: '#' + hc.getHexString(), roughness: 1, flatShading: true });
   for (let i = 0; i < 26; i++) { const a = i / 26 * Math.PI * 2, r = big ? 1500 : 220 + Math.random() * 60; const h = new THREE.Mesh(new THREE.ConeGeometry(40 + Math.random() * 60, 20 + Math.random() * 40, 6), hm); h.position.set(Math.cos(a) * r, 0, Math.sin(a) * r); E.hills.add(h); }
-  E.scene.add(E.hills);
+  E.scene.add(E.hills); E.ground.visible = true;
   E.weather = weather; E.weatherT = 0;
   E.groundKind = groundKind;
 };

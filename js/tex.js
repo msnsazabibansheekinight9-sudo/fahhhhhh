@@ -120,6 +120,34 @@ G.texCamo = function (kind) {
   }
   return (cache[id] = toTex(c));
 };
+// generic camouflage from a palette: style = blob | digital | dots | brush | splinter | stripe
+G.texPattern = function (id, style, pal, sc = 1) {
+  const key = 'pat_' + id; if (cache[key]) return cache[key];
+  const seed = [...id].reduce((a, ch) => a * 31 + ch.charCodeAt(0) & 0xffff, 7);
+  let c;
+  if (style === 'digital') {
+    const n = makeNoise(seed, 16), r = rng(seed + 1), bs = Math.max(2, Math.round(4 * sc));
+    c = pixels(128, 128, (i, j) => { const x = Math.floor(i / bs), y = Math.floor(j / bs); const v = Math.min(.999, Math.max(0, fbm(n, x * .25 / sc, y * .25 / sc, 2) + r() * .12)); return hex(pal[Math.floor(v * pal.length)]); });
+  } else if (style === 'dots') { // Flecktarn / Erbsenmuster: layered speckles
+    c = canvas(256, 256); const x = c.getContext('2d'), r = rng(seed);
+    x.fillStyle = pal[0]; x.fillRect(0, 0, 256, 256);
+    for (let k = 1; k < pal.length; k++) { x.fillStyle = pal[k]; const n = 700 / k; for (let q = 0; q < n; q++) { const cx = r() * 256, cy = r() * 256, rr = (2 + r() * 5) * sc; x.beginPath(); x.ellipse(cx, cy, rr, rr * (.6 + r() * .6), r() * 3, 0, 7); x.fill(); } }
+  } else if (style === 'splinter') {
+    c = canvas(256, 256); const x = c.getContext('2d'), r = rng(seed);
+    x.fillStyle = pal[0]; x.fillRect(0, 0, 256, 256);
+    for (let k = 0; k < 44; k++) { x.fillStyle = pal[1 + (k % (pal.length - 1))]; x.beginPath(); const cx = r() * 256, cy = r() * 256; x.moveTo(cx, cy); for (let q = 0; q < 4; q++) x.lineTo(cx + (r() - .5) * 100 * sc, cy + (r() - .5) * 60 * sc); x.fill(); }
+  } else if (style === 'stripe') {
+    const n = makeNoise(seed, 32);
+    c = pixels(256, 256, (i, j) => { const x = i / 256, y = j / 256; const s2 = Math.sin((y * 10 / sc + fbm(n, x * 3, y * 3, 3) * 5) * Math.PI); const v = fbm(n, x * 8, y * 2, 2); return hex(s2 > .55 && v > .35 ? pal[1] : s2 > .35 ? pal[2] : pal[0]); });
+  } else { // blob / brush
+    const noises = pal.map((_, k) => makeNoise(seed + k * 13, 32));
+    const ax = style === 'brush' ? 3 : 1, ay = style === 'brush' ? 1 : 1;
+    c = pixels(256, 256, (i, j) => { const x = i / 256, y = j / 256; let col = hex(pal[0]);
+      for (let k = 1; k < pal.length; k++) { const f = 5 / sc * (1 + k * .15); const v = fbm(noises[k], x * f * ax, y * f * ay, 3); if (v > .54 + k * .012) col = hex(pal[k]); }
+      return col; });
+  }
+  const t = toTex(c); t.userData = { style }; return (cache[key] = t);
+};
 G.texEngraved = function () {
   if (cache.engr) return cache.engr;
   const c = canvas(256, 256), x = c.getContext('2d');

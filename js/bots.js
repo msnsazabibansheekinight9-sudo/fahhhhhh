@@ -48,15 +48,15 @@ function pickLoadout(era, role, team) {
 const ROLES = ['rifleman', 'rifleman', 'assault', 'gunner', 'marksman'];
 
 class Bot {
-  constructor(game, team, tierId, era, idx) {
+  constructor(game, team, tierId, era, idx, opts = {}) {
     this.game = game; this.team = team; this.tier = G.TIER[tierId]; this.era = era; this.idx = idx;
     this.role = ROLES[idx % ROLES.length];
-    const lo = pickLoadout(era, this.role, team);
+    const lo = opts.wp ? { wp: opts.wp, L: G.defaultLoadout(opts.wp) } : pickLoadout(era, this.role, team);
     this.wp = lo.wp; this.L = lo.L; this.S = G.resolveStats(this.wp, this.L);
-    this.name = NAMES[era][team][idx % 7];
+    this.name = opts.name || NAMES[era][team][idx % 7];
     this.pos = V3(); this.vel = V3(); this.yaw = 0; this.pitch = 0;
     this.alive = false; this.hp = 100; this.kills = 0; this.deaths = 0; this.score = 0;
-    this.model = G.buildSoldier({ era, team, tier: tierId, weapon: this.wp, loadout: this.L });
+    this.model = G.buildSoldier({ era: opts.look || era, team, tier: tierId, weapon: this.wp, loadout: this.L, kit: opts.kit || null });
     this.model.root.visible = false;
     G.E.world.group.add(this.model.root);
     // tier insignia: a coloured armband so tiers are readable at a glance
@@ -90,7 +90,7 @@ class Bot {
       // convert world fall direction to local
       const inv = -this.yaw; const dx = this.model.deathDir.x, dz = this.model.deathDir.z;
       this.model.deathDir.set(dx * Math.cos(inv) + dz * Math.sin(inv), 0, -dx * Math.sin(inv) + dz * Math.cos(inv)).multiplyScalar(-1);
-      this.respawnT = 4.5;
+      this.respawnT = this.game.mode === 'mission' ? 1e9 : 4.5;
       this.game.onKill(b.owner, this, b.weapon, zone === 'head');
       return { dmg: d, killed: true, armorStop };
     }
@@ -158,6 +158,7 @@ class Bot {
       if (this.vel.lengthSq() > .1) desiredYaw = Math.atan2(-this.vel.x, -this.vel.z);
       if (this.lastHeard && !tgt) { const to = this.lastHeard.clone().sub(this.pos); desiredYaw = Math.atan2(-to.x, -to.z); }
     }
+    if (this.guard && !visible && !this.lastHeard) desiredYaw = this.guard.yaw + Math.sin(now * .22 + this.idx * 1.7) * .9; // sentry scanning its sector
     const turn = (visible ? T.track : 4) * dt;
     this.yaw += clamp(angDiff(this.yaw, desiredYaw), -turn, turn);
     this.pitch += clamp(desiredPitch - this.pitch, -turn, turn);
@@ -214,6 +215,14 @@ class Bot {
         const n = this.path[0]; const to = V3(n.x - this.pos.x, 0, n.z - this.pos.z);
         if (to.length() < .7) this.path.shift(); else move.add(to.normalize());
       }
+    }
+    if (this.guard) { // sentries hold their post: small side-steps while engaged, drift back to the post, never step off a ledge
+      move = visible ? move.setY(0).multiplyScalar(.5) : V3();
+      const home = V3(this.guard.pos.x - this.pos.x, 0, this.guard.pos.z - this.pos.z);
+      if (home.length() > 2.5 || (!visible && home.length() > .4)) move.copy(home.normalize().multiplyScalar(.7));
+      const ahead = this.pos.clone().addScaledVector(move.clone().normalize(), .6);
+      if (move.lengthSq() > 0 && W.groundAt(ahead.x, ahead.z, this.pos.y + .45, .1) < this.pos.y - .35) move.set(0, 0, 0);
+      if (visible && this.guard.crouch) this.crouch = 1;
     }
     const speed = (this.crouch ? 1.8 : visible ? 2.6 : 3.8) * (this.wp.heavy ? .85 : 1) * W.slowAt(this.pos);
     if (move.lengthSq() > 0) move.normalize().multiplyScalar(speed);

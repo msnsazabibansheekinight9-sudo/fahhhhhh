@@ -54,7 +54,7 @@ I.frame = function () {
     ads: I.mb[2] || tb.ads,
     reload: e('KeyR') || te.reload, inspect: e('KeyF'), melee: e('KeyV'), gl: e('KeyG'), mode: e('KeyB') || te.mode, light: e('KeyL'),
     zeroUp: e('BracketRight') || e('PageUp'), zeroDown: e('BracketLeft') || e('PageDown'), bipod: e('KeyX'),
-    fly: e('KeyN'), menu: e('KeyT'), reset: e('KeyY'),
+    fly: e('KeyN'), menu: e('KeyT'), reset: e('KeyY'), nvg: e('KeyJ'),
   };
   if (e('Digit1')) out.swap = 0; if (e('Digit2')) out.swap = 1;
   if (I.wheel !== 0 && G.Game.player) { out.swap = (G.Game.player.cur + 1) % Math.max(1, G.Game.player.weapons.length); I.wheel = 0; }

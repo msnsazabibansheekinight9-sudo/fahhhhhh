@@ -1536,12 +1536,13 @@ G.buildGun = function (wp, L, opt = {}) {
       const chain = rig.saw = grp(0, 0, -.02, sg);
       for (let i = 0; i < 18; i++) { const z = -i * .0115; add(gBox(.006, .006, .006), MT.steel, 0, .014 - i * .0002, z, chain); add(gBox(.006, .006, .006), MT.steel, 0, -.014 + i * .0002, z, chain); }
     }
-    if (Sd === 'laser' || Sd === 'dbal' || Sd === 'light') {
+    if (Sd === 'laser' || Sd === 'dbal' || Sd === 'light' || Sd === 'peq2' || Sd === 'lasergrip') {
       const sz = zf - Math.min(hgL || .12, blen) * .5;
       const sx = pistol ? 0 : (hgT === 'quad' || hgT === 'quad_long' || hgT.startsWith('mlok') ? .032 : RW * .5 + .02);
       const sy = pistol ? PS.sB - PS.dcH - .012 : 0;
       if (Sd === 'light') { add(gCyl(.013, .013, .1, 16), MT.metal, sx, sy, sz); add(gCyl(.012, .012, .002, 16), MT.glass, sx, sy, sz - .05); }
-      else { add(gRBox(.03, .03, .08, .006), MT.poly, sx, sy, sz); add(gCyl(.004, .004, .003, 10), MT.glow, sx - .006, sy + .006, sz - .041); }
+      else if (Sd === 'lasergrip') { add(gRBox(.018, .016, .04, .005), MT.poly, sx, sy + .004, sz + .02); add(gCyl(.003, .003, .003, 10), MT.glow, sx, sy, sz - .001); }
+      else { add(gRBox(Sd === 'peq2' ? .036 : .03, .03, Sd === 'peq2' ? .1 : .08, .006), MT.poly, sx, sy, sz); add(gCyl(.004, .004, .003, 10), MT.glow, sx - .006, sy + .006, sz - .041); if (Sd !== 'dbal') add(gCyl(.006, .006, .003, 10), MT.glass, sx + .006, sy + .006, sz - .041); }
       rig.laserPos = V3(sx - .006, sy + .006, sz - .045);
       rig.lightPos = V3(sx, sy, sz - .05);
     }
