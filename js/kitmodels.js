@@ -156,6 +156,11 @@ const SH = {
   '6b47': { R: .134, k: 1.08, ry: .12, cz: .006, edge: [[0, .02], [.6, .012], [1.1, -.045], [1.6, -.068], [PI, -.08]], flare: .006, fz: .015 },
   altyn: { R: .14, k: 1.07, ry: .13, cz: .008, edge: [[0, .052], [.82, .052], [1.0, -.09], [1.6, -.1], [PI, -.1]], th: .012 },
   lshz: { R: .138, k: 1.07, ry: .125, cz: .008, edge: [[0, .048], [.8, .048], [1.0, -.07], [1.6, -.08], [PI, -.09]] },
+  fj: { R: .126, k: 1.07, ry: .108, edge: [[0, .03], [.9, .018], [1.5, -.02], [2.3, -.035], [PI, -.04]] },
+  mk3: { R: .13, k: 1.08, ry: .114, edge: [[0, .018], [1.0, -.03], [1.8, -.06], [PI, -.07]], flare: .02, fz: .04 },
+  m33: { R: .126, k: 1.08, ry: .118, edge: [[0, .024], [1.2, -.03], [PI, -.05]], flare: .01, fz: .02 },
+  type90j: { R: .126, k: 1.07, ry: .116, edge: [[0, .025], [1.3, -.02], [PI, -.035]], flare: .012, fz: .02 },
+  ssh36: { R: .128, k: 1.08, ry: .116, edge: [[0, .03], [1.2, -.03], [PI, -.05]], flare: .03, fz: .03 },
   visor: { R: .136, k: 1.08, ry: .12, cz: .006, edge: [[0, .044], [.85, .044], [1.02, -.07], [PI, -.082]] },
 };
 for (const k in SH) { const s = SH[k]; s.e = curve(s.edge); s.f = s.flare ? curve(s.flare) : () => 0; s.fz = s.fz || .02; s.th = s.th || .009; s.cy = s.cy === undefined ? .035 : s.cy; s.cz = s.cz || 0; }
@@ -235,6 +240,16 @@ function helmet(HD, id, model, H) {
       else { for (const sx of [-1, 1]) { const p = onShell(s, sx * 1.5, .03, .001); A(gCylX(.006, .006, .006, 8), M.metal, p[0], p[1], p[2], HD); }
         const p = onShell(s, -1.35, .045, .001); A(gRBox(.004, .024, .02, .002), mat('#c8c8c0', .6), p[0], p[1], p[2], HD, 0, -1.35); } // side vent + decal
       chin2(HD, M.leather, model, -.095); break; }
+    case 'fj': case 'mk3': case 'm33': case 'type90j': case 'ssh36': {
+      trim(hm);
+      if (model === 'fj') chin4(HD, M.leather, 'fj', false); else chin2(HD, M.leather, model, -.095);
+      if (model === 'type90j') { const p = onShell(s, 0, .06, .002); A(gRBox(.026, .026, .004, .004), M.brass, p[0], p[1], p[2], HD, 0, 0, PI / 4); }
+      if (model === 'ssh36') { const crest = []; for (let i = 0; i <= 10; i++) { const p = -1.0 + i / 10 * 2.0; crest.push([0, s.cy + s.ry * Math.cos(p) + .008, s.cz + Math.sin(p) * s.R * s.k]); } add(ribbon('ssh36c', crest, .016, .008, [0, 1, 0]), hm, 0, 0, 0, HD); }
+      if (model === 'm33') for (const sx of [-1, 1]) { const p = onShell(s, sx * 1.5, .03, .001); add(gSph(.006, 6), M.metal, p[0], p[1], p[2], HD); }
+      break; }
+    case 'beanie': { // knit watch cap with a folded cuff
+      add(sweep('beanie', { n: 36, k: 1.06 }, () => { const o = [], i = []; for (let v = 0; v <= 7; v++) { const p = v / 7 * PI / 2; o.push([.108 * Math.sin(p), .045 + .1 * Math.cos(p)]); i.push([.102 * Math.sin(p), .045 + .094 * Math.cos(p)]); } return loop(o, [[.112, .045], [.112, .02], [.104, .02]], i.reverse()); }), hm, 0, 0, .006, HD);
+      break; }
     case 'ssh40': case 'ssh68': {
       trim(hm); for (const t of [-1.55, 1.55, PI]) { const p = onShell(s, t, .045, .001); add(gSph(.006, 6), hm, p[0], p[1], p[2], HD); }
       chin2(HD, fab('#6a5a3e'), model, -.095); break; }
@@ -283,8 +298,9 @@ function helmet(HD, id, model, H) {
       add(sweep('altvf', { n: 24, t0: -1.07, t1: 1.07, k: 1.06, cz: s.cz, su: 1 }, () => loop([[.158, .07], [.158, .05]], [[.158, .05], [.14, .05]], [[.14, .05], [.14, .07], [.158, .07]])), hm, 0, s.cy, 0, HD);
       for (const sx of [-1, 1]) { const p = onShell(s, sx * 1.12, .03, .004); A(gCylX(.02, .02, .018, 14), hm, p[0], p[1], p[2], HD); A(gCylX(.008, .008, .024, 8), M.metal, p[0], p[1], p[2], HD); }
       chin2(HD, web, 'alt', -.1); break; }
-    case 'cap': { // patrol cap: flat oval crown, stiff curved bill
-      add(sweep('pcap', { n: 36, k: 1.1 }, () => loop([[0, .135], [.09, .135], [.096, .132]], [[.096, .132], [.108, .05]], [[.108, .05], [.102, .05]], [[.102, .05], [.09, .128], [0, .128]])), hm, 0, 0, 0, HD);
+    case 'cap': { // patrol cap: flat oval crown, stiff curved bill (baseball cap: six-panel rounded crown and button)
+      if (id === 'h_ballcap') { add(sweep('bcap', { n: 36, k: 1.08 }, () => { const o = [], i = []; for (let v = 0; v <= 7; v++) { const p = v / 7 * PI / 2; o.push([.108 * Math.sin(p), .05 + .085 * Math.cos(p)]); i.push([.103 * Math.sin(p), .05 + .08 * Math.cos(p)]); } return loop(o, [[.108, .05]], i.reverse()); }), hm, 0, 0, .006, HD); add(gSph(.009, 8), hm, 0, .136, .006, HD); }
+      else add(sweep('pcap', { n: 36, k: 1.1 }, () => loop([[0, .135], [.09, .135], [.096, .132]], [[.096, .132], [.108, .05]], [[.108, .05], [.102, .05]], [[.102, .05], [.09, .128], [0, .128]])), hm, 0, 0, 0, HD);
       add(sweep('pbill', { n: 16, t0: -.95, t1: .95, k: 1.1, su: 1 }, () => loop([[.104, .054], [.14, .05], [.176, .036]], [[.176, .036], [.176, .031]], [[.176, .031], [.14, .045], [.104, .049]])), hm, 0, 0, 0, HD); break; }
     case 'boonie': { // boonie hat: soft crown, stitched brim, foliage band
       add(sweep('bcrown', { n: 36, k: 1.08 }, () => loop([[0, .128], [.07, .126], [.1, .11], [.108, .06]], [[.108, .06], [.1, .06]], [[.1, .06], [.092, .106], [0, .12]])), hm, 0, 0, 0, HD);
@@ -339,6 +355,17 @@ function face(HD, F, s) {
       const sm = shemMat();
       add(sweep('shw', { n: 36, k: 1.08, su: 2 }, t => { const a = Math.abs(t) > PI ? TAU - Math.abs(t) : Math.abs(t), top = a < 1.2 ? .008 : -.06, n = Math.max(0, 1 - a / .5) * .016; return loop([[.116 + n, top], [.124 + n * .6, top - .04], [.122, -.1], [.104, -.14]], [[.104, -.14], [.09, -.14]], [[.09, -.14], [.104, top - .04], [.106 + n, top], [.116 + n, top]]); }), sm, 0, 0, -.004, HD);
       A(gRBox(.06, .12, .02, .01), sm, .03, -.14, .1, HD, .3, 0, .2); break; }
+    case 'gaiter': { // stretch tube pulled up over nose and mouth
+      add(sweep('gait', { n: 36, k: 1.06, su: 2 }, t => { const a = angA(t), n = Math.max(0, 1 - a / .5) * .014, top = a < 1.2 ? .0 : -.05; return loop([[.112 + n, top], [.116, -.05], [.104, -.13]], [[.104, -.13], [.096, -.13]], [[.096, -.13], [.106, -.05], [.106 + n, top], [.112 + n, top]]); }), mat('#4a4e3c', .95), 0, 0, .002, HD);
+      break; }
+    case 'kmask': { // aramid face mask: matte, eye cut-outs above, covers nose and jaw
+      add(sweep('kmk', { n: 22, t0: -1.4, t1: 1.4, k: 1.04, su: 1 }, t => { const n = Math.max(0, 1 - Math.abs(t) / .5) * .016; return loop([[.11 + n, .012], [.118 + n * .5, -.03], [.112, -.06], [.1, -.096], [.072, -.118]], [[.072, -.118], [.068, -.112]], [[.068, -.112], [.094, -.092], [.108, -.06], [.114 + n * .5, -.03], [.106 + n, .012], [.11 + n, .012]]); }), mat('#1c1c1a', .85), 0, 0, .004, HD);
+      break; }
+    case 'resp': { // half-face elastomer respirator with twin pink P100 filters
+      add(sweep('resp', { n: 18, t0: -1.0, t1: 1.0, k: 1.05, su: 1 }, t => loop([[.112, .0], [.12, -.04], [.106, -.08]], [[.106, -.08], [.098, -.078]], [[.098, -.078], [.11, -.04], [.104, .0], [.112, .0]])), mat('#6a6e72', .7), 0, 0, .004, HD);
+      for (const sx of [-1, 1]) A(gCyl(.026, .026, .016, 16), mat('#d87a9a', .7), sx * .05, -.05, -.112, HD, 0, -sx * .7);
+      for (const sx of [-1, 1]) add(ribbon('rstrap' + sx, [[sx * .1, -.03, -.03], [sx * .106, -.04, .04], [sx * .02, -.05, .104]], .012, .003, [0, 1, 0]), mat('#2a2a2a', .7), 0, 0, 0, HD);
+      break; }
     case 'skull': { // printed half-mask over nose and jaw
       add(sweep('skm', { n: 22, t0: -1.4, t1: 1.4, k: 1.04, su: 1 }, t => { const n = Math.max(0, 1 - Math.abs(t) / .5) * .016; return loop([[.11 + n, .006], [.118 + n * .5, -.03], [.112, -.06], [.1, -.096], [.072, -.118]], [[.072, -.118], [.068, -.112]], [[.068, -.112], [.094, -.092], [.108, -.06], [.114 + n * .5, -.03], [.106 + n, .006], [.11 + n, .006]]); }), skullMat(), 0, 0, .004, HD);
       break; }
@@ -438,6 +465,7 @@ function nvg(HD, N, H, s) {
 // ================================================================= HEADSETS
 function comms(HD, C, H, s) {
   if (!C.model) return;
+  if (C.model === 'inear') { for (const sx of [-1, 1]) { A(gSph(.012, 10), mat('#1a1a1a', .6), sx * .1, .008, .0, HD); add(cable('iec' + sx, [[sx * .1, .0, .0], [sx * .09, -.06, .02], [sx * .05, -.12, .03]], .0018), mat('#101010', .7), 0, 0, 0, HD); } return; }
   const cupM = mat(C.col || '#3a3d32', .6), pad = mat('#141414', .8), blk = mat('#161616', .6);
   const hasRails = s && railsOn[H.model];
   for (const sx of [-1, 1]) {
@@ -534,6 +562,17 @@ const AS = {
   a_jpc: { base: 'carrier', panel: [.25, .31], cum: 'elastic', shoulders: 'thin', kanga: true, load: ['mag', 'mag', 'mag'], back: 'zip', handle: true, belt: 'war' },
   a_avs: { base: 'carrier', panel: [.27, .33], cum: 'full', shoulders: 'pad', sides: true, placard: true, load: ['mag', 'mag', 'mag', 'radio'], side: ['ifak', 'frag'], back: 'molle', handle: true, belt: 'war' },
   a_virtus: { base: 'carrier', panel: [.27, .33], cum: 'full', shoulders: 'pad', sides: true, molle: 5, load: ['magflap', 'magflap', 'magflap'], side: ['ifak', 'frag'], back: 'virtus', belt: 'war' },
+  a_slickster: { base: 'carrier', panel: [.25, .31], cum: 'elastic', shoulders: 'thin', kanga: true, load: ['mag', 'mag', 'mag'], back: 'zip', handle: true, belt: 'war' },
+  a_lv119: { base: 'carrier', panel: [.26, .32], cum: 'full', shoulders: 'thin', sides: true, placard: true, load: ['mag', 'mag', 'mag', 'radio'], back: 'molle', handle: true, belt: 'war' },
+  a_banshee: { base: 'carrier', panel: [.27, .33], cum: 'full', shoulders: 'pad', sides: true, molle: 5, load: ['magflap', 'magflap', 'magflap'], admin: true, side: ['ifak', 'smoke'], back: 'molle', handle: true, belt: 'war' },
+  a_ciras: { base: 'vest', collar: 'low', molle: 6, qr: true, sides: true, load: ['mag', 'mag', 'mag', 'radio'], loadY: -.07, admin: true, belt: 'war' },
+  a_6b13: { base: 'vest', collar: 'high', groin: true, front: 'zip', load: ['ak', 'ak', 'ak'], loadY: -.07, belt: 'soviet', bulk: .01 },
+  a_6b5: { base: 'vest', collar: 'high', front: 'zip', pockets: true, belt: 'soviet', bulk: .016 },
+  a_jgsdf3: { base: 'vest', collar: 'high', molle: 4, load: ['magflap', 'magflap', 'frag'], loadY: -.07, belt: 'war' },
+  a_m1952: { base: 'vest', ribs: true, collar: 'low', front: 'zip', pockets: true, belt: 'alice' },
+  a_d3crm: { base: 'rig', style: 'd3crm' },
+  a_alice: { base: 'belt', belt: 'alice' },
+  a_battlebelt: { base: 'belt', belt: 'war' },
   a_psy_black: { base: 'carrier', panel: [.28, .34], cum: 'full', shoulders: 'hard', collar: 'low', groin: true, sides: true, molle: 4, load: ['mag', 'mag', 'mag'], back: 'molle', iff: true, belt: 'war' },
 };
 
@@ -672,7 +711,14 @@ function steel(S, spec, AR) {
 }
 function rig(S, spec) {
   const C = S.chest, g = M.gear, dark = M.dark;
-  if (spec.style === 'type56') { // Chinese chest rig: three tall AK pouches, stripper-clip and grenade pouches, X-back
+  if (spec.style === 'd3crm') { // modern chest rig: four open-top rifle mags, wing pouches, H-harness and a back strap
+    const zf = -(torso(-.06)[1] + .012);
+    add(slab('d3p', rrect(.34, .16, .02), .016, 1.4, .004), g, 0, -.06, zf, C);
+    row(C, ['mag', 'mag', 'mag', 'mag'], -.07, zf - .012, 1.4, g, .075);
+    for (const sx of [-1, 1]) pouch(sx > 0 ? 'radio' : 'gp', C, sx * .2, -.08, zf + .04, g, -sx * .7);
+    for (const sx of [-1, 1]) add(ribbon('d3s' + sx, [[sx * .13, .01, zf], [sx * .11, .2, -.08], [sx * .1, .235, 0], [sx * .1, .14, .14]], .04, .006, [1, 0, 0]), g, 0, 0, 0, C);
+    add(band('d3w', .9, TAU - .9, [[0, -.07]], [[0, -.1]], .01, .005, 30), dark, 0, 0, 0, C);
+  } else if (spec.style === 'type56') { // Chinese chest rig: three tall AK pouches, stripper-clip and grenade pouches, X-back
     const zf = -(torso(-.1)[1] + .012);
     add(slab('t56p', rrect(.36, .17, .02), .012, 1.4, .003), g, 0, -.1, zf, C);
     for (let i = -1; i <= 1; i++) { A(gRBox(.07, .18, .046, .012), g, i * .075, -.09, zf - .03 + Math.abs(i) * .008, C, 0, -i * .15); A(gRBox(.074, .04, .05, .012), g, i * .075, .005, zf - .032 + Math.abs(i) * .008, C, 0, -i * .15); A(gCylX(.006, .006, .012, 6), M.leather, i * .075, -.02, zf - .058 + Math.abs(i) * .008, C); }
@@ -718,7 +764,9 @@ function pack(S, K, backZ) {
   const bag = (w, h, d, y, r = .04) => A(slab('pk' + w + h + d, rrect(w, h, r), d, -.8, .012), m, 0, y, z + d / 2 - .004, C);
   switch (K.model) {
     case 'haversack': {
-      if (K.id === 'k_tornister') { // calfskin pack with hair-on flap, greatcoat roll in a horseshoe, mess tin
+      if (K.id === 'k_sidor') { // Soviet veshmeshok: a drawstring sack on two straps
+        const sk = add(gSph(.16, 14), m, 0, -.04, z + .12, C); sk.scale.set(1, 1.15, .65); A(gCylY(.035, .05, .07, 10), m, 0, .14, z + .1, C); A(HM.gTorus(.04, .008), M.dark, 0, .12, z + .1, C, PI / 2); straps(.03, -.12, 'sd');
+      } else if (K.id === 'k_tornister') { // calfskin pack with hair-on flap, greatcoat roll in a horseshoe, mess tin
         bag(.3, .3, .1, .02); A(slab('tflap', rrect(.3, .2, .03), .012, -.8, .006), furMat(), 0, .07, z + .125, C);
         add(ribbon('troll', [[-.16, -.1, z + .06], [-.18, .12, z + .06], [0, .22, z + .07], [.18, .12, z + .06], [.16, -.1, z + .06]], .055, .055, [0, 0, 1]), mat('#5a5e52', .95), 0, 0, 0, C);
         A(gCyl(.06, .06, .05, 14), mat('#6a6a5a', .5, .5), 0, -.05, z + .2, C); straps(.035, -.1, 't');
@@ -782,6 +830,8 @@ const BOOT = {
   puttee: { shaft: .05, up: '#3a2616', sole: '#1e140e', lace: 1 }, jack: { tall: 1, up: '#1a1614', sole: '#100c0a' }, legging: { shaft: .04, up: '#3a2a1c', sole: '#1e140e', lace: 1 },
   b_kirza: { tall: 1, up: '#241c16', sole: '#141010', top: '#2a221a' }, b_jungle: { shaft: .11, up: '#161412', panel: '#3e4632', sole: '#121210', lace: 1, toe: '#101010' },
   b_combat: { shaft: .12, up: '#121212', sole: '#0c0c0c', lace: 1, toe: '#0a0a0a' }, b_desert: { shaft: .11, up: '#a08a64', sole: '#6a5a44', lace: 1, suede: 1 },
+  b_jump: { shaft: .16, up: '#4a2e1c', sole: '#1e140e', lace: 1 }, b_lowa: { shaft: .07, up: '#8a7a5a', trim: '#3a3228', sole: '#1a1a1a', mid: '#5a5a58', lace: 1 },
+  b_danner: { shaft: .12, up: '#7a6a4c', sole: '#3a3228', lace: 1, suede: 1 }, b_haix: { shaft: .11, up: '#141414', sole: '#0c0c0c', lace: 1, toe: '#0a0a0a' },
   b_salomon: { shaft: .06, up: '#7a6a4c', trim: '#3a3228', sole: '#1a1a1a', mid: '#5a5a58', lace: 1 },
 };
 G.kitBoot = function (knee, ankle, kit, MM, addFn) {
@@ -807,12 +857,12 @@ G.kitHand = function (hand, kit, MM, addFn, side) {
   const Gl = G.GEARID[kit.gloves] || {}; if (!Gl.col) return;
   const gm = M.glove, dk = mat('#141414', .7);
   switch (Gl.id) {
-    case 'g_mechanix': A(gRBox(.07, .016, .014, .005), dk, 0, .098, .026, hand); A(gRBox(.05, .03, .006, .003), dk, 0, .05, .023, hand); A(gRBox(.076, .018, .046, .006), dk, 0, -.012, 0, hand); break; // TPR knuckles, back pad, velcro cuff
-    case 'g_oakley': A(gRBox(.072, .03, .018, .008), mat('#1e1c18', .45, .2), 0, .092, .026, hand); A(gRBox(.078, .03, .05, .01), gm, 0, -.03, 0, hand); break; // carbon knuckle shell, gauntlet cuff
+    case 'g_mechanix': case 'g_pig': A(gRBox(.07, .016, .014, .005), dk, 0, .098, .026, hand); A(gRBox(.05, .03, .006, .003), dk, 0, .05, .023, hand); A(gRBox(.076, .018, .046, .006), dk, 0, -.012, 0, hand); break; // TPR knuckles, back pad, velcro cuff
+    case 'g_oakley': case 'g_wileyx': A(gRBox(.072, .03, .018, .008), mat('#1e1c18', .45, .2), 0, .092, .026, hand); A(gRBox(.078, .03, .05, .01), gm, 0, -.03, 0, hand); break; // carbon knuckle shell, gauntlet cuff
     case 'g_nomex': add(HM.gLathe('nmx', [[0, -.07], [.044, -.07], [.042, -.005], [0, -.005]], 10), gm, 0, 0, 0, hand); break; // long flight-glove cuff
     case 'g_leather': add(HM.gLathe('lgc', [[0, -.07], [.05, -.07], [.042, -.005], [0, -.005]], 10), gm, 0, 0, 0, hand); break;
     case 'g_wool': for (let i = 0; i < 3; i++) add(HM.gTorus(.041, .004), gm, 0, -.01 - i * .008, 0, hand).rotation.x = PI / 2; break;
-    case 'g_black': A(gRBox(.076, .018, .046, .006), dk, 0, -.012, 0, hand); break;
+    case 'g_black': case 'g_hatch': A(gRBox(.076, .018, .046, .006), dk, 0, -.012, 0, hand); break;
   }
 };
 
