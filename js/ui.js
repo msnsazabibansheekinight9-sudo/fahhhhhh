@@ -242,7 +242,7 @@ function renderMissions(root) {
       <div><span class="lbl">Sidearm</span><div class="pick"><select id="msec">${opts(w => w.c === 'PST', C.secondary)}</select><button class="btn small" data-cust="sec">Customise</button></div></div>
       <div><span class="lbl">Your kit</span><div class="pick"><span class="muted" style="font-size:13px">${esc(G.GEARID[kit.helmet].n)} · ${esc(G.GEARID[kit.armor].n)}${G.GEARID[kit.armor].plates ? ' + ' + esc(G.GEARID[kit.plates].n) : ''} · NVG: ${esc(nv.n)}</span><button class="btn small" id="mkit">Kit locker</button></div></div>
     </div>
-    <div class="deploy"><span class="muted" style="max-width:62ch">No respawns — the dead stay down. Don't hit the hostages. Dead hostiles drop their weapons: F picks one up, K drops yours. Hostiles hold their posts and react to gunfire (breachers come for you) — a suppressor keeps them unaware longer.${C.tod === 'night' ? ` Night: ${nv.nv ? 'press J (or N) for night vision' : 'your kit has no night vision — pick some in the Kit locker'}${L.side === 'laser' || L.side === 'dbal' || L.side === 'peq2' ? ', L cycles your laser' : ''}.` : ''}</span><button class="btn primary" id="mgo" style="font-size:20px;padding:14px 36px">Infiltrate</button></div>
+    <div class="deploy"><span class="muted" style="max-width:62ch">No respawns — the dead stay down. Don't hit the hostages. Dead hostiles drop their weapons: F picks one up, K drops yours. Hostiles hold their posts and react to gunfire (breachers come for you) — a suppressor keeps them unaware longer.${C.tod === 'night' ? ` Night: ${nv.nv ? 'press J (or N) for night vision' : 'your kit has no night vision — pick some in the Kit locker'}${L.side === 'laser' || L.side === 'dbal' || L.side === 'peq2' ? ', L cycles your laser' : ''}.` : ''}</span><div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end"><div style="display:flex;gap:10px;align-items:center"><label class="muted" style="font-size:13px;display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="mrndeach" ${C.rnd ? 'checked' : ''}>Re-roll every deploy</label><button class="btn" id="mrnd">🎲 Random loadout</button></div><button class="btn primary" id="mgo" style="font-size:20px;padding:14px 36px">Infiltrate</button></div></div>
   </div></section>`;
   const re = () => { store.set('mis', C); renderMissions(root); };
   root.querySelectorAll('[data-mis]').forEach(b => b.onclick = () => { C.mission = b.dataset.mis; G.Audio.ui(); re(); });
@@ -255,8 +255,22 @@ function renderMissions(root) {
   $('#mkit').onclick = () => UI.show('kit');
   $('#back').onclick = () => UI.show('menu');
   $('#mgo').onclick = () => { G.Audio.init(); UI.deployMission(); };
+  $('#mrnd').onclick = () => { const t = UI.randomLoadout(C); G.Audio.ui('attach'); re(); UI.toast && UI.toast(t, 3); };
+  $('#mrndeach').onchange = e => { C.rnd = e.target.checked; store.set('mis', C); };
 }
+// random build: any primary and sidearm from any era with random attachments, a random kit in every slot, four random explosives
+UI.randomLoadout = function (C) {
+  const pick = l => l[Math.floor(Math.random() * l.length)];
+  const p = pick(G.WEAPONS.filter(w => w.c !== 'PST')), s = pick(G.WEAPONS.filter(w => w.c === 'PST'));
+  for (const wp of [p, s]) { const L = {}; for (const [sl] of G.SLOTS) { const o = G.attachFor(wp, sl); if (o.length) L[sl] = pick(o).id; } UI.saveLoadout(wp, L); }
+  C.primary = p.id; C.secondary = s.id;
+  const kit = G.Kit.current; for (const [sl] of G.GEAR_SLOTS) kit[sl] = pick(G.gearFor(sl)).id; G.Kit.save(kit);
+  const ex = G.EXPLOSIVES.map(e => e.id).sort(() => Math.random() - .5); C.ex = ex.slice(0, 4);
+  store.set('mis', C);
+  return `${p.n} + ${s.n} · ${G.GEARID[kit.helmet].n}, ${G.GEARID[kit.armor].n}`;
+};
 UI.deployMission = function () {
+  if (UI.mis.rnd) UI.randomLoadout(UI.mis);
   const C = UI.mis, p = G.WEAPON[C.primary], s = G.WEAPON[C.secondary];
   const cfg = { mission: C.mission, tod: C.tod, tier: C.tier, explosives: (C.ex || ['m67', 'm84', 'm18', 'c4']).slice(), primary: { wp: p, L: UI.loadoutFor(p) }, secondary: s ? { wp: s, L: UI.loadoutFor(s) } : null };
   UI.lastMission = cfg;
@@ -273,7 +287,7 @@ UI.showMissionResults = function () {
     <p class="muted">${esc(wn)}</p>${Ms.ok ? `<div style="font:700 34px var(--f-ui);color:var(--accent,#c9a24b)">${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}</div>` : ''}
     <dl class="spec">${([['Time', mm], ['Hostiles neutralised', `${Ms.killed} / ${Ms.total}`], ['Headshots', Ms.heads], ['Accuracy', `${acc}% (${Gm.stats ? Gm.stats.hits : 0}/${Gm.stats ? Gm.stats.shots : 0})`], ['Damage taken', Math.round(Ms.dmgTaken)], ['Hostages safe', `${Ms.hostages - Ms.hostagesLost} / ${Ms.hostages}`]]).map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(String(v))}</dd></div>`).join('')}</dl>
     <div class="btns"><button class="btn primary" id="x-again">Retry</button><button class="btn" id="x-setup">Change mission</button><button class="btn" id="x-arm">Armory</button><button class="btn" id="x-kit">Kit locker</button><button class="btn" id="x-menu">Main menu</button></div></div>`);
-  $('#x-again').onclick = () => { UI.closeOverlay(); loading('Inserting…', () => G.Game.startMission(UI.lastMission)); };
+  $('#x-again').onclick = () => { UI.closeOverlay(); if (UI.mis.rnd) { Gm.cleanup(); Gm.player = null; UI.deployMission(); } else loading('Inserting…', () => G.Game.startMission(UI.lastMission)); };
   $('#x-setup').onclick = () => { UI.closeOverlay(); Gm.cleanup(); Gm.player = null; UI.show('missions'); };
   if ($('#x-arm')) $('#x-arm').onclick = () => { UI.closeOverlay(); Gm.cleanup(); Gm.player = null; UI.show('armory'); };
   $('#x-kit').onclick = () => { UI.closeOverlay(); Gm.cleanup(); Gm.player = null; UI.show('kit'); };
