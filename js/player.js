@@ -37,6 +37,7 @@ class Player {
     this.bob = 0; this.heat = 0; this.stepT = 0; this.lastHurt = 0; this.kills = 0; this.deaths = 0; this.score = 0; this.recoilBank = 0; this.shake = 0;
     this.lightOn = false; this.bipod = false; this.inspecting = false; this.suppress = 0;
     this.kit = Object.assign({}, G.Kit.current); this.armorState = G.newArmorState(); this.sideMode = 0; this.nvgOn = false; this.laserMode = null;
+    this.km = G.kitMods(this.kit, G.kitEnv()); this.camoK = this.km.camo; this.noiseK = this.km.noise;
     const kg = G.kitWeight(this.kit); this.kitK = Math.max(.72, Math.min(1.04, 1.04 - Math.max(0, kg - 5) * .012)); this.kitKg = kg;
     this.vm = this.buildVM();
   }
@@ -117,13 +118,29 @@ class Player {
   makeWeapon(wp, L) {
     const S = G.resolveStats(wp, L);
     const rig = G.buildGun(wp, L);
+    if (rig.magPivot) rig.magPivot.rotation.z = G.ATT[L.aux] && G.ATT[L.aux].s.alt && G.ATT[L.aux].s.alt.k === 'mag' ? -PI / 2 : 0;
     rig.root.visible = false; this.vm.holder.add(rig.root);
     rig.root.traverse(o => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false; } });
     const zero = ZERO[wp.c] || 100;
-    const w = { wp, L, S, rig, mag: S.mag, reserve: S.mag * (wp.c === 'PST' ? 4 : wp.c === 'LMG' ? 3 : 6), mode: 0, zero, zeroAng: 0, chambered: true, heat: 0, glAmmo: S.gl ? 6 : 0, boltOpen: false, cycleNeeded: false };
+    const w = { st: { fold: false, coll: false, supOff: false, alt: false, zoom: 0 }, wp, L, S, rig, mag: S.mag, reserve: S.mag * ((wp.c === 'PST' ? 4 : wp.c === 'LMG' ? 3 : 6) + (this.km ? this.km.mags : 0)), mode: 0, zero, zeroAng: 0, chambered: true, heat: 0, glAmmo: S.gl ? (S.ubsg ? 5 : 6) : 0, boltOpen: false, cycleNeeded: false };
     if (wp.c === 'SG') w.reserve = S.mag * 5;
     this.computeZero(w);
     return w;
+  }
+  // re-resolve a weapon's stats after a field change; rebuild the mesh when its shape changes
+  refreshWeapon(w, rebuild) {
+    const mode = w.S.modes[w.mode];
+    w.S = G.resolveStats(w.wp, w.L, w.st);
+    w.mode = Math.max(0, w.S.modes.indexOf(mode));
+    if (rebuild) {
+      const vis = w.rig.root.visible, mp = w.rig.magPivot ? w.rig.magPivot.rotation.z : null;
+      this.vm.holder.remove(w.rig.root);
+      const rig = G.buildGun(w.wp, w.L, { st: w.st }); rig.root.visible = vis; this.vm.holder.add(rig.root);
+      rig.root.traverse(o => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false; } });
+      if (rig.magPivot && mp !== null) rig.magPivot.rotation.z = mp;
+      w.rig = rig; if (w === this.W) this.vm.flash.position.set(0, rig.muzzleY || 0, rig.muzzleZ - .02);
+    }
+    this.computeZero(w); this.hudDirty = true;
   }
   computeZero(w) { w.zeroAng = G.Ballistics.zeroAngle(w.wp.gyro ? w.wp.gyro.v * .85 : w.S.v, w.S.k, Math.max(.02, w.rig.sightH), w.zero); }
   // pick up a weapon: pistols go to the sidearm slot, everything else to the primary slot; returns the weapon it replaced
@@ -168,11 +185,11 @@ class Player {
     const rig = w.rig;
     const empty = w.mag === 0;
     switch (name) {
-      case 'holster': dur = wp.c === 'PST' ? .22 : .3; fn = t => { const e = ss(t); this.anim = { px: .04 * e, py: -.28 * e, pz: .05 * e, rx: -.7 * e, ry: .2 * e, rz: .5 * e }; };
+      case 'holster': dur = (wp.c === 'PST' ? .22 : .3) * (S.swap || 1); fn = t => { const e = ss(t); this.anim = { px: .04 * e, py: -.28 * e, pz: .05 * e, rx: -.7 * e, ry: .2 * e, rz: .5 * e }; };
         end = () => { this.anim = null; this.equip(o.next, 'draw'); this.startAction('equip'); G.Audio.mech('equip'); }; break;
       case 'equip': {
         const heavy = wp.heavy || wp.c === 'LMG';
-        dur = wp.c === 'PST' ? .4 : heavy ? .85 : .6;
+        dur = (wp.c === 'PST' ? .4 : heavy ? .85 : .6) * (S.swap || 1);
         if (wp.c === 'PST') fn = t => { const e = 1 - ss(t), flip = track([[0, 1], [.55, -.15], [.8, .04], [1, 0]], t); this.anim = { px: .02 * e, py: -.2 * e, pz: .04 * e, rx: -1.3 * flip, ry: .3 * e, rz: -.4 * e }; };
         else fn = t => { const e = 1 - ss(Math.min(1, t * 1.25)), settle = track([[.7, 0], [.82, 1], [1, 0]], t); this.anim = { px: .08 * e, py: -.3 * e - settle * .01 * (heavy ? 2 : 1), pz: .06 * e, rx: -.6 * e + settle * .03, ry: .5 * e, rz: .7 * e }; };
         ev = [[.75, () => G.Audio.mech('mode')]];
@@ -243,6 +260,7 @@ class Player {
         break; }
       case 'melee': dur = .55; cancel = false; fn = t => { const s = track([[0, 0], [.25, 1], [.45, 1], [1, 0]], t); this.anim = { px: -.05 * s, py: .02 * s, pz: -.25 * s, rx: -.15 * s, ry: .5 * s, rz: -.3 * s }; }; ev = [[.25, () => this.meleeHit()]]; G.Audio.mech('melee'); break;
       case 'mode': dur = .3; keepAds = true; fn = t => { const s = track([[0, 0], [.4, 1], [1, 0]], t); this.anim = { px: 0, py: 0, pz: 0, rx: 0, ry: 0, rz: .12 * s }; }; ev = [[.3, () => G.Audio.mech('mode')]]; break;
+      case 'fiddle': { dur = o.dur || .6; keepAds = !!o.keepAds; const k = o.pose || {}; fn = t => { const s = track([[0, 0], [.2, 1], [.8, 1], [1, 0]], t); this.anim = { px: (k.px || 0) * s, py: (k.py || -.03) * s, pz: (k.pz || .02) * s, rx: (k.rx || .1) * s, ry: (k.ry || .25) * s, rz: (k.rz || .35) * s }; }; ev = (o.ev || []).concat([[o.at || .6, o.cb || (() => {})]]); end = () => { this.anim = null; }; break; }
       case 'gl': dur = 1.6; keepAds = true; fn = t => { const s = track([[0, 0], [.05, 1], [.3, 0], [.4, 0], [.6, 1], [.8, 1], [1, 0]], t); this.anim = { px: 0, py: -.03 * s, pz: .03 * s, rx: .2 * s, ry: 0, rz: .1 * s }; }; ev = [[.02, () => this.fireGL()], [.6, () => G.Audio.mech('magout')], [.85, () => G.Audio.mech('magin')]]; break;
     }
     this.action = { name, t: 0, dur, fn, ev: ev.slice(), end, cancel, keepAds };
@@ -254,7 +272,8 @@ class Player {
     const mag = rig.mag, home = rig.magHome;
     const fillAll = () => { const n = Math.min(need + (empty || wp.c === 'SG' ? 0 : 0), w.reserve); w.mag += n; w.reserve -= n; this.hudDirty = true; };
     const drop = () => this.dropMag();
-    let dur = empty ? S.rl[1] : S.rl[0];
+    let dur = (empty ? S.rl[1] * (S.rle || 1) : S.rl[0]) * (this.km ? this.km.reload : 1);
+    if (S.qc) w.heat = 0; // quick-change barrel: a cool one goes in with every reload
     const tilt = { px: -.02, py: .01, pz: .02, rx: .12, ry: .15, rz: .45 };
     const R = { dur, ev: [], cancel: false, end: null };
     // --- per-round loading: shotguns, Lebel, M1897
@@ -403,9 +422,10 @@ class Player {
     if (!this.canFire()) return;
     if (w.wp.spin && (w.spin || 0) < 1) return; // still spinning up
     if (w.cycleNeeded) { if (pressed && !this.action) this.startAction('cycle'); return; }
-    const interval = 60 / (mode === 'burst2' && w.wp.burstRpm ? w.wp.burstRpm : S.rpm);
-    if (now - this.lastShot < interval) return;
     const semiLike = mode === 'semi' || mode === 'bolt' || mode === 'pump' || mode === 'lever';
+    const interval = 60 / ((mode === 'burst2' && w.wp.burstRpm ? w.wp.burstRpm : S.rpm) * (mode === 'semi' ? S.srpm || 1 : 1));
+    if (now - this.lastShot < interval) return;
+    if ((this.sprintOut || 0) > 0) return; // still bringing the gun up out of a sprint
     if (semiLike && !pressed) return;
     if (mode.startsWith('burst')) { if (pressed) this.burst = mode === 'burst2' ? 2 : 3; if (this.burst <= 0) return; }
     if (w.mag <= 0) { if (pressed) { G.Audio.mech('dry'); if (w.reserve > 0) this.reload(); } return; }
@@ -443,10 +463,10 @@ class Player {
       d.applyAxisAngle(V3(0, 1, 0), -offX + Math.cos(a1) * sprd + Math.cos(pa) * pr);
       d.applyQuaternion(q).normalize();
       const start = eye.clone().addScaledVector(V3(0, 1, 0).applyQuaternion(q), -Math.max(.02, rig.sightH) * ads);
-      G.Ballistics.fire({ pos: start, dir: d, v: S.v * (pellets > 1 ? .95 + Math.random() * .1 : 1), k: S.k, dmg: S.dmg, pen: S.pen, team: 0, owner: this, tracer: tracerOn ? 'red' : null, streak: !tracerOn && i === 0 && Math.random() < .4, cal: wp.cal, weapon: wp, vis, aim: { eye: eye.clone(), dir: V3(0, 0, -1).applyQuaternion(q) }, inc: S.inc, player: true, pellet: pellets > 1 && !wp.salvo && !wp.duplex, gyro: wp.gyro, hp: L_HP(w), ap: w.L.ammo === 'am_ap' || w.L.ammo === 'am_inc' || w.L.ammo === 'am_psy_du', he: S.he, homing: S.homing });
+      G.Ballistics.fire({ pos: start, dir: d, v: S.v * (pellets > 1 ? .95 + Math.random() * .1 : 1), k: S.k, dmg: S.dmg, pen: S.pen, team: 0, owner: this, tracer: tracerOn ? (S.tracerCol === 'green' ? 'green' : S.tracerCol === 'ir' ? 'ir' : 'red') : null, stun: S.stun || 0, streak: !tracerOn && i === 0 && Math.random() < .4, cal: wp.cal, weapon: wp, vis, aim: { eye: eye.clone(), dir: V3(0, 0, -1).applyQuaternion(q) }, inc: S.inc, player: true, pellet: pellets > 1 && !wp.salvo && !wp.duplex, gyro: wp.gyro, hp: L_HP(w), ap: w.L.ammo === 'am_ap' || w.L.ammo === 'am_inc' || w.L.ammo === 'am_psy_du', he: S.he, homing: S.homing });
     }
     // recoil
-    let stanceK = (this.stance === 1 ? .82 : this.stance === 2 ? .6 : 1) * (this.bipod ? .38 : 1) * lerp(1.15, 1, ads) * Math.sqrt(salvo);
+    let stanceK = (this.km ? this.km.recoil : 1) * (this.stance === 1 ? .82 : this.stance === 2 ? .6 : 1) * (this.bipod ? .38 : 1) * lerp(1.15, 1, ads) * Math.sqrt(salvo);
     // G11 hyperburst: the barrel/action recoils inside the housing, so the shooter feels the burst only when it ends
     if (wp.hyper && (S.modes[w.mode] || '').startsWith('burst')) stanceK *= this.burst > 1 ? .08 : 2.4;
     const rv = S.rv * stanceK, rh = S.rh * stanceK;
@@ -456,7 +476,7 @@ class Player {
     this.kick.vz += .9 * Math.min(2.5, rv) * (wp.c === 'PST' ? .6 : 1); this.kick.vrx += 2.4 * rv * (wp.c === 'PST' ? 1.6 : 1);
     this.kick.ry += (Math.random() - .5) * .02 * rh; this.kick.rz += (Math.random() - .5) * .04 * rh;
     this.shake = Math.min(1, this.shake + rv * .08);
-    w.heat = Math.min(1.5, w.heat + (wp.c === 'LMG' ? .012 : .025) * (cal.pen));
+    w.heat = Math.min(1.5, w.heat + (wp.c === 'LMG' ? .012 : .025) * (cal.pen) * (S.heat || 1));
     // effects
     const flashScale = (S.sup ? 0 : 1) * S.flash * (.6 + cal.cs[0] * 10) * (S.blen < 1 ? 1.4 : 1);
     this.flashT = S.sup ? 0 : .045; this.flashScale = flashScale;
@@ -484,6 +504,13 @@ class Player {
     w.glAmmo--; this.hudDirty = true;
     const cam = G.E.camera, q = cam.getWorldQuaternion(new THREE.Quaternion());
     const d = V3(0, 0, -1).applyAxisAngle(V3(1, 0, 0), .06).applyQuaternion(q);
+    if (w.S.ubsg) { // under-barrel shotgun: nine 00 buckshot pellets
+      G.Audio.shot({ cal: '12 gauge', cls: 'SG', sup: 0, loud: 1, player: true });
+      const eye = cam.getWorldPosition(V3());
+      for (let i = 0; i < 9; i++) { const dd = V3(0, 0, -1).applyAxisAngle(V3(1, 0, 0), (Math.random() - .5) * .05).applyAxisAngle(V3(0, 1, 0), (Math.random() - .5) * .05).applyQuaternion(q);
+        G.Ballistics.fire({ pos: eye.clone(), dir: dd, v: 400, k: .006, dmg: 18, pen: 1, team: 0, owner: this, cal: '12 gauge', weapon: G.WEAPON.r870 || w.wp, player: true, pellet: true }); }
+      this.pitch += .05; this.recoilBank += .03; this.shake = Math.max(this.shake, .6); G.Game.onPlayerShot && G.Game.onPlayerShot(w); return;
+    }
     G.Audio.mech('gl');
     G.Game.launchGrenade(cam.getWorldPosition(V3()).addScaledVector(d, .5), d.multiplyScalar(76), this);
   }
@@ -495,7 +522,7 @@ class Player {
   meleeHit() {
     const cam = G.E.camera, eye = cam.getWorldPosition(V3()), d = V3(0, 0, -1).applyQuaternion(cam.getWorldQuaternion(new THREE.Quaternion()));
     const reach = 1.6 * (this.W.S.melee > 1.5 ? 1.35 : 1);
-    G.Game && G.Game.melee && G.Game.melee(this, eye, d, reach, this.W.S.melee > 1.5 ? 110 : 55);
+    G.Game && G.Game.melee && G.Game.melee(this, eye, d, reach, (this.W.S.melee > 1.5 ? 110 : 55) * (this.km ? this.km.melee : 1));
   }
   finishAction(cancelled) {
     const a = this.action; if (!a) return;
@@ -541,6 +568,7 @@ class Player {
   // ---------------------------------------------------------------- update
   update(dt, input, now) {
     const w = this.W, S = w ? w.S : null;
+    if (!this.kmT || now - this.kmT > 2) { this.kmT = now; this.km = G.kitMods(this.kit, G.kitEnv()); this.camoK = this.km.camo; this.noiseK = this.km.noise; }
     const W = G.E.world;
     // look
     const sens = .0022 * G.settings.sens * (this.scoped ? 1 / Math.max(1, (S.zoom || 1) * .7) : lerp(1, .75, this.ads));
@@ -558,7 +586,9 @@ class Player {
     // movement
     const f = (input.f || 0), r = (input.r || 0);
     this.sprinting = input.sprint && f > 0 && this.stance === 0 && !this.adsHeld && !this.fireHeld;
-    let speed = [4.3, 2.3, .9][this.stance] * (this.sprinting ? 1.6 : 1) * lerp(1, .55, this.ads) * (S ? .82 + S.mob * .025 : 1) * (this.kitK || 1);
+    if (this.wasSprint && !this.sprinting) this.sprintOut = .2 * (S ? S.stf || 1 : 1);
+    this.wasSprint = this.sprinting; this.sprintOut = Math.max(0, (this.sprintOut || 0) - dt);
+    let speed = [4.3, 2.3, .9][this.stance] * (this.sprinting ? 1.6 : 1) * lerp(1, .55, this.ads) * (S ? .82 + S.mob * .025 : 1) * (this.kitK || 1) * (this.km ? this.km.speed : 1);
     speed *= W.slowAt(this.pos);
     const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
     const wishX = (-sy * f + cy * r), wishZ = (-cy * f - sy * r);
@@ -599,15 +629,40 @@ class Player {
     if (input.light && w && (S.light || S.laser)) { // cycle the side device: visible laser → IR laser → light → laser + light → off
       const modes = [null];
       if (S.laser && S.laser.includes('vis')) modes.push('vis'); if (S.laser && S.laser.includes('ir')) modes.push('ir');
-      if (S.light) modes.push('light'); if (S.light && S.laser && S.laser.includes('vis')) modes.push('vis+light');
+      if (S.light) modes.push('light'); if (S.light && S.laser && S.laser.includes('vis')) modes.push('vis+light'); if (S.strobe) modes.push('strobe');
       this.sideMode = (this.sideMode + 1) % modes.length; const m = modes[this.sideMode];
-      this.lightOn = !!m && m.includes('light'); this.laserMode = m === 'vis' || m === 'vis+light' ? 'vis' : m === 'ir' ? 'ir' : null;
-      G.Audio.mech('mode'); G.UI.toast({ null: 'Laser / light off', vis: 'Visible laser on', ir: 'IR laser on (night vision)', light: 'Weapon light on', 'vis+light': 'Laser + light on' }[m], 1);
+      this.lightOn = !!m && (m.includes('light') || m === 'strobe'); this.strobeOn = m === 'strobe'; this.laserMode = m === 'vis' || m === 'vis+light' ? 'vis' : m === 'ir' ? 'ir' : null;
+      G.Audio.mech('mode'); G.UI.toast({ null: 'Laser / light off', vis: 'Visible laser on', ir: 'IR laser on (night vision)', light: 'Weapon light on', 'vis+light': 'Laser + light on', strobe: 'Strobe — dazzles anyone in the beam' }[m], 1);
     }
     const nvItem = G.GEARID[this.kit.nvg];
     if ((input.nvg || (input.fly && G.Game.mode !== 'range')) && nvItem && nvItem.nv) { this.nvgOn = !this.nvgOn; G.Audio.mech('mode'); G.UI.toast(this.nvgOn ? nvItem.n + ' down' : 'Night vision up', 1); }
     if (input.zeroUp && w) { w.zero = Math.min(1000, w.zero + (w.zero >= 300 ? 100 : w.zero >= 100 ? 50 : 25)); this.computeZero(w); this.hudDirty = true; G.Game.toast('Zero ' + w.zero + ' m'); }
     if (input.zeroDown && w) { w.zero = Math.max(25, w.zero - (w.zero > 300 ? 100 : w.zero > 100 ? 50 : 25)); this.computeZero(w); this.hudDirty = true; G.Game.toast('Zero ' + w.zero + ' m'); }
+    if (input.kitInfo) { this.showInfo = !this.showInfo; G.Audio.ui && G.Audio.ui(); }
+    // field changes to the weapon: sights (H), zoom (wheel), stock (O), suppressor (U)
+    if (w && input.altSight && S.alt && !this.action) {
+      w.st.alt = !w.st.alt; this.refreshWeapon(w, false); G.Audio.mech('mode');
+      const k = S.alt.k, on = w.st.alt;
+      G.Game.toast({ mag: on ? `Magnifier in · ${w.S.zoom}×` : 'Magnifier flipped aside', flip: on ? 'Magnifier flipped aside · 1×' : 'Magnifier in', offset: on ? 'Rolled onto the offset sight' : 'Back on the main optic', piggy: on ? 'Piggyback dot' : 'Main optic', switch: on ? 'Lever thrown · 1×' : `Lever thrown · ${w.S.zoom}×` }[k] || 'Sight switched', 1);
+    }
+    if (w && input.zoomStep && S.zmin && !w.st.alt) {
+      const z = Math.max(S.zmin, Math.min(S.zmax, Math.round(S.zoom * (input.zoomStep > 0 ? 1.25 : .8) * 10) / 10));
+      if (z !== S.zoom) { w.st.zoom = z; this.refreshWeapon(w, false); G.Audio.mech('mode'); }
+    }
+    if (w && input.stockT && (S.fold || S.coll) && !this.action) {
+      const fold = !!S.fold;
+      this.startAction('fiddle', { dur: fold ? .7 : .45, pose: { rz: .15, ry: .5, py: -.05 }, at: .5, cb: () => {
+        if (fold) w.st.fold = !w.st.fold; else w.st.coll = !w.st.coll; this.refreshWeapon(w, fold); G.Audio.mech(fold ? 'bipod' : 'mode');
+        G.Game.toast(fold ? (w.st.fold ? 'Stock folded — handier, harder to control' : 'Stock extended') : (w.st.coll ? 'Stock collapsed' : 'Stock extended'), 1.2);
+      } });
+    }
+    if (w && input.supT && (S.qd && S.sup || w.st.supOff) && !this.action) {
+      const off = !w.st.supOff;
+      this.startAction('fiddle', { dur: 2.2, pose: { rx: -.25, ry: .6, rz: .5, py: -.06 }, at: .55, ev: [[.2, () => G.Audio.mech('magout')], [.4, () => G.Audio.mech('mode')]], cb: () => {
+        w.st.supOff = off; this.refreshWeapon(w, true); G.Audio.mech('magin');
+        G.Game.toast(off ? 'Suppressor off — loud, but shorter and handier' : 'Suppressor threaded on', 1.4);
+      } });
+    }
     if (input.bipod && w && S.bip) { this.bipod = !this.bipod; G.Audio.mech('bipod'); G.Game.toast(this.bipod ? 'Bipod deployed' : 'Bipod stowed'); }
     if (this.stance === 2 && S && S.bip && !this.bipod && Math.hypot(this.vel.x, this.vel.z) < .2) { this.bipod = true; }
     if (this.bipod && (Math.hypot(this.vel.x, this.vel.z) > .6 || (this.stance === 0 && !this.bipodRest()))) this.bipod = false;
@@ -618,7 +673,7 @@ class Player {
     this.scoped = S && S.zoom >= 1.2 && this.ads > .9;
     // breath hold for scopes
     this.holding = this.scoped && input.sprint && this.breath > 0;
-    if (this.holding) this.breath = Math.max(0, this.breath - dt / 5); else this.breath = Math.min(1, this.breath + dt / (this.breath <= 0 ? 7 : 4));
+    if (this.holding) this.breath = Math.max(0, this.breath - dt / 5); else this.breath = Math.min(1, this.breath + dt * (this.km ? this.km.breath : 1) / (this.breath <= 0 ? 7 : 4));
     // fire
     this.fireHeld = input.fire;
     const hyper = w && w.wp.hyper && this.burst > 0; // a hyperburst always completes once started
@@ -645,7 +700,7 @@ class Player {
     }
     if (w) w.heat = Math.max(0, w.heat - dt * .12);
     // health regen
-    if (this.alive && this.hp < 100 && now - this.lastHurt > 4.5) this.hp = Math.min(100, this.hp + dt * 22);
+    if (this.alive && this.hp < 100 && !G.Game.raid && now - this.lastHurt > 4.5) this.hp = Math.min(100, this.hp + dt * 22);
     this.suppress = Math.max(0, this.suppress - dt * .8);
     this.updateCamera(dt, now);
     this.updateVM(dt, now);
@@ -661,7 +716,7 @@ class Player {
     const t = now;
     const stable = (this.bipod ? .12 : 1) * (this.stance === 2 ? .45 : this.stance === 1 ? .75 : 1) * (this.holding ? .08 : 1) * (this.breath <= 0 ? 1.8 : 1);
     const cls = S ? (w.wp.c === 'PST' ? 1.2 : w.wp.heavy ? 1.4 : 1) : 1;
-    const amp = .0028 * stable * cls * (1 + this.suppress * 2) * (S ? Math.max(.6, Math.min(1.6, w.wp.wt / 4)) : 1);
+    const amp = .0028 * stable * cls * (1 + this.suppress * 2) * (S ? Math.max(.6, Math.min(1.6, (S.wt || w.wp.wt) / 4)) * (S.sway || 1) * (this.km ? this.km.sway : 1) : 1);
     const sx = (Math.sin(t * .9) * 1.0 + Math.sin(t * 2.1) * .35) * amp * this.ads;
     const syy = (Math.sin(t * 1.3 + 1) * .8 + Math.sin(t * 3.3) * .25) * amp * this.ads;
     this.aimOff.x += (sx + this.swayL.x * .3 - this.aimOff.x) * Math.min(1, dt * 10);
@@ -690,7 +745,7 @@ class Player {
     cam.updateMatrixWorld();
     // weapon light
     const L = G.E.vmLight;
-    if (this.lightOn && S && S.light) { L.intensity = 3; L.position.copy(cam.position); L.target.position.copy(cam.position).add(V3(0, 0, -10).applyQuaternion(cam.quaternion)); } else L.intensity = 0;
+    if (this.lightOn && S && S.light) { L.intensity = 3 * Math.min(1.8, (S.lum || 500) / 550) * (this.strobeOn ? (Math.floor(now * 14) % 2) : 1); L.position.copy(cam.position); L.target.position.copy(cam.position).add(V3(0, 0, -10).applyQuaternion(cam.quaternion)); } else L.intensity = 0;
     this.updateLaser(w, S, cam);
   }
   // aiming laser: a beam from the module on the rail, parallel to the bore, and a dot where it lands
@@ -734,7 +789,15 @@ class Player {
     // hip and ADS placements
     const pst = wp.c === 'PST';
     const hip = pst ? V3(.12, -.11 - rig.gripPos.y * .3, -.4) : V3(.14, -.13 - Math.max(0, rig.sightH - .03) * .5, -.4 - (wp.heavy ? .03 : 0));
-    const adsP = V3(-(rig.sightX || 0), -rig.sightH, -(rig.eyeDist) - rig.sightZ);
+    // which sight the eye lines up with: the main optic, or an offset / piggyback / unmagnified alternate
+    const useAlt = w.st && w.st.alt && rig.alt && !(S.zoom >= 1.2);
+    const tgt = useAlt ? [rig.alt.x, rig.alt.y, rig.alt.z, rig.alt.eye, rig.alt.roll || 0] : [rig.sightX || 0, rig.sightH, rig.sightZ, rig.eyeDist, 0];
+    if (!this.sightV || this.sightW !== w) { this.sightV = tgt.slice(); this.sightW = w; }
+    for (let i = 0; i < 5; i++) this.sightV[i] += (tgt[i] - this.sightV[i]) * Math.min(1, dt * 12);
+    const [sX, sY, sZ, sE, sR] = this.sightV, cr = Math.cos(sR), sr = Math.sin(sR);
+    const adsP = V3(-(sX * cr - sY * sr), -(sX * sr + sY * cr), -sE - sZ);
+    if (rig.magPivot) { const kind = S.alt && S.alt.k, inn = kind === 'mag' ? w.st.alt : kind === 'flip' ? !w.st.alt : true; rig.magPivot.rotation.z += ((inn ? 0 : -PI / 2) - rig.magPivot.rotation.z) * Math.min(1, dt * 14); }
+    if (rig.altDot) { rig.altDot.visible = !!useAlt; rig.altDot.material.opacity = .3 + ss(this.ads) * .7; }
     const a = ss(this.ads);
     const P = hip.clone().lerp(adsP, a);
     // sprint pose, bipod pose
@@ -761,7 +824,7 @@ class Player {
     const wl = this.wall * (1 - a * .5);
     vm.offset.position.set(P.x + bx - spr * .06 + wl * .03, P.y + by + idle - spr * .05 - dip + air - wl * .06, P.z + kz + spr * .02 + wl * .14);
     const sx = tac ? .75 : -.35, sy = tac ? .35 : .8, sz = tac ? .9 : .35;
-    vm.offset.rotation.set(krx + spr * sx - dip * 1.2 + wl * .55, spr * sy + (1 - a) * .05 + wl * .35, spr * sz + K.rz + (1 - a) * -.03 - this.tiltS + rollIn, 'YXZ');
+    vm.offset.rotation.set(krx + spr * sx - dip * 1.2 + wl * .55, spr * sy + (1 - a) * .05 + wl * .35, spr * sz + K.rz + (1 - a) * -.03 - this.tiltS + rollIn + sR * a, 'YXZ');
     // sway in pivot (so ADS sights move with the aim offset)
     vm.pivot.rotation.set(this.scoped ? 0 : this.aimOff.y, this.scoped ? 0 : -this.aimOff.x + K.ry, -this.lean * .05, 'YXZ');
     // animation additive

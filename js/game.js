@@ -348,7 +348,8 @@ Game.startMission = function (cfg) {
     const wl = role.weapons.filter(id => G.WEAPON[id]), wp = G.WEAPON[pick(wl.length ? wl : G.TERROR_WEAPONS)] || G.WEAPON.akm;
     let kit = pick(role.kits);
     if (role.id === 'leader' && cfg.tod === 'night') kit = Object.assign({}, kit, { nvg: kit.helmet === 'h_fast' ? 'n_pvs31' : 'n_1pn138' });
-    const b = new G.Bot(Game, 1, G.TIERS[ti].id, 'mod', i, { wp, kit, look: 'mod', name: G.TERROR_NAMES[i % G.TERROR_NAMES.length] });
+    const L = G.botLoadout(wp, role.id, ti, cfg.tod === 'night', R);
+    const b = new G.Bot(Game, 1, G.TIERS[ti].id, 'mod', i, { wp, L, kit, look: 'mod', name: G.TERROR_NAMES[i % G.TERROR_NAMES.length] });
     b.role = role; b.kit = kit; b.armorState = G.newArmorState();
     b.guard = { pos: V3(g[0], g[1], g[2]), yaw: g[3], crouch: !!g[4] || !!role.crouch, leash: role.rush || 0 };
     b.spawn(V3(g[0], g[1] + .05, g[2])); b.yaw = g[3]; b.spawnProt = 0;

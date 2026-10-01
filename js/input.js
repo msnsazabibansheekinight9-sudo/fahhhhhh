@@ -15,7 +15,7 @@ I.init = function (canvas) {
     I.keys[e.code] = true;
     if (G.Game.mode !== 'menu' && ['Space', 'Tab', 'PageUp', 'PageDown', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault();
     if (e.code === 'Escape' || e.code === 'KeyP') G.UI.onEscape(e.code);
-    if (e.code === 'KeyH' && G.Game.mode !== 'menu') G.UI.toggleHelp();
+    if (e.code === 'F1' && G.Game.mode !== 'menu') { e.preventDefault(); G.UI.toggleHelp(); }
   });
   window.addEventListener('keyup', e => { I.keys[e.code] = false; });
   window.addEventListener('blur', () => { I.keys = {}; I.mb = [false, false, false]; });
@@ -30,7 +30,7 @@ I.init = function (canvas) {
   window.addEventListener('wheel', e => { if (I.locked) I.wheel += Math.sign(e.deltaY); }, { passive: true });
   document.addEventListener('pointerlockchange', () => {
     const was = I.locked; I.locked = document.pointerLockElement === canvas;
-    if (was && !I.locked && G.Game.mode !== 'menu' && G.Game.state === 'play' && !I.touch) G.UI.pause(true);
+    if (was && !I.locked && G.Game.mode !== 'menu' && G.Game.state === 'play' && !I.touch && !G.Game.lootOpen) G.UI.pause(true);
   });
 };
 I.lock = function () { try { const p = I.canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) {} };
@@ -55,8 +55,11 @@ I.frame = function () {
     reload: e('KeyR') || te.reload, inspect: e('KeyF'), drop: e('KeyK'), expUse: e('Digit3'), expNext: e('Digit4'), melee: e('KeyV'), gl: e('KeyG'), mode: e('KeyB') || te.mode, light: e('KeyL'),
     zeroUp: e('BracketRight') || e('PageUp'), zeroDown: e('BracketLeft') || e('PageDown'), bipod: e('KeyX'),
     fly: e('KeyN'), menu: e('KeyT'), reset: e('KeyY'), nvg: e('KeyJ'),
+    altSight: e('KeyH'), stockT: e('KeyO'), supT: e('KeyU'), kitInfo: e('KeyI'),
   };
   if (e('Digit1')) out.swap = 0; if (e('Digit2')) out.swap = 1;
+  const PZ = G.Game.player, WZ = PZ && PZ.W;
+  if (I.wheel !== 0 && PZ && PZ.scoped && WZ && WZ.S.zmin) { out.zoomStep = -Math.sign(I.wheel); I.wheel = 0; }
   if (I.wheel !== 0 && G.Game.player) { out.swap = (G.Game.player.cur + 1) % Math.max(1, G.Game.player.weapons.length); I.wheel = 0; }
   if (te.swap && G.Game.player) out.swap = (G.Game.player.cur + 1) % Math.max(1, G.Game.player.weapons.length);
   I.lastDx = I.dx; I.lastDy = I.dy;

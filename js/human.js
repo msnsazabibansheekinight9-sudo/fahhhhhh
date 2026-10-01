@@ -184,6 +184,7 @@ G.buildSoldier = function (opts) {
     if (kit) G.kitHand(hand, kit, M, add, s);
     S.arms.push({ sh, upper, fore, elbow, hand, side: s });
   }
+  if (kit && G.kitLimbs) G.kitLimbs(S, kit, M, add);
   // --- weapon
   if (opts.weapon) {
     const rig = G.buildGun(opts.weapon, opts.loadout || G.defaultLoadout(opts.weapon), { lod: 1 });

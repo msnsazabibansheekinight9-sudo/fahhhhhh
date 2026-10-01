@@ -88,7 +88,7 @@ function detonate(o) {
     case 'stun': {
       G.FX.explosion(p, .6); G.Audio.explosion(p);
       for (const b of Game.bots) { if (!b.alive) continue; const d = b.pos.distanceTo(p); if (d > E.r || !G.E.world.los(p.clone().setY(p.y + .3), b.eye)) continue; b.stunT = Math.max(b.stunT || 0, 5.5 * (1 - d / E.r) + 1.5); b.targetVisible = false; b.sus = .5; }
-      const P = Game.player; if (P && P.alive) { const d = P.pos.distanceTo(p); if (d < E.r * 1.5 && G.E.world.los(p.clone().setY(p.y + .3), P.eye)) { const look = V3(-Math.sin(P.yaw), 0, -Math.cos(P.yaw)), to = p.clone().sub(P.pos).setY(0).normalize(); Game.flashT = Math.max(Game.flashT, (1 - d / (E.r * 1.5)) * (to.dot(look) > .2 ? 4.5 : 1.5)); } }
+      const P = Game.player; if (P && P.alive) { const d = P.pos.distanceTo(p); if (d < E.r * 1.5 && G.E.world.los(p.clone().setY(p.y + .3), P.eye)) { const look = V3(-Math.sin(P.yaw), 0, -Math.cos(P.yaw)), to = p.clone().sub(P.pos).setY(0).normalize(); Game.flashT = Math.max(Game.flashT, (1 - d / (E.r * 1.5)) * (to.dot(look) > .2 ? 4.5 : 1.5) * ((P.km && P.km.flash) || 1)); } }
       for (const a of Game.agents) { const d = a.pos.distanceTo(p); if (a.alive && d < 2.5 && !(a === Game.player && a.god)) a.damage({ dmg: E.dmg, pen: 1, owner: o.owner, weapon: { n: E.n } }, 'chest', 1, V3(0, 0, 1), a.pos); }
       break; }
     case 'smoke': Game.smokes.push({ p: p.clone(), r: E.r, t: 0, life: E.life, col: E.col }); if (G.Audio.impact) G.Audio.impact(p, 'metal', false); break;
@@ -124,7 +124,7 @@ Game.updateOrdnance = function (dt) {
   for (let i = Game.fires.length - 1; i >= 0; i--) { const f = Game.fires[i]; f.t += dt; if (f.t > f.life) { Game.fires.splice(i, 1); continue; }
     for (let j = 0; j < 3; j++) G.FX.fire.spawn({ x: f.p.x + (Math.random() - .5) * f.r * 1.4, y: f.p.y + .1, z: f.p.z + (Math.random() - .5) * f.r * 1.4, vx: 0, vy: 1 + Math.random() * 1.5, vz: 0, life: .5 + Math.random() * .4, s0: .5, s1: 1.2, r: 1, g: .55 + Math.random() * .25, b: .2, drag: .1 });
     if (Math.random() < .3) G.FX.smoke.spawn({ x: f.p.x, y: f.p.y + 1, z: f.p.z, vx: 0, vy: 1.2, vz: 0, life: 3, s0: .8, s1: 3, r: .2, g: .2, b: .2, a: .5, drag: .2 });
-    for (const a of Game.agents) { if (!a.alive || (a === P && P.god)) continue; if (Math.hypot(a.pos.x - f.p.x, a.pos.z - f.p.z) < f.r && Math.abs(a.pos.y - f.p.y) < 1.5) a.damage({ dmg: f.dps * dt, pen: 1, owner: f.owner, weapon: { n: f.n } }, 'stomach', 1, V3(0, 1, 0), a.pos); } }
+    for (const a of Game.agents) { if (!a.alive || (a === P && P.god)) continue; if (Math.hypot(a.pos.x - f.p.x, a.pos.z - f.p.z) < f.r && Math.abs(a.pos.y - f.p.y) < 1.5) a.damage({ dmg: f.dps * dt * ((a.km && a.km.burn) || 1), pen: 1, owner: f.owner, weapon: { n: f.n } }, 'stomach', 1, V3(0, 1, 0), a.pos); } }
   Game.flashT = Math.max(0, Game.flashT - dt);
 };
 
@@ -132,7 +132,7 @@ Game.updateOrdnance = function (dt) {
 Game.playerExplosives = function (P, input) {
   if (!P || !P.alive) return;
   const X = P.expl || (P.expl = { list: Game.mode === 'range' ? G.EXPLOSIVES.map(e => e.id) : (Game.cfg && Game.cfg.explosives) || ['m67', 'm84', 'm18', 'c4'], counts: {}, sel: 0, cd: 0 });
-  if (!X.init) { X.init = true; const inf = Game.mode === 'range'; for (const id of X.list) X.counts[id] = inf ? 99 : ({ charge: 2, mine: 1, smoke: 2, stun: 2, fire: 1 }[(G.EXPLOSIVE[id] || {}).kind] || 2); }
+  if (!X.init) { X.init = true; const inf = Game.mode === 'range'; for (const id of X.list) X.counts[id] = inf ? 99 : ({ charge: 2, mine: 1, smoke: 2, stun: 2, fire: 1 }[(G.EXPLOSIVE[id] || {}).kind] || 2) + ((P.km && P.km.exp) || 0); }
   X.cd -= 1 / 60;
   if (input.expNext && X.list.length) { X.sel = (X.sel + 1) % X.list.length; const E = G.EXPLOSIVE[X.list[X.sel]]; Game.toast(`${E.n} · ${X.counts[E.id]} left`, 1.3); P.hudDirty = true; }
   if (!input.expUse || X.cd > 0 || !X.list.length) return;

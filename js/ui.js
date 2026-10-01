@@ -12,7 +12,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 const UI = G.UI = { dirty: true };
 const store = { get(k, d) { try { const v = localStorage.getItem('ironsight.' + k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('ironsight.' + k, JSON.stringify(v)); } catch (e) {} } };
 UI.loadouts = store.get('loadouts', {});
-UI.loadoutFor = wp => { const L = Object.assign(G.defaultLoadout(wp), UI.loadouts[wp.id] || {}); for (const s in L) if (!G.ATT[L[s]] || (G.ATT[L[s]].slot === s && !G.attachOK(wp, G.ATT[L[s]]) && !['irons', 'mz_std', 'brl_std', 'ub_none', 'sd_none', 'mag_std', 'stk_std', 'am_fmj', 'am_buck', 'fin_factory'].includes(L[s]))) L[s] = G.defaultLoadout(wp)[s]; return L; };
+UI.loadoutFor = wp => { const L = Object.assign(G.defaultLoadout(wp), UI.loadouts[wp.id] || {}); for (const s in L) if (!G.ATT[L[s]] || (G.ATT[L[s]].slot === s && !G.attachOK(wp, G.ATT[L[s]]) && !(G.DEFAULT_IDS || []).includes(L[s]))) L[s] = G.defaultLoadout(wp)[s]; return L; };
 UI.saveLoadout = (wp, L) => { UI.loadouts[wp.id] = L; store.set('loadouts', UI.loadouts); };
 UI.sel = store.get('sel', { era: 'ww2', wp: 'garand', cls: null });
 
@@ -40,10 +40,11 @@ function initShowroom() {
   window.addEventListener('pointermove', e => { if (!drag) return; SR.yaw -= (e.clientX - lx) * .008; SR.pitch = Math.max(-.6, Math.min(1.2, SR.pitch + (e.clientY - ly) * .006)); lx = e.clientX; ly = e.clientY; });
   c.addEventListener('wheel', e => { if (G.Game.mode !== 'menu') return; SR.dist = Math.max(.5, Math.min(4, SR.dist * (1 + Math.sign(e.deltaY) * .1))); }, { passive: true });
 }
-SR.show = function (wp, L) {
+SR.show = function (wp, L, st) {
   if (SR.rig) { SR.turn.remove(SR.rig.root); }
   if (SR.kitS) { SR.turn.remove(SR.kitS.root); SR.kitS = null; }
-  const rig = SR.rig = G.buildGun(wp, L);
+  const rig = SR.rig = G.buildGun(wp, L, { st });
+  if (rig.magPivot) { const k = rig.S.alt && rig.S.alt.k; rig.magPivot.rotation.z = (k === 'mag' ? st && st.alt : k === 'flip' ? !(st && st.alt) : true) ? 0 : -PI / 2; }
   rig.root.rotation.y = -PI / 2; rig.root.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(rig.root); const size = box.getSize(V3()), ctr = box.getCenter(V3());
   rig.root.position.sub(ctr); rig.root.position.y += .02;
@@ -80,8 +81,24 @@ SR.render = function (dt) {
 };
 
 // ============================================================ SCREENS
+// "Open in Chrome": opens this page on its own, full-window, in Chrome (Android intent / iOS scheme / new tab on desktop)
+UI.openChrome = function () {
+  let u = /^https?:/.test(location.href) ? location.href : (document.referrer || 'https://claude.ai/artifact/98Ay2afhvBxVPgfMGSfiHh');
+  const ua = navigator.userAgent || '', bare = u.replace(/^https?:\/\//, '');
+  if (/Android/i.test(ua)) location.href = `intent://${bare}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(u)};end`;
+  else if (/iPhone|iPad|iPod/i.test(ua)) location.href = 'googlechromes://' + bare;
+  else { const w = window.open(u, '_blank', 'noopener'); if (!w) location.href = u; }
+};
+function chromeBar(show) {
+  let b = document.getElementById('openchrome');
+  if (!b) { b = document.createElement('button'); b.id = 'openchrome'; b.textContent = 'Open in Chrome ↗'; b.title = 'Open the game full-window in Chrome (best for mouse capture and performance)';
+    b.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:50;padding:6px 14px;font:600 13px var(--f-ui,sans-serif);letter-spacing:.04em;color:#111;background:#e6c572;border:0;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,.5);cursor:pointer';
+    b.onclick = () => UI.openChrome(); document.body.appendChild(b); }
+  b.style.display = show ? 'block' : 'none';
+}
+UI.chromeBar = chromeBar;
 UI.show = function (name) {
-  UI.screen = name;
+  UI.screen = name; chromeBar(true);
   const root = $('#ui');
   root.innerHTML = '';
   G.Input.unlock();
@@ -89,6 +106,7 @@ UI.show = function (name) {
   if (name === 'armory') renderArmory(root);
   if (name === 'kit') renderKit(root);
   if (name === 'missions') renderMissions(root);
+  if (name === 'extraction') G.Raid.render(root);
   $('#hud').hidden = true;
 };
 function renderMenu(root) {
@@ -104,10 +122,11 @@ function renderMenu(root) {
       <button class="menu-item" data-go="armory"><span class="n">01</span><b>Armory</b><i>Inspect and customise every weapon</i></button>
       <button class="menu-item" data-go="range"><span class="n">02</span><b>Firing range</b><i>Paper, steel, gel, armour plates and mannequins out to 1,000 m</i></button>
       <button class="menu-item" data-go="missions"><span class="n">03</span><b>Solo missions</b><i>Clear terrorists from ships, rigs, embassies and trains — dawn to night</i></button>
-      <button class="menu-item" data-go="kit"><span class="n">04</span><b>Kit locker</b><i>Helmets, armour, plates, camo and night vision from armies worldwide</i></button>
-      <button class="menu-item" data-go="settings"><span class="n">05</span><b>Settings</b><i>Sensitivity, field of view, audio, graphics</i></button>
+      <button class="menu-item" data-go="extraction"><span class="n">04</span><b>Extraction</b><i>Hardcore loot-and-extract raids with your own guns and kit — lose it all if you die</i></button>
+      <button class="menu-item" data-go="kit"><span class="n">05</span><b>Kit locker</b><i>Helmets, armour, plates, camo and night vision from armies worldwide</i></button>
+      <button class="menu-item" data-go="settings"><span class="n">06</span><b>Settings</b><i>Sensitivity, field of view, audio, graphics</i></button>
     </nav>
-    <div class="menu-foot">Click the view to capture the mouse · H in game for controls<br>Headphones recommended</div>
+    <div class="menu-foot">Click the view to capture the mouse · F1 in game for controls<br>Headphones recommended</div>
   </div></section>
   <div id="showcard"><div class="eyebrow">${esc(G.ERA[wp.e].name)} · ${wp.y}</div><div class="nm">${esc(wp.n)}</div><div class="meta">${esc(wp.co)} · ${esc(wp.cal)} · ${wp.rpm} rpm</div></div>`;
   root.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { G.Audio.init(); G.Audio.ui(); const g = b.dataset.go; if (g === 'range') UI.startRange(); else if (g === 'settings') UI.settings(); else UI.show(g); });
@@ -154,25 +173,41 @@ function renderArmory(root) {
   $('#tomis').onclick = () => { if (wp.c === 'PST') UI.mis.secondary = wp.id; else UI.mis.primary = wp.id; if (!G.WEAPON[UI.mis.primary] || G.WEAPON[UI.mis.primary].c === 'PST') UI.mis.primary = 'm4a1'; store.set('mis', UI.mis); G.Audio.init(); UI.deployMission(); };
   $('#rnd').onclick = () => { const L2 = {}; for (const [s] of G.SLOTS) { const o = G.attachFor(wp, s); L2[s] = o[Math.floor(Math.random() * o.length)].id; } UI.saveLoadout(wp, L2); G.Audio.ui('attach'); refresh(); };
   $('#rst').onclick = () => { UI.saveLoadout(wp, G.defaultLoadout(wp)); refresh(); };
-  let open = null;
+  let open = null; const fst = { fold: false, coll: false, supOff: false, alt: false };
   function refresh() {
     const L = UI.loadoutFor(wp), S = G.resolveStats(wp, L), S0 = G.resolveStats(wp, G.defaultLoadout(wp));
-    SR.show(wp, L);
+    SR.show(wp, L, fst);
     $('#wera').textContent = `${G.ERA[wp.e].name} · ${G.CLASS_NAMES[wp.c]}${wp.proto ? ' · Prototype' : ''}${wp.psy ? (wp.psy === 'feasible' ? ' · Feasible' : ' · Overkill') : ''}`;
     $('#wname').textContent = wp.n;
     $('#wsub').textContent = `${wp.co} · adopted ${wp.y} · ${wp.cal} · ${{ bolt: 'bolt action', semi: 'semi-automatic', auto: 'selective fire', auto_ob: 'open bolt', pump: 'pump action', lever: 'lever action', rev: 'double-action revolver' }[wp.act] || wp.act}`;
     const b = statBars(wp, S), b0 = statBars(wp, S0);
     const blen = Math.round(wp.m.B[0] * S.blen * 1000);
-    const spec = [['Rate of fire', S.modes.includes('bolt') ? `~${wp.rpm} rpm (aimed)` : `${S.rpm} rpm`], ['Capacity', `${S.mag} rds`], ['Muzzle velocity', `${Math.round(S.v)} m/s`], ['Weight (empty)', `${wp.wt.toFixed(2)} kg`], ['Barrel', `${blen} mm`], ['Fire modes', S.modes.map(m => ({ semi: 'Semi', auto: 'Auto', burst3: '3-rd', burst2: '2-rd', bolt: 'Bolt', pump: 'Pump', lever: 'Lever' }[m])).join(' / ')], ['Dispersion', `${S.acc.toFixed(1)} MOA`], ['Energy @ muzzle', `${Math.round(.5 * ((G.MASS || {})[wp.cal] || massOf(wp.cal)) / 1000 * S.v * S.v)} J`]];
+    const spec = [['Rate of fire', S.modes.includes('bolt') ? `~${wp.rpm} rpm (aimed)` : `${S.rpm} rpm`], ['Capacity', `${S.mag} rds`], ['Muzzle velocity', `${Math.round(S.v)} m/s`], ['Weight (empty)', `${S.wt.toFixed(2)} kg${Math.abs(S.wt - wp.wt) > .005 ? ` (base ${wp.wt.toFixed(2)})` : ''}`], ['Barrel', `${blen} mm`], ['Fire modes', S.modes.map(m => ({ semi: 'Semi', auto: 'Auto', burst3: '3-rd', burst2: '2-rd', bolt: 'Bolt', pump: 'Pump', lever: 'Lever' }[m])).join(' / ')], ['Dispersion', `${S.acc.toFixed(1)} MOA`], ['Energy @ muzzle', `${Math.round(.5 * ((G.MASS || {})[wp.cal] || massOf(wp.cal)) / 1000 * S.v * S.v)} J`]];
     { const sp = []; if (S.he) sp.push(`explosive rounds (${S.he.r} m blast)`); if (S.homing) sp.push('seeker rounds'); if (wp.spin) sp.push(`rotary, ${wp.spin}s spin-up`); if (wp.charge) sp.push(`hold to charge (${wp.charge}s)`); if (wp.salvo) sp.push(`${wp.salvo}-barrel salvo`); if (wp.gyro) sp.push('rocket-propelled'); if (wp.caseless) sp.push('caseless'); if (wp.duplex) sp.push('duplex rounds'); if (wp.intSup) sp.push('integral suppressor'); if (S.inc) sp.push('incendiary'); if (sp.length) spec.push(['Special', sp.join(' · ')]); }
     $('#specs').innerHTML = `${wp.blurb ? `<p class="blurb">${esc(wp.blurb)}</p>` : ''}<dl class="spec">${spec.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
-      <div class="bars">${Object.keys(b).map(k => { const d = b[k] - b0[k]; return `<div class="bar">${k}<i class="${d > 1 ? 'up' : d < -1 ? 'down' : ''}" style="--v:${Math.max(2, b[k]).toFixed(0)}%"></i><s>${Math.round(b[k])}</s></div>`; }).join('')}</div>
-      ${G.SLOTS.map(([s, name]) => { const opts = G.attachFor(wp, s); const cur = G.ATT[L[s]]; return `<div class="slot"><button data-slot="${s}"><span class="sn">${name}</span><span class="sv">${esc(cur ? cur.n : '—')}</span><span class="sc">${opts.length}</span></button>${open === s ? `<div class="opts">${opts.map(o => `<button class="opt ${o.id === L[s] ? 'on' : ''}" data-att="${o.id}"><b>${esc(o.n)}</b>${o.d ? `<span>${esc(o.d)}</span>` : ''}</button>`).join('')}</div>` : ''}</div>`; }).join('')}`;
+      <div class="bars" id="wbars">${barsHTML(b, b0)}</div>
+      ${perksHTML(S, L)}
+      ${G.SLOTS.map(([s, name]) => { const opts = G.attachFor(wp, s); const cur = G.ATT[L[s]]; return `<div class="slot"><button data-slot="${s}"><span class="sn">${name}</span><span class="sv">${esc(cur ? cur.n : '—')}</span><span class="sc">${opts.length}</span></button>${open === s ? `<div class="opts">${opts.map(o => `<button class="opt ${o.id === L[s] ? 'on' : ''}" data-att="${o.id}"><b>${esc(o.n)}</b>${o.d ? `<span>${esc(o.d)}</span>` : ''}${chipsHTML(o)}</button>`).join('')}</div>` : ''}</div>`; }).join('')}`;
+    // hovering a part previews its effect on the stat bars
+    $('#specs').querySelectorAll('[data-att]').forEach(bt => { bt.onmouseenter = () => { const L2 = Object.assign({}, L, { [open]: bt.dataset.att }); const el = $('#wbars'); if (el) el.innerHTML = barsHTML(statBars(wp, G.resolveStats(wp, L2)), b, true); }; bt.onmouseleave = () => { const el = $('#wbars'); if (el) el.innerHTML = barsHTML(b, b0); }; });
+    // try the field controls on the showroom model
+    $('#specs').querySelectorAll('[data-fst]').forEach(bt => bt.onclick = () => { const k = bt.dataset.fst; fst[k] = !fst[k]; G.Audio.ui('attach'); refresh(); });
     $('#specs').querySelectorAll('[data-slot]').forEach(bt => bt.onclick = () => { open = open === bt.dataset.slot ? null : bt.dataset.slot; G.Audio.ui(); refresh(); });
     $('#specs').querySelectorAll('[data-att]').forEach(bt => bt.onclick = () => { const L2 = UI.loadoutFor(wp); L2[open] = bt.dataset.att; UI.saveLoadout(wp, L2); G.Audio.ui('attach'); refresh(); });
   }
   refresh();
 }
+function barsHTML(b, b0, prev) { return Object.keys(b).map(k => { const d = b[k] - b0[k]; return `<div class="bar">${k}<i class="${d > 1 ? 'up' : d < -1 ? 'down' : ''}" style="--v:${Math.max(2, b[k]).toFixed(0)}%"></i><s>${Math.round(b[k])}${prev && Math.abs(d) >= 1 ? ` <em style="color:${d > 0 ? '#8fd16a' : '#e46a5a'};font-style:normal">${d > 0 ? '+' : ''}${Math.round(d)}</em>` : ''}</s></div>`; }).join(''); }
+function chipsHTML(o) { const l = G.attStatList ? G.attStatList(o) : []; if (!l.length) return ''; return `<span style="display:flex;flex-wrap:wrap;gap:3px;margin-top:4px">${l.map(([t, g]) => `<em style="font-style:normal;font-size:10.5px;padding:1px 5px;border-radius:3px;background:${g === true ? 'rgba(120,190,90,.18)' : g === false ? 'rgba(220,90,70,.18)' : 'rgba(230,197,114,.18)'};color:${g === true ? '#a6d98a' : g === false ? '#ec8a7a' : '#e6c572'}">${esc(t)}</em>`).join('')}</span>`; }
+function perksHTML(S, L) {
+  const P = G.weaponPerks ? G.weaponPerks(S, L) : []; if (!P.length) return '';
+  const tg = [];
+  if (S.fold) tg.push(['fold', 'Fold stock (O)']); else if (S.coll) tg.push(['coll', 'Collapse stock (O)']);
+  if (S.sup && S.qd) tg.push(['supOff', 'Remove suppressor (U)']);
+  if (S.alt) tg.push(['alt', 'Switch sight (H)']);
+  return `<div class="slot" style="padding:8px 10px"><span class="lbl">Perks</span><div style="display:flex;flex-direction:column;gap:3px;margin-top:4px">${P.map(p => `<div style="font-size:12.5px"><b style="color:${p.k === 'warn' ? '#ec8a7a' : '#e6c572'}">${esc(p.n)}</b>${p.d ? ` <span class="muted">— ${esc(p.d)}</span>` : ''}</div>`).join('')}</div>${tg.length ? `<div class="row" style="margin-top:6px;gap:6px;flex-wrap:wrap">${tg.map(([k, n]) => `<button class="chip" data-fst="${k}">${n}</button>`).join('')}<span class="muted" style="font-size:11px">try it on the model</span></div>` : ''}</div>`;
+}
+function gearChips(o) { const P = G.gearProps ? G.gearProps(o).perks : []; if (!P.length) return ''; return `<span style="display:flex;flex-wrap:wrap;gap:3px;margin-top:4px">${P.map(([n, , good]) => `<em style="font-style:normal;font-size:10.5px;padding:1px 5px;border-radius:3px;background:${good ? 'rgba(120,190,90,.18)' : 'rgba(220,90,70,.18)'};color:${good ? '#a6d98a' : '#ec8a7a'}">${esc(n)}</em>`).join('')}</span>`; }
 function massOf(cal) { const M = { '12 gauge': 32 }; return M[cal] || ((G.CAL[cal].cs[0] * G.CAL[cal].cs[1] * G.CAL[cal].cs[1]) * 7.9e6 * .9); }
 
 // ------------------------------------------------------------ KIT LOCKER
@@ -196,8 +231,9 @@ function renderKit(root) {
     SR.showKit(kit, wp && wp.c !== 'PST' ? wp : null); SR.auto = true;
     const kg = G.kitWeight(kit), mob = Math.round(Math.max(.72, Math.min(1.04, 1.04 - Math.max(0, kg - 5) * .012)) * 100);
     $('#ksub').textContent = `${kg.toFixed(1)} kg carried · movement ${mob}%`;
-    $('#kslots').innerHTML = G.GEAR_SLOTS.map(([slot, name]) => { const cur = G.GEARID[kit[slot]]; const opts = G.gearFor(slot).slice().sort((a, b) => a.y - b.y);
-      return `<div class="slot"><button data-kslot="${slot}"><span class="sn">${name}</span><span class="sv">${esc(cur ? cur.n : '—')}</span><span class="sc">${opts.length}</span></button>${open === slot ? `<div class="opts">${opts.map(o => `<button class="opt ${o.id === kit[slot] ? 'on' : ''}" data-kid="${o.id}"><b>${esc(o.n)}</b><span>${esc(o.co || '')}${o.y > 1900 ? ' · ' + o.y : ''}${o.wt ? ' · ' + o.wt + ' kg' : ''}${o.rating ? ' · rating ' + o.rating : ''}${o.soft ? ' · soft ' + o.soft : ''}</span></button>`).join('')}</div>` : ''}</div>`; }).join('');
+    const cat = UI.kitCat || 'all', inCat = o => cat === 'all' || (cat === 'mil' ? !o.cat : o.cat === cat) || /_none$|^g_none$/.test(o.id);
+    $('#kslots').innerHTML = `<div class="eras" style="padding:8px 12px;display:flex;gap:6px;flex-wrap:wrap">${(G.KIT_CATS || []).map(([k, n]) => `<button class="chip ${cat === k ? 'on' : ''}" data-kcat="${k}">${n}</button>`).join('')}</div>` + G.GEAR_SLOTS.map(([slot, name]) => { const cur = G.GEARID[kit[slot]]; const opts = G.gearFor(slot).filter(inCat).sort((a, b) => a.y - b.y);
+      return `<div class="slot"><button data-kslot="${slot}"><span class="sn">${name}</span><span class="sv">${esc(cur ? cur.n : '—')}</span><span class="sc">${opts.length}</span></button>${open === slot ? `<div class="opts">${opts.map(o => `<button class="opt ${o.id === kit[slot] ? 'on' : ''}" data-kid="${o.id}"><b>${esc(o.n)}</b><span>${esc(o.co || '')}${o.y > 1900 ? ' · ' + o.y : ''}${o.wt ? ' · ' + o.wt + ' kg' : ''}${o.rating ? ' · rating ' + o.rating : ''}${o.soft ? ' · soft ' + o.soft : ''}</span>${gearChips(o)}</button>`).join('')}</div>` : ''}</div>`; }).join('');
     const prot = protSummary(kit);
     const A = G.GEARID[kit.armor], P = G.GEARID[kit.plates];
     $('#kinfo').innerHTML = `<p class="blurb">Pick a preset or change any single piece. Every item has its real protection level: rounds are checked against the plate, soft armour, side plate, collar, groin protector, helmet or visor they actually hit, and plates crack with each hit.</p>
@@ -206,7 +242,9 @@ function renderKit(root) {
       ${A && A.plates && (!P || !P.rating) ? '<p class="muted">This carrier has empty plate pockets — pick plates.</p>' : ''}${A && !A.plates && P && P.rating ? '<p class="muted">This vest has no plate pockets, so the plates slot is ignored.</p>' : ''}
       <div class="lbl" style="margin:12px 0 4px">Real-world presets</div>
       <div class="opts" style="display:grid;gap:4px">${G.KIT_PRESETS.map(p => `<button class="opt" data-preset="${p.id}"><b>${esc(p.n)}</b></button>`).join('')}</div>
-      ${open ? `<div class="lbl" style="margin:12px 0 4px">About</div><p class="muted">${esc(G.GEARID[kit[open]].d || G.GEARID[kit[open]].n)}</p>` : ''}`;
+      ${open ? `<div class="lbl" style="margin:12px 0 4px">About</div><p class="muted">${esc(G.GEARID[kit[open]].d || G.GEARID[kit[open]].n)}</p>` : ''}
+      <div class="lbl" style="margin:12px 0 4px">Kit perks</div>${G.GEAR_SLOTS.map(([sl]) => G.GEARID[kit[sl]]).filter(g => g && G.gearProps(g).perks.length).map(g => `<div style="font-size:12.5px;margin-bottom:6px"><b style="color:#e6c572">${esc(g.n)}</b><br>${G.gearProps(g).perks.map(([n, d, good]) => `<span style="color:${good ? '#a6d98a' : '#ec8a7a'}">${esc(n)}</span> <span class="muted">${esc(d)}</span>`).join('<br>')}</div>`).join('')}`;
+    root.querySelectorAll('[data-kcat]').forEach(b => b.onclick = () => { UI.kitCat = b.dataset.kcat; G.Audio.ui(); refresh(); });
     root.querySelectorAll('[data-kslot]').forEach(b => b.onclick = () => { open = UI.kitOpen = open === b.dataset.kslot ? null : b.dataset.kslot; G.Audio.ui(); refresh(); });
     root.querySelectorAll('[data-kid]').forEach(b => b.onclick = () => { kit[open] = b.dataset.kid; G.Kit.save(kit); G.Audio.ui('attach'); refresh(); });
     root.querySelectorAll('[data-preset]').forEach(b => b.onclick = () => { Object.assign(kit, G.KIT_PRESETS.find(p => p.id === b.dataset.preset).kit); G.Kit.save(kit); G.Audio.ui('attach'); refresh(); });
@@ -303,6 +341,7 @@ UI.startRange = function (o = {}) {
   G.Audio.init();
   loading('Walking to the firing line…', () => { G.Game.startRange(list); if (o.kitTest) { G.Game.clearTargets(); G.Game.addTarget('kitdummy', 10, { orient: 'front' }); G.Game.addTarget('kitdummy', 25, { orient: 'rear' }); UI.rangeSel = Object.assign({ era: wp.e, tier: 'regular', veh: 'sedan' }, UI.rangeSel || {}, { type: 'kitdummy', dist: 10, orient: 'front' }); G.Game.toast('Your kit is on the mannequins — front at 10 m, back at 25 m. T for more targets.', 5); } });
 };
+UI.esc = esc; UI.store = store; UI.overlay = html => overlay(html); UI.loading = (m, f) => loading(m, f);
 function loading(msg, fn) { const l = $('#loading'); l.textContent = msg; l.hidden = false; setTimeout(() => { try { fn(); } catch (e) { console.error(e); } l.hidden = true; }, 40); }
 
 // ------------------------------------------------------------ OVERLAYS
@@ -322,6 +361,7 @@ UI.settings = function (back) {
   $('#s-done').onclick = () => { UI.closeOverlay(); if (back) back(); };
 };
 UI.pause = function (on) {
+  chromeBar(!!on);
   const Gm = G.Game;
   if (Gm.mode === 'menu') return;
   if (on) {
@@ -339,14 +379,15 @@ UI.pause = function (on) {
     if ($('#p-rs')) $('#p-rs').onclick = () => { UI.closeOverlay(); loading('Inserting…', () => G.Game.startMission(UI.lastMission)); };
   } else UI.resume();
 };
-UI.resume = function () { UI.closeOverlay(); const h = $('#helpov'); if (h) h.remove(); if (G.Game.state === 'pause') G.Game.state = 'play'; if (!G.Input.touch) G.Input.lock(); };
+UI.resume = function () { chromeBar(false); UI.closeOverlay(); const h = $('#helpov'); if (h) h.remove(); if (G.Game.state === 'pause') G.Game.state = 'play'; if (!G.Input.touch) G.Input.lock(); };
 UI.onEscape = function () {
+  if (G.Game.lootOpen && G.Raid) { G.Raid.closePanel(); return; }
   const Gm = G.Game;
   if ($('#rmenu')) { UI.toggleRangeMenu(false); return; }
   if (Gm.mode === 'menu') { if ($('#ov')) UI.closeOverlay(); return; }
   if (Gm.state === 'play') UI.pause(true); else if (Gm.state === 'pause') UI.resume();
 };
-const KEYS = [['W A S D', 'Move'], ['Mouse', 'Look'], ['Left click', 'Fire'], ['Right click', 'Aim down sights'], ['Shift', 'Sprint · hold breath when scoped'], ['Space', 'Jump'], ['C', 'Crouch'], ['Z', 'Prone (auto bipod)'], ['Q / E', 'Lean'], ['R', 'Reload'], ['B', 'Fire mode'], ['1 / 2 · wheel', 'Switch weapon'], ['[ / ]', 'Zeroing distance'], ['X', 'Bipod'], ['V', 'Melee / bayonet'], ['G', 'Underbarrel launcher'], ['F', 'Pick up / swap weapon (inspect when none near)'], ['K', 'Drop weapon in hand'], ['3', 'Throw / place explosive (again: detonate charges)'], ['4', 'Next explosive type'], ['L', 'Laser / light modes'], ['J', 'Night vision'], ['T', 'Range: targets & wind'], ['N', 'Range: fly mode'], ['Y', 'Range: reset targets'], ['Esc', 'Pause']];
+const KEYS = [['W A S D', 'Move'], ['Mouse', 'Look'], ['Left click', 'Fire'], ['Right click', 'Aim down sights'], ['Shift', 'Sprint · hold breath when scoped'], ['Space', 'Jump'], ['C', 'Crouch'], ['Z', 'Prone (auto bipod)'], ['Q / E', 'Lean'], ['R', 'Reload'], ['B', 'Fire mode'], ['1 / 2 · wheel', 'Switch weapon'], ['[ / ]', 'Zeroing distance'], ['X', 'Bipod'], ['V', 'Melee / bayonet'], ['G', 'Underbarrel launcher'], ['F', 'Pick up / swap weapon (inspect when none near)'], ['K', 'Drop weapon in hand'], ['3', 'Throw / place explosive (again: detonate charges)'], ['4', 'Next explosive type'], ['L', 'Laser / light / strobe modes'], ['Wheel (scoped)', 'Zoom a variable-power optic'], ['H', 'Switch sight: magnifier, offset / piggyback dot, power lever'], ['O', 'Fold or collapse the stock'], ['U', 'Take the suppressor off / put it on'], ['I', 'Gear check: weapon and kit perks'], ['J', 'Night vision'], ['T', 'Range: targets & wind'], ['N', 'Range: fly mode'], ['Y', 'Range: reset targets'], ['Tab', 'Extraction: inventory, exfils, timer'], ['5', 'Extraction: bandage / heal'], ['F1', 'Show these controls'], ['Esc', 'Pause']];
 UI.toggleHelp = function (force, back) {
   let h = $('#helpov');
   if (h && !force) { h.remove(); return; }
@@ -391,6 +432,7 @@ UI.toggleRangeMenu = function (force) {
 };
 // ============================================================ HUD
 UI.showHUD = function (mode) {
+  chromeBar(false);
   UI.screen = 'game';
   $('#ui').innerHTML = ''; UI.closeOverlay();
   const h = $('#hud'); h.hidden = false;
@@ -401,7 +443,7 @@ UI.showHUD = function (mode) {
     <div class="hudbox" id="hp"><div class="v">100</div><div class="b"><i></i></div><div class="st"></div></div>
     ${mode === 'mission' ? '<div class="hudbox" id="score"><span class="a">0</span><span class="t">0:00</span><span class="e">0</span></div><div class="hudbox" id="feed"></div>' : ''}${mode === 'range' ? '<div class="hudbox" id="tcam" hidden><b></b></div><div class="hudbox" id="rstats"></div><div class="hudbox" id="rhint">T targets & wind · N fly · Y reset · [ ] zero · H controls</div>' : ''}
     <div class="hudbox" id="compass"><div class="strip"></div></div>
-    <div class="hudbox" id="toast"></div><div id="flashfx" style="position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none"></div><div id="expl" style="position:absolute;right:24px;bottom:150px;font:600 13px var(--f-mono,monospace);color:#e8e2cc;text-align:right;text-shadow:0 1px 2px #000;pointer-events:none"></div><div id="pick" style="position:absolute;left:50%;top:62%;transform:translateX(-50%);font:600 15px var(--f-ui,sans-serif);color:#fff;background:rgba(0,0,0,.55);padding:6px 12px;border-radius:4px;pointer-events:none;display:none"></div><div class="hudbox" id="center"></div><div class="hudbox" id="board" hidden></div>`;
+    <div class="hudbox" id="toast"></div><div id="flashfx" style="position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none"></div><div id="pips" style="position:absolute;left:50%;top:50%;width:0;height:0;pointer-events:none"></div><div id="kitinfo" style="position:absolute;left:24px;top:90px;max-width:430px;max-height:70vh;overflow:auto;font:12.5px/1.45 var(--f-ui,sans-serif);color:#e8e2cc;background:rgba(10,12,10,.82);border:1px solid rgba(230,197,114,.35);border-radius:6px;padding:10px 14px;pointer-events:none;display:none"></div><div id="expl" style="position:absolute;right:24px;bottom:150px;font:600 13px var(--f-mono,monospace);color:#e8e2cc;text-align:right;text-shadow:0 1px 2px #000;pointer-events:none"></div><div id="pick" style="position:absolute;left:50%;top:62%;transform:translateX(-50%);font:600 15px var(--f-ui,sans-serif);color:#fff;background:rgba(0,0,0,.55);padding:6px 12px;border-radius:4px;pointer-events:none;display:none"></div><div class="hudbox" id="center"></div><div class="hudbox" id="board" hidden></div>`;
   const strip = $('#compass .strip'); let s = '';
   for (let k = 0; k < 3; k++) for (let d = 0; d < 360; d += 15) s += `<span>${{ 0: 'N', 90: 'E', 180: 'S', 270: 'W' }[d] || (d % 45 === 0 ? d : '·')}</span>`;
   strip.innerHTML = s;
@@ -458,6 +500,7 @@ UI.updateHUD = function (dt) {
   const deg = ((-P.yaw * 180 / PI) % 360 + 360) % 360;
   const strip = $('#compass .strip'); if (strip) strip.style.transform = `translateX(${180 - 15 - (deg + 360) * 2}px)`;
   // mission objective
+  updatePips(P, Gm); updateKitInfo(P);
   { const fx = $('#flashfx'); if (fx) fx.style.opacity = Math.min(1, (Gm.flashT || 0) / 2.5).toFixed(3); const ex = $('#expl'), X = P.expl; if (ex && X && X.list.length && (UI.dirty || Gm.frame % 10 === 0)) { const E = G.EXPLOSIVE[X.list[X.sel]]; ex.textContent = `${E.n} ×${X.counts[E.id] > 90 ? '∞' : X.counts[E.id]}  [3] use · [4] next`; } }
   { const pk = $('#pick'), np = Gm.nearPick; if (pk) { if (np) { const cur = P.weapons.find(w => (w.wp.c === 'PST') === (np.wp.c === 'PST')); pk.textContent = `F — ${cur ? 'swap ' + cur.wp.n + ' for' : 'pick up'} ${np.wp.n} (${np.mag} + ${np.reserve})`; pk.style.display = 'block'; } else pk.style.display = 'none'; } }
   if (Gm.mode === 'mission' && Gm.mission) {
@@ -485,6 +528,38 @@ UI.updateHUD = function (dt) {
   drawScope();
 };
 
+// ------------------------------------------------------------ HEARING CUES & GEAR CHECK
+// active hearing protection: footsteps of nearby moving hostiles show as cues around the sights;
+// a radio marks hostiles who call out a contact
+function updatePips(P, Gm) {
+  const el = $('#pips'); if (!el || Gm.frame % 3) return;
+  const km = P.km || {}; if (!P.alive || (!km.hear && !km.radio)) { if (el.innerHTML) el.innerHTML = ''; return; }
+  const now = performance.now(); let h = '';
+  for (const b of Gm.bots || []) {
+    if (!b.alive || b.team === P.team) continue;
+    const dx = b.pos.x - P.pos.x, dz = b.pos.z - P.pos.z, d = Math.hypot(dx, dz), sp = b.vel ? Math.hypot(b.vel.x, b.vel.z) : 0;
+    const radio = km.radio && b.radioT > now && d < 170, heard = km.hear && d < 32 && sp > (b.crouch ? 2.5 : .6);
+    if (!radio && !heard) continue;
+    const rel = Math.atan2(-dx, -dz) - P.yaw, R = 120 + Math.min(60, d * .8);
+    const x = -Math.sin(rel) * R, y = -Math.cos(rel) * R, a = radio ? .95 : Math.max(.25, 1 - d / 32);
+    h += `<i style="position:absolute;left:${x.toFixed(0)}px;top:${y.toFixed(0)}px;width:${radio ? 12 : 9}px;height:${radio ? 12 : 9}px;margin:-5px;border-radius:${radio ? '2px' : '50%'};transform:rotate(${(-rel * 180 / Math.PI).toFixed(0)}deg);background:${radio ? '#ff5a40' : '#e6c572'};opacity:${a.toFixed(2)};box-shadow:0 0 6px ${radio ? '#ff5a40' : '#e6c572'}"></i>`;
+  }
+  el.innerHTML = h;
+}
+function updateKitInfo(P) {
+  const el = $('#kitinfo'); if (!el) return;
+  if (!P.showInfo || !P.W) { if (el.style.display !== 'none') el.style.display = 'none'; return; }
+  const w = P.W, key = w.wp.id + JSON.stringify(w.st) + JSON.stringify(w.L) + (P.km ? P.km.camo.toFixed(2) : '');
+  el.style.display = 'block'; if (el.dataset.k === key) return; el.dataset.k = key;
+  const perks = G.weaponPerks(w.S, w.L), km = P.km || G.kitMods(P.kit, G.kitEnv());
+  const kitRows = G.GEAR_SLOTS.map(([sl]) => G.GEARID[P.kit[sl]]).filter(g => g && G.gearProps(g).perks.length).map(g => `<div><b style="color:#e6c572">${esc(g.n)}</b><br>${G.gearProps(g).perks.map(([n, d, good]) => `<span style="color:${good ? '#a6d98a' : '#ec8a7a'}">${esc(n)}</span> <span style="opacity:.7">${esc(d)}</span>`).join('<br>')}</div>`).join('');
+  const camo = km.envMatch < .9 ? 'good' : km.envMatch > 1.05 ? 'poor' : 'fair';
+  el.innerHTML = `<div style="font-weight:700;letter-spacing:.06em;margin-bottom:4px">GEAR CHECK <span style="opacity:.6;font-weight:400">· I to close</span></div>
+    <div style="margin-bottom:6px"><b>${esc(w.wp.n)}</b> · ${w.S.wt.toFixed(2)} kg · ${w.S.mag} rds · ${Math.round(w.S.rpm)} rpm${w.st.supOff ? ' · suppressor OFF' : ''}${w.st.fold ? ' · stock folded' : ''}${w.st.coll ? ' · stock collapsed' : ''}<br>${G.SLOTS.map(([s]) => G.ATT[w.L[s]]).filter(a => a && !(G.DEFAULT_IDS || []).includes(a.id)).map(a => esc(a.n)).join(' · ') || 'Factory configuration'}</div>
+    ${perks.map(p => `<div><span style="color:${p.k === 'warn' ? '#ec8a7a' : '#e6c572'}">${esc(p.n)}</span> <span style="opacity:.7">${esc(p.d)}</span></div>`).join('')}
+    <div style="margin:8px 0 4px;font-weight:700;letter-spacing:.06em">KIT · ${P.kitKg.toFixed(1)} kg · camouflage ${camo} here</div>
+    <div style="display:flex;flex-direction:column;gap:5px">${kitRows}</div>`;
+}
 // ------------------------------------------------------------ SCOPE RETICLES
 function drawScope() {
   const cv = UI.scopeCv; if (!cv) return;
@@ -508,7 +583,8 @@ function drawScope() {
   const fov = G.E.camera.fov * PI / 180; const ppm = (H / 2) / Math.tan(fov / 2) * .001;
   const cx = W / 2, cy = H / 2;
   x.save(); x.beginPath(); x.arc(ex, ey, R, 0, 7); x.clip();
-  const ink = '#0b0b0b';
+  const night = (G.E.map && ['night', 'dusk', 'dawn'].includes(G.E.map.env)) || P.nvgOn || w.S.nv || w.S.thermal;
+  const ink = w.S.illum && night ? '#ff3b24' : w.S.thermal ? '#101010' : '#0b0b0b'; // illuminated reticles glow in the dark
   const line = (x1, y1, x2, y2, wdt = 1.2, col = ink) => { x.strokeStyle = col; x.lineWidth = wdt; x.beginPath(); x.moveTo(x1, y1); x.lineTo(x2, y2); x.stroke(); };
   const dot = (px, py, r, col = ink) => { x.fillStyle = col; x.beginPath(); x.arc(px, py, r, 0, 7); x.fill(); };
   switch (ret) {
@@ -548,29 +624,30 @@ function drawScope() {
       dot(cx, cy, ret === 'xm157' ? 1.6 : 2, red);
       if (ret === 'g36') for (const [m, l] of [[1.8, '2'], [3.1, '3'], [4.8, '4'], [6.9, '5'], [9.6, '6']]) { line(cx - 12, cy + m * ppm, cx + 12, cy + m * ppm, 1); x.fillStyle = ink; x.font = '10px monospace'; x.fillText(l, cx + 16, cy + m * ppm + 3); }
       if (ret === 'lpvo' || ret === 'xm157') { line(cx - R, cy, cx - 12 * ppm, cy, 3); line(cx + 12 * ppm, cy, cx + R, cy, 3); line(cx, cy + 12 * ppm, cx, cy + R, 3); for (let i = 1; i <= 5; i++) line(cx - 5 - i, cy + i * 1.5 * ppm, cx + 5 + i, cy + i * 1.5 * ppm, 1); }
-      if (ret === 'xm157') {
-        const cam = G.E.camera, d = V3(0, 0, -1).applyQuaternion(cam.quaternion);
-        const hit = G.E.world.raycast(cam.position, d, 1500);
-        let rng = hit ? hit.t : null;
-        if (G.Game.targets) for (const T of G.Game.targets) { const tt = T.rayTest(cam.position, d, 1500, {}); if (tt >= 0 && (rng == null || tt < rng)) rng = tt; }
-        for (const a of G.Game.agents) if (a !== P && a.alive) for (const hb of a.hitboxes()) { const tt = G.rayCapsule(cam.position, d, hb.a, hb.b, hb.r); if (tt >= 0 && (rng == null || tt < rng)) rng = tt; }
-        x.fillStyle = red; x.font = '600 14px monospace';
-        if (rng) {
-          const drop = computeHold(w, rng);
-          x.fillText(`RNG ${rng.toFixed(0)} M`, cx + R * .35, cy + R * .45);
-          x.fillText(`HOLD ${drop >= 0 ? '▼' : '▲'} ${Math.abs(drop).toFixed(1)} MIL`, cx + R * .35, cy + R * .45 + 18);
-          dot(cx, cy + drop * ppm, 2.5, '#ffd02a');
-        } else x.fillText('RNG ---', cx + R * .35, cy + R * .45);
-      }
       break; }
+    case 'dot': dot(cx, cy, 2.6, '#ff3b24'); break;
+    case 'irons': dot(cx, cy, 2, ink); break;
     default: line(cx - R, cy, cx + R, cy, 1); line(cx, cy - R, cx, cy + R, 1);
+  }
+  if (w.S.lrf || w.S.bc || ret === 'xm157') { // laser rangefinder readout, ballistic computer hold point
+    const red = '#ff3b24';
+    const cam = G.E.camera, d = V3(0, 0, -1).applyQuaternion(cam.quaternion);
+    const hit = G.E.world.raycast(cam.position, d, 1500);
+    let rng = hit ? hit.t : null;
+    if (G.Game.targets) for (const T of G.Game.targets) { const tt = T.rayTest(cam.position, d, 1500, {}); if (tt >= 0 && (rng == null || tt < rng)) rng = tt; }
+    for (const a of G.Game.agents) if (a !== P && a.alive) for (const hb of a.hitboxes()) { const tt = G.rayCapsule(cam.position, d, hb.a, hb.b, hb.r); if (tt >= 0 && (rng == null || tt < rng)) rng = tt; }
+    x.fillStyle = red; x.font = '600 14px monospace';
+    if (rng) {
+      x.fillText(`RNG ${rng.toFixed(0)} M`, cx + R * .35, cy + R * .45);
+      if (w.S.bc || ret === 'xm157') { const drop = computeHold(w, rng); x.fillText(`HOLD ${drop >= 0 ? '▼' : '▲'} ${Math.abs(drop).toFixed(1)} MIL`, cx + R * .35, cy + R * .45 + 18); dot(cx, cy + drop * ppm, 2.5, '#ffd02a'); }
+    } else x.fillText('RNG ---', cx + R * .35, cy + R * .45);
   }
   x.restore();
   // lens tint & scope rim
   x.strokeStyle = 'rgba(20,20,20,1)'; x.lineWidth = 6; x.beginPath(); x.arc(ex, ey, R, 0, 7); x.stroke();
   x.fillStyle = 'rgba(140,170,200,.04)'; x.beginPath(); x.arc(ex, ey, R, 0, 7); x.fill();
   x.fillStyle = 'rgba(230,197,114,.9)'; x.font = '12px monospace';
-  x.fillText(`${zoom}× · ZERO ${w.zero} M${G.Game.mode === 'range' && G.rangeWind ? ` · WIND ${G.rangeWind.toFixed(1)} M/S` : ''}${P.holding ? ' · BREATH HELD' : P.breath < .3 ? ' · OUT OF BREATH' : ''}`, 18, H - 18);
+  x.fillText(`${zoom}×${w.S.zmin && !w.st.alt ? ` (${w.S.zmin}–${w.S.zmax}× · wheel)` : ''}${w.S.alt ? ' · H: switch sight' : ''}${w.S.nv ? ' · NIGHT' : ''}${w.S.thermal ? ' · THERMAL' : ''} · ZERO ${w.zero} M${G.Game.mode === 'range' && G.rangeWind ? ` · WIND ${G.rangeWind.toFixed(1)} M/S` : ''}${P.holding ? ' · BREATH HELD' : P.breath < .3 ? ' · OUT OF BREATH' : ''}`, 18, H - 18);
 }
 // holdover in mils relative to the current zero for a range (for the XM157 FCU)
 function computeHold(w, d) {
@@ -601,6 +678,14 @@ function renderTargetCam(R, Gm) {
 
 // ============================================================ NIGHT VISION
 // phosphor tint on the 3D canvas, tube mask (mono / binocular / panoramic quad) and scintillation noise
+// thermal optics: living people glow white-hot through the scope
+UI.thermalGlow = function (on) {
+  if (on === !!UI._thermal) return; UI._thermal = on;
+  for (const b of (G.Game.bots || [])) { const root = b.model && b.model.root; if (!root) continue;
+    root.traverse(o => { if (!o.isMesh || !o.material || !o.material.emissive) return;
+      if (on && b.alive) { if (!o.userData.th) { o.userData.th = o.material; o.material = o.material.clone(); } o.material.emissive.set('#ffffff'); o.material.emissiveIntensity = .9; }
+      else if (o.userData.th) { o.material.dispose(); o.material = o.userData.th; o.userData.th = null; } }); }
+};
 UI.nvgFx = function (nv) {
   const key = nv ? nv.view + (nv.white ? 'w' : 'g') + (nv.thermal ? 't' : '') + G.E.W + 'x' + G.E.H : '';
   let ov = document.getElementById('nvgov');
@@ -613,7 +698,7 @@ UI.nvgFx = function (nv) {
     if (nv) {
       const W = ov.width = Math.round(G.E.W / 2), H = ov.height = Math.round(G.E.H / 2), x = ov.getContext('2d');
       x.fillStyle = 'rgba(0,0,0,.97)'; x.fillRect(0, 0, W, H); x.globalCompositeOperation = 'destination-out';
-      const r = H * .5, holes = nv.view === 'mono' ? [[.5, r * .98]] : nv.view === 'quad' ? [[.32, r * .92], [.44, r * .96], [.56, r * .96], [.68, r * .92]] : [[.42, r * .95], [.58, r * .95]];
+      const r = H * .5, holes = nv.view === 'scope' ? [[.5, H * 2]] : nv.view === 'mono' ? [[.5, r * .98]] : nv.view === 'quad' ? [[.32, r * .92], [.44, r * .96], [.56, r * .96], [.68, r * .92]] : [[.42, r * .95], [.58, r * .95]];
       for (const [fx, rr] of holes) { const g = x.createRadialGradient(W * fx, H / 2, rr * .82, W * fx, H / 2, rr); g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.beginPath(); x.arc(W * fx, H / 2, rr, 0, 7); x.fill(); }
       x.globalCompositeOperation = 'source-over';
     }
@@ -642,7 +727,9 @@ function boot() {
     const Gm = G.Game;
     if (Gm.state === 'play' || Gm.state === 'end') Gm.update(dt, now / 1000);
     else if (Gm.state === 'pause') { G.Input.frame(); }
-    const P0 = Gm.player, nv = P0 && P0.nvgOn && P0.alive ? (G.GEARID[P0.kit.nvg] || {}).nv : null;
+    const P0 = Gm.player, SW = P0 && P0.W && P0.W.S, scopeNV = P0 && P0.scoped && SW && (SW.thermal ? { view: 'scope', white: true, thermal: true, q: .9 } : SW.nv ? { view: 'scope', q: .8 } : null);
+    const nv = scopeNV || (P0 && P0.nvgOn && P0.alive ? (G.GEARID[P0.kit.nvg] || {}).nv : null);
+    UI.thermalGlow(!!(scopeNV && scopeNV.thermal));
     let ex = (G.ENV[G.E.map.env] || {}).exp || 1;
     if (nv) ex *= ({ night: 4.2, dusk: 2.4, dawn: 2.4 }[G.E.map.env] || 1.6) * (.8 + nv.q * .3); // image intensifier gain
     R.toneMappingExposure = ex; UI.nvgFx(nv);

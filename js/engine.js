@@ -167,7 +167,7 @@ const GRAV = 9.81;
 // o: { pos, dir, v, k, dmg, pen, team, owner, tracer, streak, cal, weapon, pellets..., aim (for range stats) }
 B.fire = function (o) {
   const b = { p: o.pos.clone(), v: o.dir.clone().multiplyScalar(o.v), v0: o.v, k: o.k, dmg: o.dmg, pen: o.pen, team: o.team, owner: o.owner, t: 0, dist: 0,
-    gyro: o.gyro || null, ap: !!o.ap, tracer: o.tracer || (o.gyro ? 'red' : null), streak: o.streak, cal: o.cal, weapon: o.weapon, start: o.pos.clone(), vis: o.vis ? o.vis.clone() : null, aim: o.aim, snapped: false, inc: o.inc, ammo: o.ammo, hp: o.hp, player: o.player, alive: true, hits: 0, pellet: o.pellet, pierced: 0, he: o.he || null, homing: o.homing || 0 };
+    gyro: o.gyro || null, ap: !!o.ap, tracer: o.tracer || (o.gyro ? 'red' : null), streak: o.streak, cal: o.cal, weapon: o.weapon, start: o.pos.clone(), vis: o.vis ? o.vis.clone() : null, aim: o.aim, snapped: false, inc: o.inc, ammo: o.ammo, hp: o.hp, player: o.player, alive: true, hits: 0, pellet: o.pellet, pierced: 0, he: o.he || null, homing: o.homing || 0, stun: o.stun || 0 };
   B.list.push(b);
   return b;
 };
@@ -209,6 +209,7 @@ B.update = function (dt, ctx) {
   // tracers
   for (const b of B.list) {
     if (!b.alive) continue;
+    if (b.tracer === 'ir' && !(G.Game.player && G.Game.player.nvgOn)) continue; // IR tracers only show through night vision
     if (b.tracer || b.streak) {
       const back = b.p.clone().addScaledVector(b.v, -Math.min(.035, b.t));
       if (b.vis && b.t < .05) back.lerp(b.vis, 1 - b.t / .05);

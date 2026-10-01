@@ -40,9 +40,7 @@ function pickLoadout(era, role, team) {
   // prefer the era's own weapons when the faction also draws on an older arsenal
   if (A && A.eras.length > 1) { const own = list.filter(w => w.e === era); if (own.length && Math.random() < .7) list = own; }
   const wp = list[Math.floor(Math.random() * list.length)];
-  const L = G.defaultLoadout(wp);
-  // bots in later eras use common optics
-  if (G.ERA[era].ord >= 3 && ['AR', 'CAR', 'BR', 'LMG'].includes(wp.c)) { const o = G.attachFor(wp, 'optic').filter(a => ['reddot', 'holo', 'acog', 'kobra', 'lpvo'].includes(a.id)); if (o.length && Math.random() < .7) L.optic = o[Math.floor(Math.random() * o.length)].id; }
+  const L = G.botLoadout ? G.botLoadout(wp, role, G.ERA[era].ord >= 3 ? 2 : 1) : G.defaultLoadout(wp);
   return { wp, L };
 }
 const ROLES = ['rifleman', 'rifleman', 'assault', 'gunner', 'marksman'];
@@ -51,7 +49,7 @@ class Bot {
   constructor(game, team, tierId, era, idx, opts = {}) {
     this.game = game; this.team = team; this.tier = G.TIER[tierId]; this.era = era; this.idx = idx;
     this.role = ROLES[idx % ROLES.length];
-    const lo = opts.wp ? { wp: opts.wp, L: G.defaultLoadout(opts.wp) } : pickLoadout(era, this.role, team);
+    const lo = opts.wp ? { wp: opts.wp, L: opts.L || G.defaultLoadout(opts.wp) } : pickLoadout(era, this.role, team);
     this.wp = lo.wp; this.L = lo.L; this.S = G.resolveStats(this.wp, this.L);
     this.name = opts.name || NAMES[era][team][idx % 7];
     this.pos = V3(); this.vel = V3(); this.yaw = 0; this.pitch = 0;
@@ -82,6 +80,7 @@ class Bot {
     if (this.spawnProt > 0) return { dmg: 0 };
     let d = b.dmg * energy * (G.ZONE_MUL[zone] || 1);
     let armorStop = false;
+    if (b.stun) { this.stunT = Math.max(this.stunT || 0, b.stun); this.duckT = Math.max(this.duckT || 0, 1); } // less-lethal: knocked down and dazed
     if (this.kit && p) { // the hostile's actual kit: plates, soft armour, helmet and visor resolved like the player's
       const bone = zone === 'head' ? this.model.head : this.model.chest; bone.updateWorldMatrix(true, false);
       const loc = bone.worldToLocal(p.clone()); if (zone === 'head') loc.y += .026;
@@ -112,6 +111,7 @@ class Bot {
   // shout a contact report: allies nearby (same floor or in sight) start searching where you were seen
   callout(pos, r = 28) {
     if (this.calledT && performance.now() - this.calledT < 4000) return; this.calledT = performance.now();
+    const Pl = this.game.player; if (Pl && Pl.km && Pl.km.radio) this.radioT = performance.now() + 6000; // intercepted on the player's radio
     if (G.Audio.shout) G.Audio.shout(this.pos);
     for (const b of this.game.bots) { if (b === this || !b.alive || b.team !== this.team || b.alert === 'combat') continue;
       const d = b.pos.distanceTo(this.pos); if (d > r) continue; if (Math.abs(b.pos.y - this.pos.y) > 3 && !G.E.world.los(b.eye, this.eye)) continue;
@@ -152,7 +152,7 @@ class Bot {
         const range = (60 * vis + 25) * (this.role && this.role.sight || 1) * (night && !nvg && !flash ? .45 : 1) * (e.lightOn ? 1.5 : 1);
         if (d > range) continue;
         const close = 1 - d / range, sp = Math.hypot(e.vel.x, e.vel.z);
-        const k = fovK * (.18 + 2.4 * close * close) * (sp > 3 ? 1.7 : sp > .6 ? 1.15 : .7) * (flash ? 2.5 : 1) * this.pers.eyes;
+        const k = fovK * (.18 + 2.4 * close * close) * (sp > 3 ? 1.7 : sp > .6 ? 1.15 : .7) * (flash ? 2.5 : 1) * this.pers.eyes * (e.camoK || 1);
         if (d < bd) { bd = d; best = e; bk = k; }
       }
       const rate = this.alert === 'combat' ? 7 : this.alert === 'search' ? 2.6 : 1.1;
@@ -160,7 +160,7 @@ class Bot {
       else this.sus = Math.max(0, this.sus - (this.alert === 'combat' ? .05 : .2) * iv);
       // hearing: running footsteps carry, a crouch-walk barely does
       const Pl = this.game.player;
-      if (Pl && Pl.alive && Pl.team !== this.team && !best) { const d = Pl.pos.distanceTo(this.pos), sp = Math.hypot(Pl.vel.x, Pl.vel.z), hr = (sp > 4 ? 14 : sp > 2 ? 7 : sp > .4 ? (Pl.stance ? 2 : 3.5) : 0) * this.pers.ears;
+      if (Pl && Pl.alive && Pl.team !== this.team && !best) { const d = Pl.pos.distanceTo(this.pos), sp = Math.hypot(Pl.vel.x, Pl.vel.z), hr = (sp > 4 ? 14 : sp > 2 ? 7 : sp > .4 ? (Pl.stance ? 2 : 3.5) : 0) * this.pers.ears * (Pl.noiseK || 1);
         if (d < hr && Math.abs(Pl.pos.y - this.pos.y) < 3) { this.lastHeard = Pl.pos.clone(); this.sus = Math.max(this.sus, .35); if (this.alert === 'calm') { this.alert = 'search'; this.alertT = 20; } } }
       const was = this.targetVisible;
       this.targetVisible = !!best && this.sus >= 1 && !(this.stunT > 0);
@@ -182,7 +182,9 @@ class Bot {
       if (this.errT <= 0) { // re-sample aim error, shrinking while engaged
         this.errT = .35 + Math.random() * .4;
         const d = eye.distanceTo(aimAt), moving = Math.hypot(tgt.vel.x, tgt.vel.z) > 1 ? 1.5 : 1;
-        const e = T.aimErr * moving * (1 + (this.engageT ? Math.max(0, 1 - this.engageT / 3) : 1)) * (this.vel.lengthSq() > 1 ? 1.4 : 1) / this.pers.aim * (this.hp < this.tier.hp * .35 ? 1.35 : 1);
+        const Pz = this.game.player, dazzle = Pz && tgt === Pz && Pz.strobeOn && Pz.lightOn && Pz.pos.distanceTo(this.pos) < 30 && V3(-Math.sin(Pz.yaw), 0, -Math.cos(Pz.yaw)).dot(this.pos.clone().sub(Pz.pos).setY(0).normalize()) > .94 ? 3 : 1;
+        const optK = (this.S.zoom || 1) >= 3 && this.pos.distanceTo(tgt.pos) > 40 ? .7 : (this.S.laser && this.pos.distanceTo(tgt.pos) < 15 ? .85 : 1); // scopes help at range, lasers up close
+        const e = optK * dazzle * T.aimErr * moving * (1 + (this.engageT ? Math.max(0, 1 - this.engageT / 3) : 1)) * (this.vel.lengthSq() > 1 ? 1.4 : 1) / this.pers.aim * (this.hp < this.tier.hp * .35 ? 1.35 : 1);
         this.aimErr.set((Math.random() - .5) * 2 * e, (Math.random() - .5) * 2 * e * .7, 0);
       }
       this.engageT = (this.engageT || 0) + dt;

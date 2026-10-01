@@ -87,6 +87,8 @@ G.gunMaterials = function (wp, S) {
   if (fin === 'crimson') { metalCol = '#5a0c10'; metalRough = .3; }
   if (fin === 'hazard') { metalCol = '#141414'; metalRough = .5; }
   if (fin === 'rust') { metalCol = '#6a3a22'; metalRough = .85; metalMet = .4; }
+  const FX = G.FIN_EXTRA && G.FIN_EXTRA[fin];
+  if (FX) { metalCol = FX.col; metalRough = { stainless: .28, tin: .22, case: .3, worn: .45, damascus: .3 }[fin] || .55; metalMet = FX.poly ? .45 : .95; if (fin === 'damascus' || fin === 'case') { metalMap = G.texEngraved(); } }
   const camo = CAMOS.includes(fin) ? G.texCamo(fin) : null;
   const metal = new THREE.MeshStandardMaterial({ color: camo ? '#ffffff' : metalCol, map: camo || metalMap, metalness: camo ? .3 : metalMet, roughness: camo ? .7 : metalRough, roughnessMap: camo ? null : brushed, bumpMap: brushed, bumpScale: .00018 });
   const steel = new THREE.MeshStandardMaterial({ color: fin === 'gold' ? '#caa040' : '#3b3f44', metalness: .92, roughness: .3, roughnessMap: brushed });
@@ -101,6 +103,7 @@ G.gunMaterials = function (wp, S) {
   if (fin === 'fde') polyCol = '#8b7454'; if (fin === 'odc') polyCol = '#4f553b'; if (fin === 'tungsten') polyCol = '#4d545c';
   if (fin === 'whitewash') polyCol = '#dedad0'; if (fin === 'gold') polyCol = '#1d1e1f';
   if (fin === 'chrome') polyCol = '#1d1e1f'; if (fin === 'crimson') polyCol = '#6a1418'; if (fin === 'rust') polyCol = '#5a3a26';
+  if (FX && FX.poly) polyCol = FX.poly;
   const hazardPoly = !camo && (fin === 'hazard' || (m.pl === 'hazard' && !fin));
   if (!hazardPoly && polyCol === '#ffffff') polyCol = '#1d1e1f';
   const poly = new THREE.MeshStandardMaterial({ color: camo || hazardPoly ? '#ffffff' : polyCol, map: camo || (hazardPoly ? G.texHazard() : null), roughness: m.pl === 'bakelite' ? .45 : .78, metalness: .02, bumpMap: G.texStipple(), bumpScale: .0006 });
@@ -129,7 +132,8 @@ G.gunMaterials = function (wp, S) {
 // ---------------------------------------------------------------- builder
 G.buildGun = function (wp, L, opt = {}) {
   L = L || G.defaultLoadout(wp);
-  const S = G.resolveStats(wp, L);
+  if (opt.st && opt.st.supOff) L = Object.assign({}, L, { muzzle: 'mz_std' });
+  const S = G.resolveStats(wp, L, opt.st);
   const MT = opt.mats || G.gunMaterials(wp, S);
   const m = wp.m, t = m.t, lod = opt.lod || 0;
   const root = new THREE.Group(); root.name = wp.id;
@@ -1185,7 +1189,7 @@ G.buildGun = function (wp, L, opt = {}) {
   }
 
   function buildMuzzle() {
-    const L0 = L.muzzle;
+    const L0 = (G.ATT[L.muzzle] && G.ATT[L.muzzle].as === 'none') ? 'mz_std' : (G.ATT[L.muzzle] && G.ATT[L.muzzle].as) || L.muzzle;
     const mzGrp = grp(0, rig.muzzleY || 0, muzzleZ);
     cur = mzGrp;
     let len = 0;
@@ -1207,6 +1211,10 @@ G.buildGun = function (wp, L, opt = {}) {
         len = .1; add(gRBox(d * 2.6, d * 2, len, .006), MT.metal, 0, 0, -len / 2);
         for (let i = 0; i < 4; i++) for (const s of [-1, 1]) add(gBox(.003, d * 1.5, .014), MT.rubber, s * d * 1.31, 0, -.015 - i * .022);
         if (small) add(gBox(d * 1.2, .003, .05), MT.rubber, 0, d * 1.01, -len * .5);
+      } else if (L0 === 'cup') { // rifle-grenade cup / spigot launcher
+        len = .14; add(gCyl(d * 1.05, d * 1.05, .04, 14), MT.metal, 0, 0, -.02);
+        add(gCyl(.02, .02, .1, 18, true), MT.metal, 0, 0, -.09); add(gCyl(.018, .018, .1, 18, true), MT.inner || MT.rubber, 0, 0, -.09);
+        if (small) add(gBox(.004, .012, .05), MT.metal, 0, -.018, -.03);
       } else if (L0 === 'flash') {
         len = .05; add(gCyl(d * .8, d * .7, len, 12), MT.metal, 0, 0, -len / 2);
         if (small) for (let i = 0; i < 4; i++) { const a = i * PI / 2; add(gBox(.002, .004, len * .6), MT.rubber, Math.cos(a) * d * .75, Math.sin(a) * d * .75, -len * .6); }
@@ -1246,7 +1254,7 @@ G.buildGun = function (wp, L, opt = {}) {
   }
 
   function buildExtras() {
-    if (has('lug') && L.side !== 'bayonet' && small) add(gBox(.006, .01, .03), MT.metal, 0, -br * 2.2, muzzleZ + .03);
+    if (has('lug') && !(G.ATT[L.side] && (G.ATT[L.side].as === 'bayonet' || L.side === 'bayonet')) && small) add(gBox(.006, .01, .03), MT.metal, 0, -br * 2.2, muzzleZ + .03);
     if (has('heat')) { const hs = add(gCyl(br * 1.7, br * 1.7, blen * .6, 16, true), MT.metal, 0, br * .3, zf - blen * .35); hs.scale.set(1, 1, 1); if (small) for (let i = 0; i < 6; i++) for (let k = 0; k < 3; k++) add(gSph(.0035, 6), MT.rubber, Math.cos(k * .7 + .9) * br * 1.72, Math.sin(k * .7 + .9) * br * 1.72 + br * .3, zf - .04 - i * blen * .09); }
     if (has('heat_spas')) add(gRBox(.03, .02, blen * .5, .006), MT.poly, 0, br * 1.6, zf - blen * .3);
     if (has('carry_m60') || has('carry_saw') || has('carry_pk') || has('carryhandle_bren') || has('carry_barrett') || has('carry_fold') || has('carry_galil')) {
@@ -1400,9 +1408,9 @@ G.buildGun = function (wp, L, opt = {}) {
   }
   function buildAttachments() {
     // ---------- optic
-    const O = L.optic;
-    if (O !== 'irons' && G.ATT[O]) {
-      const at = G.ATT[O], s = at.s;
+    const O0 = L.optic, O = (G.ATT[O0] && G.ATT[O0].as) || O0;
+    if (O0 !== 'irons' && G.ATT[O0]) {
+      const at = G.ATT[O0], s = at.s;
       let ry = rig.railY || (t === 'ak' ? RH * .35 : ['bolt', 'lever', 'semiw'].includes(t) ? RW * .5 + .004 : top + .006);
       if (m.sgt === 'handle') ry = top + .05; // scopes sit on top of the carry handle
       const rz = rig.railZ !== undefined ? rig.railZ : zr - RL * .5;
@@ -1444,7 +1452,9 @@ G.buildGun = function (wp, L, opt = {}) {
           add(gRBox(.03, .035, .08, .008), MT.poly, .032, .045, -.03); add(gCyl(.006, .006, .003, 10), MT.glass, .032, .05, -.071); ocZ = .1; lensZ = -.096;
         } else if (O === 'holo_mag') {
           axis = .038; add(gRBox(.044, .02, .1, .006), MT.poly, 0, .01, -.03); frame(.034, .026, axis, -.03, .1, MT.poly); lens(.013, axis, -.07, 0, MT.lensRed);
-          openTube(.015, .015, .09, axis, .07); lens(.013, axis, .115, 0, MT.glass); ocZ = .12; lensZ = -.06;
+          const piv = grp(.024, axis - .022, .07), mg = grp(-.024, .022, 0, piv); cur = mg; // magnifier on a flip-to-side mount
+          openTube(.015, .015, .09, 0, 0); lens(.013, 0, .045, 0, MT.glass); cur = og; rig.magPivot = piv;
+          rig.altSpec = { x: 0, y: axis, z: .04, eye: .14 }; ocZ = .12; lensZ = -.06;
         } else if (O === 'psy_oracle') { // digital ballistic-computer scope: armoured body, rangefinder, live side display
           axis = .046; add(gRBox(.05, .052, .2, .012), MT.poly, 0, .026, 0);
           openTube(.024, .024, .06, axis, -.12); lens(.023, axis, -.15, 0, MT.glass);
@@ -1518,11 +1528,53 @@ G.buildGun = function (wp, L, opt = {}) {
       }
       rig.sightH = og.position.y + axis; rig.sightZ = rz + ocZ; rig.eyeDist = zoom >= 1.2 ? .07 : .14;
       rig.sightX = og.position.x + ox;
-      rig.optic = at; rig.lensZ = rz + lensZ;
+      rig.optic = at; rig.lensZ = rz + lensZ; rig.opticBase = og.position.y; rig.opticTop = og.position.y + axis + (zoom >= 1.2 ? .02 : .018);
+      if (rig.altSpec) { const a = rig.altSpec; rig.alt = { x: og.position.x + a.x, y: og.position.y + a.y, z: rz + a.z, eye: a.eye, roll: 0 }; }
       cur = root;
     }
+    // ---------- backup sight / magnifier
+    const AX = G.ATT[L.aux];
+    if (AX && AX.s.alt && G.auxWorks(L) && rig.sightH !== undefined) {
+      const k = AX.s.alt.k, sx = rig.sightX || 0, sh = rig.sightH, sz = rig.sightZ;
+      const base = rig.opticBase !== undefined ? rig.opticBase : sh - .03;
+      const redDot = (x, y, z, g) => { // mini reflex sight with a red window and a projected dot
+        add(gRBox(.026, .01, .04, .003), MT.poly, x, y - .011, z, g);
+        for (const s2 of [-1, 1]) add(gBox(.004, .02, .01), MT.poly, x + s2 * .012, y - .001, z - .012, g);
+        add(gBox(.028, .004, .01), MT.poly, x, y + .01, z - .012, g);
+        const wdw = add(gBox(.02, .016, .002), MT.lensRed, x, y, z - .012, g); wdw.renderOrder = 2;
+        const dot = new THREE.Sprite(new THREE.SpriteMaterial({ map: G.texSprite('glow'), color: '#ff2a1a', blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, transparent: true }));
+        dot.scale.set(.003, .003, 1); dot.position.set(x, y, z - .015); dot.renderOrder = 10; dot.visible = false; (g || root).add(dot); rig.altDot = dot;
+      };
+      if (k === 'mag') { // magnifier on a flip-to-side mount behind the red dot
+        const big = AX.s.alt.zoom >= 6, r = big ? .019 : .016, len = big ? .14 : .1, z = sz + .02 + len / 2;
+        add(gRBox(.026, sh - .022 - base, .03, .004), MT.metal, sx + .024, base + (sh - .022 - base) / 2, z);
+        const piv = grp(sx + .024, sh - .022, z), mg = grp(-.024, .022, 0, piv);
+        add(gCyl(r, r, len, 22, true), MT.poly, 0, 0, 0, mg); add(gCyl(r * .9, r * .9, len, 22, true), MT.rubber, 0, 0, 0, mg);
+        add(gCyl(r * 1.15, r * 1.15, .02, 22, true), MT.rubber, 0, 0, len / 2 - .01, mg);
+        for (const zz of [-len / 2, len / 2]) { const l = add(gCyl(r * .88, r * .88, .002, 22), MT.glass, 0, 0, zz, mg); l.renderOrder = 2; }
+        rig.magPivot = piv; rig.magIn = true;
+      } else if (k === 'offset') { // 45° canted sight on the right of the rail
+        const g = grp(sx + .03, base + .012, sz - .07); g.rotation.z = -PI / 4;
+        add(gRBox(.02, .02, .03, .004), MT.metal, 0, 0, 0, g);
+        if (AX.s.alt.ret === 'irons') {
+          add(gBox(.003, .022, .006), MT.metal, 0, .022, -.12, g); add(gBox(.012, .004, .006), MT.metal, 0, .012, -.12, g); // front post
+          add(gTor(.004, .0015), MT.metal, 0, .022, .015, g); add(gBox(.016, .012, .004), MT.metal, 0, .012, .015, g); // rear aperture
+          const p = new THREE.Vector3(0, .022, .015).applyAxisAngle(V3(0, 0, 1), -PI / 4).add(g.position);
+          rig.alt = { x: p.x, y: p.y, z: p.z, eye: .09, roll: PI / 4 };
+        } else {
+          redDot(0, .028, 0, g);
+          const p = new THREE.Vector3(0, .028, -.012).applyAxisAngle(V3(0, 0, 1), -PI / 4).add(g.position);
+          rig.alt = { x: p.x, y: p.y, z: p.z, eye: .14, roll: PI / 4 };
+        }
+      } else if (k === 'piggy') { // mini dot on top of the scope
+        const top = rig.opticTop || sh + .02, z = sz - .1;
+        add(gRBox(.02, .01, .03, .003), MT.metal, sx, top + .004, z);
+        redDot(sx, top + .022, z);
+        rig.alt = { x: sx, y: top + .022, z: z - .012, eye: .14, roll: 0 };
+      }
+    }
     // ---------- underbarrel
-    const U = L.under;
+    const U = ({ gl: 'm203' })[(G.ATT[L.under] || {}).as] || (G.ATT[L.under] || {}).as || L.under;
     const uz = zf - Math.min(hgL || blen * .4, blen) * .55;
     const uy = hgT === 'wfull' || hgT === 'wood' ? -br * 3 - .006 : -.027;
     if (U === 'vgrip' || U === 'thompson_vfg') {
@@ -1549,7 +1601,7 @@ G.buildGun = function (wp, L, opt = {}) {
       for (const s of [-1, 1]) { const leg = grp(s * .012, 0, 0, bg); add(gCyl(.004, .004, .19, 8), MT.metal, 0, 0, -.095, leg); add(gSph(.006, 8), MT.rubber, 0, 0, -.19, leg); rig.bipodLegs.push(leg); }
     }
     // ---------- side / lug
-    const Sd = L.side;
+    const Sd = (G.ATT[L.side] || {}).as || L.side;
     if (Sd === 'bayonet' || Sd === 'wirecut') {
       const blade = Sd === 'wirecut' ? .06 : wp.c === 'RIF' && G.ERA[wp.e].ord <= 1 ? .4 : .17;
       const bgp = grp(0, -br * 2.2, rig.muzzleZ + .06);
