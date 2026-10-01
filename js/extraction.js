@@ -467,7 +467,9 @@ X.render = function (root) {
   Game.mode = 'menu';
   const S = X.stash, esc = G.UI.esc, prep = S.prep = S.prep || {};
   const lv = X.level(S.xp);
-  const tabs = [['prep', 'Raid'], ['stash', 'Stash'], ['traders', 'Traders'], ['log', 'Raid log']];
+  X.auctionSim();
+  const live = (S.auctions || []).filter(a => !a.done).length;
+  const tabs = [['prep', 'Raid'], ['stash', 'Stash'], ['traders', 'Traders'], ['auction', `🔨 Auction${live ? ` (${live})` : ''}`], ['log', 'Raid log']];
   const scavReady = Date.now() >= (S.scavCD || 0);
   const owned = (t, f) => S.items.filter(it => it.t === t && f(it));
   const sel = (name, list, cur, fmtFn) => `<select data-prep="${name}"><option value="">— none —</option>${list.map(it => `<option value="${it.u}" ${cur === it.u ? 'selected' : ''}>${esc(fmtFn(it))}</option>`).join('')}</select>`;
@@ -500,6 +502,8 @@ X.render = function (root) {
       ${cat === 'w' ? `<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px">${G.ERAS.map(e => `<button class="chip ${era === e.id ? 'on' : ''}" data-tera="${e.id}">${esc(e.name)}</button>`).join('')}</div>` : ''}
       <p class="muted">Weapons come with the build you saved in the Armory — customise there first.</p>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:6px">${list.map(o => `<div class="card" style="cursor:default"><small>${esc(o.sub)}</small><b style="font-size:15px">${esc(o.n)}</b><button class="btn small" data-buy="${o.k}:${o.id}" ${S.money < o.p ? 'disabled' : ''}>Buy ${fmt(o.p)}</button></div>`).join('')}</div>`;
+  } else if (X.tab === 'auction') {
+    body = X.auctionHTML();
   } else {
     body = `<dl class="spec">${[['Raids', S.raids], ['Survived', S.survived + (S.raids ? ` (${Math.round(S.survived / S.raids * 100)}%)` : '')], ['Kills', S.kills], ['Level', lv]].map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>${(S.log || []).map(l => `<div style="padding:4px 0"><b style="color:${l.status === 'survived' ? '#a6d98a' : '#ec8a7a'}">${l.status.toUpperCase()}</b> · ${esc(l.map)} · ${mmss(l.t)} · kills ${l.kills.scav + l.kills.pmc + l.kills.boss} · brought out ${fmt(l.value)}</div>`).join('')}<div style="margin-top:16px"><button class="btn" id="xl-wipe">Wipe (start over)</button></div>`;
   }
@@ -508,6 +512,7 @@ X.render = function (root) {
     <div class="row" style="gap:6px">${tabs.map(([k, n]) => `<button class="chip ${X.tab === k ? 'on' : ''}" data-tab="${k}">${n}</button>`).join('')}</div>
     ${body}</div></section>`;
   const re = () => { X.save(); X.render(root); };
+  X.auctionBind(root, re);
   root.querySelector('#back').onclick = () => G.UI.show('menu');
   root.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { X.tab = b.dataset.tab; G.Audio.ui(); re(); });
   root.querySelectorAll('[data-map]').forEach(b => b.onclick = () => { prep.map = b.dataset.map; re(); });
@@ -553,6 +558,103 @@ X.deploy = function () {
   }
   X.save(); G.Audio.init();
   G.UI.loading('Loading the raid…', () => X.start(cfg));
+};
+
+// ------------------------------------------------------------------ auction house
+// Every few minutes a rare lot comes up: top-rated armour and helmets, premium night vision and thermals,
+// bomb suits and plate harnesses, fully kitted weapons (the most expensive parts on the market) and rare
+// valuables. Each lot runs for a few minutes; rival bidders raise the price at random up to a hidden
+// ceiling of their own. Your bid is held in escrow and refunded if you are outbid. A bid in the last
+// 30 s extends the lot by 30 s. Lots keep running (and resolve) while you are in a raid.
+const BIDDERS = ['Fence', 'Sh0tgunBob', 'GearQueen', 'Ratnik_77', 'TacticalTom', 'Baron', 'Kolya_Sniper', 'LootGoblin', 'Mr. Kim', 'Valkyrie', 'Hoarder', 'Chad_Ops'];
+const RARITY = [[400000, 'Legendary', '#ff9a3a'], [200000, 'Epic', '#c07aff'], [90000, 'Rare', '#5ab4ff'], [0, 'Uncommon', '#a6d98a']];
+const rarity = v => RARITY.find(r => v >= r[0]);
+const BAD = /solvent|beanbag|bird|pink|pearl|stk_none|tracer|steelcase|wirecut|lowrec|frangible|soft$/;
+const bestBuild = (wp, R) => { const L = G.defaultLoadout(wp); for (const [sl] of G.SLOTS) { const o = G.attachFor(wp, sl).filter(a => !G.DEFAULT_IDS.includes(a.id) && !BAD.test(a.id) && !a.s.tracer); if (!o.length || (sl === 'finish' && R() < .5)) continue; o.sort((a, b) => G.priceAtt(b) - G.priceAtt(a)); L[sl] = o[Math.floor(R() * Math.min(3, o.length))].id; } if (!G.auxWorks(L)) L.aux = 'aux_none'; return L; };
+X.rollLot = function (R = Math.random) {
+  for (let k = 0; k < 20; k++) { const l = X.rollLot1(R); if (l.value >= 90000 || k === 19) return l; } // only genuinely good stuff goes to auction
+};
+X.rollLot1 = function (R = Math.random) {
+  const kind = R();
+  let item;
+  if (kind < .4) { // premium weapon with a top-shelf build
+    const pool = G.WEAPONS.filter(w => (['now', 'mod'].includes(w.e) && ['AR', 'BR', 'DMR', 'SR', 'LMG', 'CAR'].includes(w.c)) || (w.e === 'psycho' && R() < .5) || (w.proto && w.c !== 'PST'));
+    const wp = pick(pool, R); item = { t: 'w', id: wp.id, L: bestBuild(wp, R), u: uid() };
+  } else if (kind < .85) { // top-tier kit
+    const good = G.GEAR.filter(g => !/_none$|^g_none$/.test(g.id) && ((g.slot === 'helmet' && (g.rating || 0) >= 4.2) || (g.slot === 'armor' && (g.cat || (g.plates && g.cov && g.cov.sides))) || (g.slot === 'plates' && (g.rating || 0) >= 14) || (g.slot === 'nvg' && g.nv && g.nv.q >= .85) || /psy/.test(g.id)));
+    item = { t: 'g', id: pick(good, R).id, u: uid() };
+  } else item = { t: 'l', id: pick(['l_gpu', 'l_coin', 'l_ingot', 'l_ledx', 'l_folder', 'l_nvtube', 'l_icon', 'l_ring'], R), u: uid() };
+  const v = Math.max(20000, itemPrice(item)), now = Date.now(), dur = (3 + R() * 4) * 60 * 1000;
+  return { id: uid(), item, value: v, bid: Math.round(v * (.45 + R() * .2) / 500) * 500, bidder: null, mine: 0, npcMax: Math.round(v * (.85 + R() * .75)), npcAt: now + 15000 + R() * 40000, start: now, ends: now + dur, done: false };
+};
+X.auctionSim = function () {
+  const S = X.stash, now = Date.now(); S.auctions = S.auctions || []; let changed = false;
+  if (!S.nextLot || S.nextLot < now - 30 * 60 * 1000) { // first visit or a long time away: a few lots are already running
+    for (let i = S.auctions.filter(a => !a.done && a.ends > now).length; i < 3; i++) { const a = X.rollLot(); a.ends = now + (1.5 + i * 1.6 + Math.random()) * 60 * 1000; a.npcAt = now + 8000 + Math.random() * 20000; S.auctions.push(a); }
+    S.nextLot = now + (2.5 + Math.random() * 3.5) * 60 * 1000; changed = true;
+  }
+  while (S.nextLot <= now) { if (S.auctions.filter(a => !a.done).length < 4) { const a = X.rollLot(); a.start = S.nextLot; a.ends = S.nextLot + (a.ends - now); a.npcAt = S.nextLot + 20000; S.auctions.push(a); X.notify = `🔨 New lot: ${itemName(a.item)}`; } S.nextLot += (2.5 + Math.random() * 3.5) * 60 * 1000; changed = true; }
+  for (const a of S.auctions) {
+    if (a.done) continue;
+    // rival bids up to their ceiling, more often near the end
+    while (a.npcAt <= Math.min(now, a.ends) && a.bidder !== 'npc-max') {
+      const next = Math.round(Math.max(a.bid * 1.06, a.bid + 1000) / 500) * 500;
+      if ((a.bidder && a.bidder !== 'you') || next > a.npcMax) { a.npcAt = a.ends + 1; break; } // nobody outbids a rival; stop when over their ceiling
+      if (a.bidder === 'you') { S.money += a.mine; a.mine = 0; X.notify = `Outbid on ${itemName(a.item)}`; }
+      a.bid = next; a.bidder = pick(BIDDERS); a.lastBidT = a.npcAt;
+      if (a.ends - a.npcAt < 30000) a.ends = a.npcAt + 30000; // sniping protection works for them too
+      const left = a.ends - a.npcAt; a.npcAt += Math.min(left * .8, 4000 + Math.random() * (left > 60000 ? 50000 : 12000));
+      changed = true;
+    }
+    if (a.bidder && a.bidder !== 'you' && a.npcAt > a.ends) a.npcAt = a.ends + 1;
+    if (now >= a.ends) { a.done = true; changed = true;
+      if (a.bidder === 'you') { S.items.push(a.item); a.won = true; X.notify = `🏆 You won ${itemName(a.item)} for ${fmt(a.bid)}`; }
+    }
+  }
+  S.auctions = S.auctions.filter(a => !a.done || now - a.ends < 10 * 60 * 1000).slice(-12);
+  if (changed) X.save();
+  return changed;
+};
+X.bid = function (id, mult) {
+  X.auctionSim();
+  const S = X.stash, a = S.auctions.find(x => x.id === id); if (!a || a.done) return;
+  if (a.bidder === 'you') { G.UI.toast('You are already the highest bidder', 1.5); return; }
+  const amt = Math.round(Math.max(a.bid * mult, a.bid + 1000) / 500) * 500;
+  if (S.money < amt) { G.UI.toast(`You need ${fmt(amt)}`, 1.5); return; }
+  S.money -= amt; a.mine = amt; a.bid = amt; a.bidder = 'you';
+  const now = Date.now(); if (a.ends - now < 30000) a.ends = now + 30000;
+  // a rival who still wants it answers after a few seconds
+  if (amt * 1.06 <= a.npcMax) a.npcAt = now + 3000 + Math.random() * Math.min(20000, (a.ends - now) * .6); else a.npcAt = a.ends + 1;
+  X.save(); G.Audio.ui && G.Audio.ui('attach'); G.UI.toast(`Bid ${fmt(amt)} on ${itemName(a.item)}`, 1.6);
+};
+X.auctionHTML = function () {
+  const S = X.stash, esc = G.UI.esc, now = Date.now();
+  const lots = (S.auctions || []).slice().sort((a, b) => (a.done - b.done) || a.ends - b.ends);
+  const detail = it => {
+    if (it.t === 'w') { const wp = G.WEAPON[it.id], parts = Object.values(it.L).filter(id => !G.DEFAULT_IDS.includes(id)).map(id => G.ATT[id] && G.ATT[id].n).filter(Boolean); return `${esc(G.ERA[wp.e].name)} · ${esc(G.CLASS_NAMES[wp.c])} · ${esc(wp.cal)}<br><span style="opacity:.75">${parts.map(esc).join(' · ')}</span>`; }
+    if (it.t === 'g') { const g = G.GEARID[it.id]; return `${esc(g.co || '')} · ${g.y}${g.wt ? ' · ' + g.wt + ' kg' : ''}${g.rating ? ' · rating ' + g.rating : ''}${g.soft ? ' · soft ' + g.soft : ''}<br><span style="opacity:.75">${G.gearProps(g).perks.map(p => esc(p[0])).join(' · ')}</span>`; }
+    return esc(G.LOOTID[it.id].cat);
+  };
+  return `<p class="muted">Rare lots come up every few minutes and run for 3–7 minutes. Your bid is held until you are outbid (then refunded); a bid in the last 30 s adds 30 s. Next lot in <b data-next>${mmss(Math.max(0, (S.nextLot - now) / 1000))}</b>.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:8px">${lots.map(a => { const r = rarity(a.value), mine = a.bidder === 'you', left = Math.max(0, (a.ends - now) / 1000);
+      return `<div class="card" style="cursor:default;border-color:${a.done ? 'var(--line2)' : r[2]};opacity:${a.done ? .6 : 1}"><small style="color:${r[2]}">${r[1]} · ${a.item.t === 'w' ? 'Weapon' : a.item.t === 'g' ? 'Equipment' : 'Valuable'} · est. ${fmt(a.value)}</small><b style="font-size:17px">${esc(itemName(a.item))}</b><span style="font-size:12.5px">${detail(a.item)}</span>
+        <span style="display:flex;justify-content:space-between;align-items:baseline;margin-top:6px"><span style="font:700 20px var(--f-mono,monospace);color:${mine ? '#a6d98a' : '#e8e2cc'}">${fmt(a.bid)}</span><span data-ends="${a.ends}" style="font:600 14px var(--f-mono,monospace);color:${left < 30 && !a.done ? '#ff6a5a' : '#e6c572'}">${a.done ? (a.won ? 'WON' : 'SOLD') : mmss(left)}</span></span>
+        <span>${a.done ? (a.won ? '🏆 In your stash' : `Sold to ${esc(a.bidder || 'nobody')}`) : a.bidder ? (mine ? '✔ You are winning' : `Highest: ${esc(a.bidder)}`) : 'No bids yet'}</span>
+        ${a.done ? '' : `<span style="display:flex;gap:6px;margin-top:4px">${[[1.05, '+5%'], [1.1, '+10%'], [1.25, '+25%']].map(([m, t]) => `<button class="btn small" data-bid="${a.id}" data-m="${m}" ${mine ? 'disabled' : ''}>${t} · ${fmt(Math.round(Math.max(a.bid * m, a.bid + 1000) / 500) * 500)}</button>`).join('')}</span>`}</div>`; }).join('') || '<p class="muted">No lots yet — the first one is coming up.</p>'}</div>`;
+};
+X.auctionBind = function (root, re) {
+  root.querySelectorAll('[data-bid]').forEach(b => b.onclick = () => { X.bid(b.dataset.bid, +b.dataset.m); re(); });
+  clearInterval(X._aT);
+  X._aT = setInterval(() => {
+    if (G.UI.screen !== 'extraction' || !root.isConnected) { clearInterval(X._aT); return; }
+    const ch = X.auctionSim();
+    if (X.notify) { G.UI.toast(X.notify, 3); X.notify = null; }
+    if (ch && X.tab === 'auction') return re();
+    if (ch) { const t = root.querySelector('[data-tab="auction"]'); const n = X.stash.auctions.filter(a => !a.done).length; if (t) t.textContent = `🔨 Auction${n ? ` (${n})` : ''}`; return; }
+    const now = Date.now();
+    root.querySelectorAll('[data-ends]').forEach(e => { const a = (X.stash.auctions || []).find(x => x.ends === +e.dataset.ends); if (a && !a.done) { const l = Math.max(0, (a.ends - now) / 1000); e.textContent = mmss(l); e.style.color = l < 30 ? '#ff6a5a' : '#e6c572'; } });
+    const nx = root.querySelector('[data-next]'); if (nx) nx.textContent = mmss(Math.max(0, (X.stash.nextLot - now) / 1000));
+  }, 1000);
 };
 
 // ------------------------------------------------------------------ hooks into the main loop
