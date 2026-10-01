@@ -1,7 +1,7 @@
 // ============================================================================
 // Solo counter-terror missions: clear every hostile from a structure without
-// hitting the hostages. Five multi-level sites (cargo ship, oil platform,
-// embassy compound, dockside warehouse, night train) at four times of day.
+// hitting the hostages. Eight multi-level sites (cargo ship, oil platform, embassy,
+// dockside warehouse, night train, hotel, hijacked airliner, desert compound) at four times of day.
 // Hostiles are sentries that hold their posts, scan their sector, react to
 // gunfire and never respawn.
 // ============================================================================
@@ -61,18 +61,92 @@ const H = {
 };
 G.MissionHelpers = H;
 
+// ------------------------------------------------------------------ outskirts: the wider area around each structure
+// Themed clusters of cover on a grid of cells around the core, each possibly manned by a sentry. Posts are only kept
+// where there is real floor and no geometry at body height. o: { style, base, bounds, regions, avoid, start, max, seed }
+function freeSpot(W, x, y, z, r = .45) {
+  const gy = W.groundAt(x, z, y + .45, .15); if (Math.abs(gy - y) > .15) return false;
+  for (const c of W.colliders) { if (c.soft || c.noMove) continue; if (c.max.x > x - r && c.min.x < x + r && c.max.z > z - r && c.min.z < z + r && c.max.y > y + .2 && c.min.y < y + 1.7) return false; }
+  return true;
+}
+const CLUSTERS = {
+  dock: ['containers', 'containers', 'shed', 'crates', 'crane', 'nest', 'forklift'],
+  urban: ['building', 'building', 'cars', 'barricade', 'kiosk', 'nest', 'dumpsters'],
+  desert: ['adobe', 'adobe', 'wall', 'technical', 'nest', 'palms', 'rocks'],
+  airport: ['hangarette', 'carts', 'containers', 'fuel', 'nest', 'crates'],
+  yard: ['wagons', 'wagons', 'hut', 'containers', 'crates', 'nest'],
+  rig: ['module', 'tanks', 'piperack', 'crates', 'module'],
+};
+H.outskirts = function (W, M, o) {
+  const R = G.rng(o.seed || M.id.length * 131 + 7), b = o.base || 0, posts = [], cell = o.cell || 13;
+  if (o.bounds) W.bounds = o.bounds;
+  const inside = (x, z, r, m = 0) => x > r[0] - m && x < r[2] + m && z > r[1] - m && z < r[3] + m;
+  const st = o.start || M.player.pos.filter((v, i) => i !== 1);
+  const face = (x, z) => Math.atan2(-(st[0] - x), -(st[1] - z)) + (R() - .5) * 1.2;
+  const add = (x, z, crouch) => { if (freeSpot(W, x, b, z)) { posts.push([+x.toFixed(2), b, +z.toFixed(2), face(x, z), crouch ? 1 : 0]); return true; } return false; };
+  const ground = b === 0;
+  const box = (x, z, w, h, d, m, mat = 'metal', y = 0, opt = {}) => W.box(x, b + y, z, w, h, d, surf(m, Math.max(1, Math.round(Math.max(w, d) / 4))), mat, opt);
+  const nest = (x, z, ry) => { const c = Math.cos(ry), sn = Math.sin(ry); box(x - sn * 1.3, z - c * 1.3, Math.abs(c) * 2.6 + .7, 1.1, Math.abs(sn) * 2.6 + .7, 'sandbag', 'sandbag'); return [[x, z, 1]]; };
+  const kinds = {
+    containers: (x, z, ry) => { const n = 1 + Math.floor(R() * 3), cols = ['container_r', 'container_b', 'container_g']; for (let i = 0; i < n; i++) W.container(x, z, ry, cols[Math.floor(R() * 3)], b + i * 2.59); if (R() < .6) W.container(x + (ry ? 0 : 3.2), z + (ry ? 3.2 : 0), ry, cols[Math.floor(R() * 3)], b); return [[x + (ry ? 4.6 : 0), z + (ry ? 0 : 4.6)], [x - (ry ? 4.6 : 0), z - (ry ? 0 : 4.6)]]; },
+    shed: (x, z, ry) => { H.room(W, x, z, 7, 5, 3, b, { mat: 'corrugated', doors: { s: [.5] }, win: { n: [.5] } }); return [[x, z], [x + 2, z + 4]]; },
+    crates: (x, z) => { for (let i = 0; i < 4; i++) W.crate(x + (i % 2) * 1.3 - .6, z + Math.floor(i / 2) * 1.3 - .6, 1.2, b); if (R() < .5) W.crate(x, z, 1.2, b + 1.2); return [[x + 2.4, z], [x, z + 2.4]]; },
+    crane: (x, z) => { box(x - 3, z, 1, 14, 1, 'yellow'); box(x + 3, z, 1, 14, 1, 'yellow'); box(x, z, 8, 1, 1.4, 'yellow', 'metal', 13.5, { noCol: true }); return [[x, z + 2]]; },
+    nest: (x, z, ry) => nest(x, z, ry),
+    forklift: (x, z, ry) => { if (ground) W.vehicle(x, z, ry, 'forklift'); else W.crate(x, z, 1.2, b); return [[x + 2.5, z + 1]]; },
+    building: (x, z, ry) => { const w = 9 + Math.floor(R() * 4), d = 7 + Math.floor(R() * 3), m = ['brick', 'plaster', 'redbrick', 'concrete'][Math.floor(R() * 4)]; H.room(W, x, z, w, d, 3.4, b, { mat: m, doors: { s: [.3], n: [.7] }, win: { s: [.75], e: [.5], w: [.5], n: [.25] } }); return [[x, z], [x - w / 4, z + d / 2 + 1.6]]; },
+    cars: (x, z, ry) => { W.vehicle(x, z, ry + (R() - .5) * .4, R() < .3 ? 'burnt' : 'car'); W.vehicle(x + 4, z + 2, ry + 1.4, R() < .5 ? 'car' : 'trabant'); return [[x - 2, z + 3.2], [x + 6.5, z]]; },
+    barricade: (x, z, ry) => { box(x, z, ry ? 1 : 7, 1.1, ry ? 7 : 1, 'concrete', 'concrete'); W.barrel(x + 2, z + 2, b); return [[x + (ry ? -1.3 : 0), z + (ry ? 0 : -1.3), 1]]; },
+    kiosk: (x, z) => { H.room(W, x, z, 4, 4, 2.8, b, { mat: 'white', doors: { s: [.5] }, win: { e: [.5], w: [.5] } }); return [[x, z]]; },
+    dumpsters: (x, z) => { box(x, z, 2, 1.4, 1.2, 'olive'); box(x + 2.6, z, 2, 1.4, 1.2, 'rust'); return [[x + 1.3, z + 1.8, 1]]; },
+    adobe: (x, z) => { const w = 7 + Math.floor(R() * 3), d = 6 + Math.floor(R() * 3); H.room(W, x, z, w, d, 3, b, { mat: 'adobe', doors: { s: [.5], e: [.5] }, win: { n: [.5], w: [.5] } }); return [[x, z], [x + w / 2 + 1.6, z]]; },
+    wall: (x, z, ry) => { box(x, z, ry ? .5 : 9, 2.2, ry ? 9 : .5, 'adobe', 'stone'); return [[x + (ry ? 1.2 : 0), z + (ry ? 0 : 1.2)], [x - (ry ? 1.2 : 0), z - (ry ? 0 : 1.2)]]; },
+    technical: (x, z, ry) => { if (ground) W.vehicle(x, z, ry, 'truck'); return [[x + 3, z + 1]]; },
+    palms: (x, z) => { if (ground) { W.tree(x, z, 7, 'palm'); W.tree(x + 3, z + 2, 6, 'palm'); } box(x + 1.5, z - 2, 4, .9, .8, 'sandbag', 'sandbag'); return [[x + 1.5, z - 3.2, 1]]; },
+    rocks: (x, z) => { box(x, z, 3, 1.6, 2.4, 'stone', 'stone'); box(x + 2.4, z + 1, 2, 1.1, 2, 'stone', 'stone'); return [[x - 2.2, z, 1]]; },
+    hangarette: (x, z) => { H.room(W, x, z, 12, 9, 5, b, { mat: 'corrugated', doors: { s: [.3, .7] }, win: { n: [.5] } }); W.crate(x - 3, z - 2, 1.2, b); return [[x, z], [x + 3, z + 6]]; },
+    carts: (x, z) => { for (let i = 0; i < 4; i++) box(x + i * 2.6 - 4, z, 2, 1.1, 1.4, 'car2'); return [[x, z + 2]]; },
+    fuel: (x, z, ry) => { if (ground) W.vehicle(x, z, ry, 'truck'); box(x + 4, z, 2.2, 2.2, 2.2, 'white'); return [[x + 4, z + 2.6]]; },
+    wagons: (x, z) => { for (const dx of [-1.6, 1.6]) { box(x + dx, z, 2.9, 3.2, 12.5, R() < .5 ? 'rust' : 'container_b', 'metal', .9); box(x + dx, z, 2.5, .9, 11, 'darkmetal', 'metal', 0, { noCol: true }); } return [[x + 3.8, z - 3], [x - 3.8, z + 3]]; },
+    hut: (x, z) => { H.room(W, x, z, 4, 4, 3, b, { mat: 'redbrick', doors: { s: [.5] }, win: { e: [.5], n: [.5] } }); return [[x, z]]; },
+    module: (x, z) => { H.room(W, x, z, 8, 6, 3.2, b, { mat: 'white', doors: { w: [.5], e: [.5] }, win: { n: [.5] } }); return [[x, z], [x, z + 4.2]]; },
+    tanks: (x, z) => { box(x, z, 3, 4, 3, 'white'); box(x + 3.6, z, 3, 4, 3, 'white'); return [[x + 1.8, z + 2.6]]; },
+    piperack: (x, z, ry) => { box(x, z, ry ? 1.4 : 9, 1.6, ry ? 9 : 1.4, 'darkmetal'); return [[x + (ry ? 1.4 : 0), z + (ry ? 0 : 1.4), 1]]; },
+  };
+  const list = CLUSTERS[o.style] || CLUSTERS.urban, cand = [];
+  for (const reg of o.regions) for (let x = reg[0] + cell / 2; x < reg[2]; x += cell) for (let z = reg[1] + cell / 2; z < reg[3]; z += cell) {
+    if ((o.avoid || []).some(a => inside(x, z, a, 5))) continue;
+    if (Math.hypot(x - st[0], z - st[1]) < 10) continue;
+    cand.push([x + (R() - .5) * cell * .35, z + (R() - .5) * cell * .35]);
+  }
+  let manned = 0, lit = 0;
+  for (const [x, z] of cand) {
+    if (R() > (o.density || .72)) continue;
+    const kind = list[Math.floor(R() * list.length)], ry = R() < .5 ? 0 : PI / 2;
+    const spots = kinds[kind](x, z, ry) || [];
+    if (manned < (o.max || 10) && R() < (o.guardP || .5)) for (const sp of spots.sort(() => R() - .5)) if (add(sp[0], sp[1], sp[2])) { manned++; break; }
+    if (lit++ % 2 === 0) { const lm = new THREE.Mesh(gBox(.25, .12, .25), G.mat({ color: '#ffd9a0', emissive: '#ffd9a0', emissiveIntensity: 2 })); lm.position.set(x, b + 3.4, z); W.static.add(lm); W.box(x, b, z, .12, 3.4, .12, surf('darkmetal', 1), 'metal', { noCol: true }); } // lamp post (emissive only: no extra light cost)
+  }
+  return posts;
+};
+
 // ------------------------------------------------------------------ missions
 // guards: [x, y(floor), z, yaw, crouch?]; hostages: [x, y, z, yaw]
 G.MISSIONS = [
   { id: 'ship', name: 'MV Ardent Star', loc: 'Cargo ship, Gulf of Aden', blurb: 'Pirates-turned-terrorists hold a container ship and its crew. Board at the bow, fight aft through the container stacks and take the bridge.',
     ground: 'mud', sea: true, weather: { night: 'rain' }, amb: 'wind', reverb: 'industrial',
-    player: { pos: [0, 8, -42], yaw: PI },
+    out: { style: 'dock', base: 2.3, bounds: 80, regions: [[13, -74, 76, 74]], avoid: [[12, -5, 27, 5]], start: [66, 66], max: 11 },
+    player: { pos: [66, 2.3, 66], yaw: PI / 4 },
     build(W) {
       W.bounds = 62; H.water(W);
       const hull = surf('red', 1), deckM = surf('metal', 12), white = surf('white', 2);
       W.box(0, 0, 0, 18, 5.7, 90, hull, 'metal'); H.slab(W, 0, 6, 0, 18, 90, deckM);
       W.box(0, 0, -47.5, 12, 7.7, 5, hull, 'metal'); W.box(0, 0, 47, 16, 5.7, 4, hull, 'metal'); // bow block, stern
-      for (const s of [-1, 1]) H.rail(W, s * 8.95, -44, s * 8.95, 44, 6, 'white');
+      H.rail(W, -8.95, -44, -8.95, 44, 6, 'white'); H.rail(W, 8.95, -44, 8.95, -1, 6, 'white'); H.rail(W, 8.95, 1, 8.95, 44, 6, 'white');
+      // the quay alongside, a gangway up to the main deck
+      W.box(45, 0, 0, 68, 2.3, 152, surf('concrete', 20), 'concrete'); H.slab(W, 9.5, 6, 0, 1.6, 1.6, surf('darkmetal', 1)); H.stairs(W, 18.7, 0, 2.3, 6, -1, 1.4, 'x', 'darkmetal');
+      H.rail(W, 10.2, -.75, 18.7, -.75, 2.3 + 1.9, 'white'); H.rail(W, 10.2, .75, 18.7, .75, 2.3 + 1.9, 'white');
+      for (let z = -70; z <= 70; z += 10) W.box(11.6, 2.3, z, .5, .6, .5, surf('darkmetal', 1), 'metal');
       H.rail(W, -8.9, 44.9, 8.9, 44.9, 6, 'white');
       // forecastle with stairs down to the main deck
       H.slab(W, 0, 8, -41.5, 18, 7, deckM); W.box(0, 6, -38.2, 18, 2, .3, hull, 'metal');
@@ -105,13 +179,19 @@ G.MISSIONS = [
 
   { id: 'rig', name: 'Kestrel Alpha', loc: 'Oil platform, North Sea', blurb: 'Insurgents have seized a production platform and wired it for a spill. Fast-rope onto the helideck and clear the rig from top to bottom.',
     ground: 'mud', sea: true, weather: { dawn: 'rain', night: 'rain' }, amb: 'wind', reverb: 'industrial',
+    out: { style: 'rig', base: 14, bounds: 92, regions: [[55, -14, 84, 14]], avoid: [[52, -4, 58, 4]], start: [-13, -13], max: 8, cell: 7.5, density: .95, guardP: .85 },
     player: { pos: [-13, 24.2, -13], yaw: -PI * .75 },
     build(W) {
       W.bounds = 40; H.water(W);
       for (const x of [-16, 16]) for (const z of [-16, 16]) { const l = new THREE.Mesh(gCylY(1.3, 1.6, 30, 12), surf('yellow')); l.position.set(x, 0, z); l.castShadow = true; W.static.add(l); W.addCol(V3(x - 1.4, -15, z - 1.4), V3(x + 1.4, 14, z + 1.4), 'metal'); }
       const deck = surf('metal', 10);
       H.slab(W, 0, 14, 0, 40, 40, deck); // main deck
-      H.rail(W, -19.9, -19.9, 19.9, -19.9, 14); H.rail(W, -19.9, 19.9, 19.9, 19.9, 14); H.rail(W, -19.9, -19.9, -19.9, 19.9, 14); H.rail(W, 19.9, -19.9, 19.9, 19.9, 14);
+      H.rail(W, -19.9, -19.9, 19.9, -19.9, 14); H.rail(W, -19.9, 19.9, 19.9, 19.9, 14); H.rail(W, -19.9, -19.9, -19.9, 19.9, 14); H.rail(W, 19.9, -19.9, 19.9, -1.4, 14); H.rail(W, 19.9, 1.4, 19.9, 19.9, 14);
+      // bridge to the wellhead platform (x 54..84)
+      H.slab(W, 37, 14, 0, 34, 2.4, surf('darkmetal', 6)); H.rail(W, 20, -1.2, 54, -1.2, 14); H.rail(W, 20, 1.2, 54, 1.2, 14);
+      for (const x of [56, 82]) for (const z of [-14, 14]) { const l = new THREE.Mesh(gCylY(1.1, 1.4, 30, 12), surf('yellow')); l.position.set(x, 0, z); W.static.add(l); W.addCol(V3(x - 1.2, -15, z - 1.2), V3(x + 1.2, 14, z + 1.2), 'metal'); }
+      H.slab(W, 69, 14, 0, 30, 30, surf('metal', 8)); H.rail(W, 54.1, -15, 54.1, -1.4, 14); H.rail(W, 54.1, 1.4, 54.1, 15, 14); H.rail(W, 83.9, -15, 83.9, 15, 14); H.rail(W, 54, -14.9, 84, -14.9, 14); H.rail(W, 54, 14.9, 84, 14.9, 14);
+      W.box(80, 14, 10, 1.2, 9, 1.2, surf('yellow'), 'metal'); W.box(74, 22.5, 10, 12, .8, .8, surf('yellow'), 'metal', { noCol: true });
       // derrick
       for (const x of [3, 9]) for (const z of [3, 9]) W.box(x, 14, z, .5, 18, .5, surf('red'), 'metal');
       for (let y = 17; y < 32; y += 4) { W.box(6, y, 3, 6.5, .3, .3, surf('red'), 'metal', { noCol: true }); W.box(6, y, 9, 6.5, .3, .3, surf('red'), 'metal', { noCol: true }); }
@@ -141,7 +221,8 @@ G.MISSIONS = [
 
   { id: 'embassy', name: 'Consulate Siege', loc: 'Diplomatic compound, capital city', blurb: 'A cell has stormed a consulate and taken its staff hostage. Breach the gate, clear the courtyard, then both floors and the roof.',
     ground: 'asphalt', weather: {}, amb: 'war', reverb: 'urban',
-    player: { pos: [0, 0, 36], yaw: 0 },
+    out: { style: 'urban', bounds: 88, regions: [[-84, -84, 84, 84]], avoid: [[-44, -44, 44, 44]], start: [0, 80], max: 12 },
+    player: { pos: [0, 0, 80], yaw: 0 },
     build(W) {
       W.bounds = 44;
       const wallM = surf('plaster', 6);
@@ -183,7 +264,8 @@ G.MISSIONS = [
 
   { id: 'warehouse', name: 'Pier 9', loc: 'Dockside warehouse, Rotterdam', blurb: 'An arms-smuggling ring is holed up in a bonded warehouse with two hostages. Push in from the quay, clear the racks, the mezzanine and the office.',
     ground: 'concrete', weather: { night: 'rain', dawn: 'rain' }, amb: 'wind', reverb: 'industrial',
-    player: { pos: [0, 0, 38], yaw: 0 },
+    out: { style: 'dock', bounds: 88, regions: [[-84, -84, 84, 84]], avoid: [[-44, -44, 44, 46]], start: [0, 80], max: 12 },
+    player: { pos: [0, 0, 80], yaw: 0 },
     build(W) {
       W.bounds = 44;
       const wm = surf('corrugated', 6);
@@ -213,10 +295,12 @@ G.MISSIONS = [
 
   { id: 'train', name: 'Night Express', loc: 'Stalled passenger train, rail yard', blurb: 'Gunmen have stopped an express and moved its passengers into the rear coaches. Clear the platform, then work through the train carriage by carriage.',
     ground: 'gravel', weather: { night: 'snow', dawn: 'snow' }, amb: 'wind', reverb: 'urban',
-    player: { pos: [5, 1.1, 44], yaw: 0 },
+    out: { style: 'yard', bounds: 92, regions: [[-88, -88, 88, 88]], avoid: [[-14, -52, 10, 54]], start: [5, 84], max: 12 },
+    player: { pos: [5, 0, 84], yaw: 0 },
     build(W) {
       W.bounds = 50;
       H.slab(W, 2.05, 1.1, 0, 5.9, 96, surf('concrete', 12)); // platform (flush with the coach doors)
+      H.stairs(W, 2.05, 50.5, 0, 1.1, -1, 3, 'z', 'concrete'); // steps up from the yard
       for (let z = -44; z <= 44; z += 8) { W.box(3, 1.1, z, .15, 3.5, .15, surf('darkmetal'), 'metal'); }
       W.box(4.2, 4.6, 0, 3, .15, 90, surf('corrugated', 10), 'metal', { noCol: true }); // canopy
       for (const x of [-2.5, -7.5]) { W.box(x - .7, 0, 0, .15, .2, 100, surf('darkmetal', 12), 'metal', { noCol: true }); W.box(x + .7, 0, 0, .15, .2, 100, surf('darkmetal', 12), 'metal', { noCol: true }); }
@@ -243,6 +327,136 @@ G.MISSIONS = [
     guards: [[3, 1.1, 30, PI], [4, 1.1, 12, PI, true], [2, 1.1, -8, PI], [3.5, 1.1, -28, PI], [-7.5, 3.2, 4, PI], [-2.5, 1.2, 36, PI], [-2.5, 1.2, 20, PI], [-2.5, 1.2, 2, PI, true],
       [-2.5, 1.2, -14, PI], [-2.5, 1.2, -30, PI], [-5.2, 0, -19, PI / 2], [-2.5, 1.2, -40, 0]],
     hostages: [[-2.8, 1.2, -17, -PI / 2], [-2.2, 1.2, -33, PI / 2], [-2.8, 1.2, -38.6, -PI / 2]] },
+
+  { id: 'hotel', name: 'Hotel Meridian', loc: 'Business hotel, city centre', blurb: 'A cell has taken the Meridian during a conference. Storm the lobby, clear the ballroom floor and finish them on the roof terrace.',
+    ground: 'concrete', weather: { night: 'rain' }, amb: 'wind', reverb: 'urban',
+    out: { style: 'urban', bounds: 88, regions: [[-84, -84, 84, 84]], avoid: [[-19, -14, 19, 35]], start: [0, 80], max: 12 },
+    player: { pos: [0, 0, 80], yaw: 0 },
+    build(W) {
+      W.bounds = 42;
+      const ext = surf('plaster', 3), glass = surf('glass', 1), wood = surf('planks', 2), floorM = surf('concrete', 6), dark = surf('darkmetal', 1), white = surf('white', 2);
+      // ground floor (lobby): glass entrance on the street side, service door at the back
+      W.wall(-15, 10, 15, 10, 3.7, .3, ext, 'concrete', [{ t: .5, w: 3.2, y0: 0, y1: 2.8 }, { t: .2, w: 4, y0: .9, y1: 2.8 }, { t: .8, w: 4, y0: .9, y1: 2.8 }]);
+      W.wall(-15, -10, 15, -10, 3.7, .3, ext, 'concrete', [{ t: .25, w: 1.2, y0: 0, y1: 2.2 }]);
+      for (const x of [-15, 15]) W.wall(x, -10, x, 10, 3.7, .3, ext, 'concrete', [{ t: .3, w: 2, y0: 1, y1: 2.6 }, { t: .7, w: 2, y0: 1, y1: 2.6 }]);
+      W.box(-8, 0, -4, 6, 1.1, 1.2, wood, 'wood'); W.box(-8, 0, -6.2, 6, 2.4, .3, wood, 'wood', { noCol: true }); // reception desk and back panel
+      for (const [x, z] of [[-10, 2], [10, 2], [10, -5], [0, -3]]) W.box(x, 0, z, .7, 3.7, .7, white, 'concrete');
+      for (const [x, z, ry] of [[6, 3, 0], [6, 6.5, 0], [-12, 6, PI / 2]]) W.box(x, 0, z, 2.4, .7, .9, surf('red', 1), 'wood', { ry });
+      W.box(13.3, 0, -8.3, 3, 3.7, 3, dark, 'metal'); // lift shaft
+      // first floor slab with the lobby staircase opening (x -6.2..3.6, z 6.6..8.4)
+      H.slab(W, 0, 4, -1.7, 30, 16.6, floorM); H.slab(W, -10.6, 4, 8.3, 8.8, 3.4, floorM); H.slab(W, 9.3, 4, 8.3, 11.4, 3.4, floorM); H.slab(W, -1.3, 4, 9.2, 9.8, 1.6, floorM);
+      H.stairs(W, -6, 7.5, 0, 4, 1, 1.6, 'x', 'concrete');
+      H.rail(W, -6.2, 6.6, 3.6, 6.6, 4, 'darkmetal'); H.rail(W, -6.2, 8.4, 3.6, 8.4, 4, 'darkmetal'); H.rail(W, -6.2, 6.6, -6.2, 8.4, 4, 'darkmetal');
+      // first floor: ballroom with side meeting rooms, banquet tables
+      W.wall(-15, 10, 15, 10, 3.7, .3, ext, 'concrete', [{ t: .15, w: 3, y0: .9, y1: 2.8 }, { t: .5, w: 3, y0: .9, y1: 2.8 }, { t: .85, w: 3, y0: .9, y1: 2.8 }], 4);
+      W.wall(-15, -10, 15, -10, 3.7, .3, ext, 'concrete', [{ t: .5, w: 3, y0: .9, y1: 2.8 }], 4);
+      for (const x of [-15, 15]) W.wall(x, -10, x, 10, 3.7, .3, ext, 'concrete', [{ t: .5, w: 3, y0: .9, y1: 2.8 }], 4);
+      H.room(W, -11, -6, 7, 7, 3.6, 4, { mat: 'white', doors: { s: [.5] }, roof: false });
+      H.room(W, 11, -5, 7, 9, 3.6, 4, { mat: 'white', doors: { w: [.75] }, roof: false });
+      for (const [x, z] of [[-3, 1], [2, -1], [-7, 2.5], [6, 3]]) { W.box(x, 4, z, 1.6, .75, 1.6, white, 'wood'); }
+      // roof slab with the opening for the second staircase (x -3.6..6.2, z -8.4..-6.6)
+      H.slab(W, 0, 8, 1.7, 30, 16.6, floorM); H.slab(W, -9.3, 8, -8.3, 11.4, 3.4, floorM); H.slab(W, 10.6, 8, -8.3, 8.8, 3.4, floorM); H.slab(W, 1.3, 8, -9.2, 9.8, 1.6, floorM);
+      H.stairs(W, 6, -7.5, 4, 8, -1, 1.6, 'x', 'concrete');
+      H.rail(W, -3.6, -8.4, 6.2, -8.4, 8, 'darkmetal'); H.rail(W, -3.6, -6.6, 6.2, -6.6, 8, 'darkmetal'); H.rail(W, 6.2, -8.4, 6.2, -6.6, 8, 'darkmetal');
+      // roof terrace: parapet, plant, water tank, sign
+      for (const [x1, z1, x2, z2] of [[-15, -10, 15, -10], [-15, 10, 15, 10], [-15, -10, -15, 10], [15, -10, 15, 10]]) W.wall(x1, z1, x2, z2, 1.1, .3, ext, 'concrete', [], 8);
+      for (const [x, z] of [[-9, 2], [-4, 5], [9, 0]]) W.box(x, 8, z, 2.4, 1.4, 1.6, surf('grey', 1), 'metal');
+      W.box(10, 8, 6, 3, 2.6, 3, surf('rust', 1), 'metal');
+      W.box(0, 9.1, 10.2, 12, 1.4, .2, surf('red', 1), 'metal', { noCol: true });
+      // street: parked cars, a burnt-out car, lamps
+      W.vehicle(-9, 17, PI / 2, 'car'); W.vehicle(8, 18, PI / 2 + .1, 'car'); W.vehicle(-2, 31, 1.2, 'burnt'); W.vehicle(13, 30, 0, 'humvee');
+      for (const [x, y, z] of [[-8, 3.2, 0], [8, 3.2, 0], [0, 3.2, 6], [-10, 7.2, -5], [0, 7.2, 0], [10, 7.2, -4], [-12, 5, 16], [12, 5, 16]]) H.light(W, x, y, z, '#ffe2b0', 1.1, 18);
+    },
+    guards: [[0, 0, 4, PI], [-10, 0, 0, PI, true], [9, 0, -2, PI], [-3, 0, -7, PI / 2], [6, 0, 8.5, PI], [12, 0, 5, PI, true],
+      [0, 4, -2, PI], [-11, 4, -4, 0], [11, 4, -3, -PI / 2], [-10, 4, 8.5, PI], [8, 4, 2, PI], [-12, 8, 0, PI, true], [10, 8, 2, PI], [2, 8, 4, PI], [-11, 8, -8, PI / 2]],
+    hostages: [[-8, 0, -5.4, 0], [-12, 4, -7, PI / 2], [12, 4, -7, -PI / 2]] },
+
+  { id: 'airliner', name: 'Flight 417', loc: 'Hijacked airliner, regional airport', blurb: 'An airliner has been hijacked on the apron, with a support team in the maintenance hangar behind it. Cross the apron, clear the cabin from both doors, then take the hangar and its office.',
+    ground: 'concrete', weather: { night: 'rain', dawn: 'rain' }, amb: 'wind', reverb: 'industrial',
+    out: { style: 'airport', bounds: 96, regions: [[-92, -92, 92, 92]], avoid: [[-25, -52, 25, 42]], start: [0, 88], max: 12 },
+    player: { pos: [0, 0, 88], yaw: 0 },
+    build(W) {
+      W.bounds = 62;
+      const white = surf('white', 2), grey = surf('grey', 1), wm = surf('corrugated', 8), seatM = surf('red', 1), dark = surf('darkmetal', 1);
+      // maintenance hangar (x -22..22, z -48..-18) with an open front, back-wall office on a mezzanine
+      W.wall(-22, -48, 22, -48, 14, .4, wm, 'metal', [{ t: .7, w: 1.2, y0: 0, y1: 2.2 }]);
+      W.wall(-22, -48, -22, -18, 14, .4, wm, 'metal', [{ t: .6, w: 1.2, y0: 0, y1: 2.2 }]); W.wall(22, -48, 22, -18, 14, .4, wm, 'metal', [{ t: .5, w: 4, y0: 0, y1: 4 }]);
+      W.wall(-22, -18, -16, -18, 14, .4, wm, 'metal'); W.wall(16, -18, 22, -18, 14, .4, wm, 'metal'); W.box(0, 9, -18, 32, 5, .4, wm, 'metal');
+      H.slab(W, 0, 14.3, -33, 44.6, 30.6, wm);
+      H.slab(W, 0, 4, -44.5, 44, 7, surf('metal', 8));
+      H.rail(W, -21.8, -41, 15.1, -41, 4, 'yellow'); H.rail(W, 16.9, -41, 21.8, -41, 4, 'yellow');
+      H.stairs(W, 16, -32, 0, 4, -1, 1.6);
+      H.room(W, -12, -44.5, 10, 6, 3, 4, { mat: 'white', doors: { s: [.5] }, win: { s: [.2, .8] } });
+      for (const [x, z] of [[-14, -30], [-8, -36], [10, -28], [6, -38]]) W.crate(x, z, 1.2);
+      for (let i = 0; i < 3; i++) W.container(-17, -26 - i * 7, PI / 2, ['container_r', 'container_b', 'container_g'][i]);
+      W.vehicle(8, -24, .4, 'forklift'); W.vehicle(-4, -30, PI / 2, 'truck');
+      for (const x of [-18, -10, 4, 12]) W.box(x, 0, -46.8, 3, 2.4, 1, dark, 'metal'); // tool racks
+      // the airliner: hollow cabin (x -1.9..1.9, z -12..24, floor 2.6), wings, engines, gear, air stairs at two doors
+      W.box(0, 1.2, 6, 3.8, 1.1, 40, white, 'metal'); H.slab(W, 0, 2.6, 6, 3.8, 40, surf('planks', 6));
+      const win = []; for (let z = -11; z <= 23; z += 1.2) if (Math.abs(z + 9) > 1 && Math.abs(z - 20) > 1) win.push({ t: (z + 12) / 36, w: .32, y0: .95, y1: 1.4 });
+      W.wall(-1.9, -12, -1.9, 24, 2.2, .15, white, 'metal', [...win, { t: 3 / 36, w: 1, y0: 0, y1: 1.9 }, { t: 32 / 36, w: 1, y0: 0, y1: 1.9 }], 2.6);
+      W.wall(1.9, -12, 1.9, 24, 2.2, .15, white, 'metal', win, 2.6);
+      W.wall(-1.9, -12, 1.9, -12, 2.2, .15, white, 'metal', [], 2.6); W.wall(-1.9, 24, 1.9, 24, 2.2, .15, white, 'metal', [], 2.6);
+      H.slab(W, 0, 5.1, 6, 4.1, 36.4, white, .3);
+      W.box(0, 1.2, -13.2, 3.4, 3.6, 2.4, white, 'metal'); W.box(0, 3.4, -14.6, 2.6, 1, .6, surf('glass', 1), 'glass', { noCol: true }); // nose and cockpit glazing
+      W.box(0, 2, 26, 3, 2.8, 4, white, 'metal'); W.box(0, 4.8, 27.4, .3, 3.6, 2.6, white, 'metal', { noCol: true }); W.box(0, 6.6, 27.6, .32, .5, 2.2, surf('red', 1), 'metal', { noCol: true }); W.box(0, 4.6, 27, 8, .25, 2, white, 'metal', { noCol: true });
+      for (const sx of [-1, 1]) { W.box(sx * 10, 2.3, 8, 16, .35, 5, white, 'metal'); W.box(sx * 7, 1.1, 6.5, 1.6, 1.2, 3.4, grey, 'metal'); W.box(sx * 1.2, 0, 8, .5, 1.2, .8, dark, 'metal'); }
+      W.box(0, 0, -10.5, .4, 1.2, .4, dark, 'metal');
+      for (let z = -10; z <= 22; z += .95) { if (Math.abs(z + 9) < 1.1 || Math.abs(z - 20) < 1.1) continue; for (const sx of [-1, 1]) { W.box(sx * 1.15, 2.6, z, 1.25, .45, .5, seatM, 'wood'); W.box(sx * 1.15, 3.05, z + .23, 1.25, .6, .08, seatM, 'wood', { noCol: true }); } }
+      for (const z of [-9, 20]) { H.stairs(W, -8.1, z, 0, 2.6, 1, 1.2, 'x', 'grey'); H.rail(W, -8.1, z - .65, -2, z - .65, 1.4, 'white'); H.rail(W, -8.1, z + .65, -2, z + .65, 1.4, 'white'); }
+      // apron: baggage carts, fuel truck, cones and lights
+      for (let i = 0; i < 4; i++) W.box(8 + i * 2.6, 0, 22, 2, 1.1, 1.4, surf('car2', 1), 'metal');
+      W.vehicle(-12, 22, .2, 'truck'); W.vehicle(10, 36, PI / 2, 'humvee');
+      for (const [x, y, z] of [[-14, 12, -30], [14, 12, -30], [0, 12, -40], [-12, 6.6, -44], [0, 4.4, -2], [0, 4.4, 14], [-14, 7, 30], [14, 7, 30]]) H.light(W, x, y, z, '#fff2cc', 1.2, 24);
+    },
+    guards: [[0, 2.6, -6, PI], [0, 2.6, 7, 0], [0, 2.6, 17, PI], [-5, 0, -11.5, PI], [6, 0, 3, PI, true], [-10, 0, 15, PI], [-12, 2.65, 8, PI, true],
+      [0, 0, -22, PI], [-12, 0, -31, PI], [12, 0, -33, 0], [17, 0, -24, PI], [0, 4, -43, PI], [-12, 4, -45, PI / 2], [10, 4, -43, PI]],
+    hostages: [[0, 2.6, 2, PI], [0, 2.6, 13, 0], [-14, 4, -46, PI / 2]] },
+
+  { id: 'compound', name: 'Al-Rashid Compound', loc: 'Walled desert compound', blurb: 'A cell leader holds a walled family compound with a two-storey house, a garage and a watchtower. Breach the gate, clear the courtyard and the house up to the roof.',
+    ground: 'sand', weather: {}, amb: 'wind', reverb: 'urban',
+    out: { style: 'desert', bounds: 88, regions: [[-84, -84, 84, 84]], avoid: [[-27, -27, 27, 37]], start: [0, 80], max: 12 },
+    player: { pos: [0, 0, 80], yaw: 0 },
+    build(W) {
+      W.bounds = 56;
+      const adobe = surf('adobe', 3), plaster = surf('plaster', 2), floorM = surf('concrete', 5);
+      // perimeter wall with the main gate (south) and a side door (west)
+      W.wall(-24, 24, 24, 24, 3, .5, adobe, 'stone', [{ t: .5, w: 4, y0: 0, y1: 3 }]); W.wall(-24, -24, 24, -24, 3, .5, adobe, 'stone');
+      W.wall(-24, -24, -24, 24, 3, .5, adobe, 'stone', [{ t: .65, w: 1.2, y0: 0, y1: 2.2 }]); W.wall(24, -24, 24, 24, 3, .5, adobe, 'stone');
+      // main house (x -10..10, z -16..-2), ground floor
+      W.wall(-10, -2, 10, -2, 3.3, .3, plaster, 'stone', [{ t: .5, w: 1.4, y0: 0, y1: 2.3 }, { t: .2, w: 1.4, y0: 1, y1: 2.2 }, { t: .8, w: 1.4, y0: 1, y1: 2.2 }]);
+      W.wall(-10, -16, 10, -16, 3.3, .3, plaster, 'stone', [{ t: .5, w: 1.4, y0: 1, y1: 2.2 }]);
+      W.wall(-10, -16, -10, -2, 3.3, .3, plaster, 'stone', [{ t: .5, w: 1.4, y0: 1, y1: 2.2 }]); W.wall(10, -16, 10, -2, 3.3, .3, plaster, 'stone', [{ t: .5, w: 1.2, y0: 0, y1: 2.2 }]);
+      W.wall(0, -16, 0, -2, 3.3, .2, plaster, 'stone', [{ t: .35, w: 1.2, y0: 0, y1: 2.2 }, { t: .8, w: 1.2, y0: 0, y1: 2.2 }]);
+      W.box(-5, 0, -6, 2.2, .75, 1.2, surf('planks', 1), 'wood'); W.box(6, 0, -9, 1, .8, 3, surf('planks', 1), 'wood');
+      // first floor (y 3.6) with the stair opening (x -9.2..-0.6, z -15.6..-13.4)
+      H.slab(W, 0, 3.6, -7.7, 20, 11.4, floorM); H.slab(W, 4.7, 3.6, -14.7, 10.6, 2.6, floorM); H.slab(W, -9.6, 3.6, -14.7, .8, 2.6, floorM);
+      H.stairs(W, -9, -14.5, 0, 3.6, 1, 1.4, 'x', 'concrete');
+      H.rail(W, -9.2, -13.4, -.6, -13.4, 3.6, 'darkmetal'); H.rail(W, -9.2, -15.6, -9.2, -13.4, 3.6, 'darkmetal');
+      W.wall(-10, -2, 10, -2, 3.3, .3, plaster, 'stone', [{ t: .25, w: 1.4, y0: 1, y1: 2.2 }, { t: .75, w: 1.4, y0: 1, y1: 2.2 }], 3.6);
+      W.wall(-10, -16, 10, -16, 3.3, .3, plaster, 'stone', [{ t: .7, w: 1.4, y0: 1, y1: 2.2 }], 3.6);
+      for (const x of [-10, 10]) W.wall(x, -16, x, -2, 3.3, .3, plaster, 'stone', [{ t: .5, w: 1.4, y0: 1, y1: 2.2 }], 3.6);
+      W.wall(0, -16, 0, -2, 3.3, .2, plaster, 'stone', [{ t: .5, w: 1.2, y0: 0, y1: 2.2 }], 3.6);
+      W.box(-6, 3.6, -8, 2, .5, 1, surf('red', 1), 'wood'); W.box(6, 3.6, -11, 2, .75, 1, surf('planks', 1), 'wood');
+      // flat roof (y 7.2) with the second stair opening (x 0.6..9.2, z -4.6..-2.4) and a parapet
+      H.slab(W, 0, 7.2, -10.3, 20, 11.4, floorM); H.slab(W, -4.7, 7.2, -3.3, 10.6, 2.6, floorM); H.slab(W, 9.6, 7.2, -3.3, .8, 2.6, floorM);
+      H.stairs(W, 9, -3.5, 3.6, 7.2, -1, 1.4, 'x', 'concrete');
+      H.rail(W, .6, -4.6, 9.2, -4.6, 7.2, 'darkmetal'); H.rail(W, 9.2, -4.6, 9.2, -2.4, 7.2, 'darkmetal');
+      for (const [x1, z1, x2, z2] of [[-10, -16, 10, -16], [-10, -2, 10, -2], [-10, -16, -10, -2], [10, -16, 10, -2]]) W.wall(x1, z1, x2, z2, 1, .3, plaster, 'stone', [], 7.2);
+      W.box(-6, 7.2, -12, 1.4, 1.2, 1.4, surf('rust', 1), 'metal'); W.box(4, 7.2, -13, 2, .9, 1, surf('grey', 1), 'metal');
+      // watchtower (inaccessible platform, a marksman's perch), garage, courtyard cover
+      for (const [x, z] of [[16.6, -19.4], [19.4, -19.4], [16.6, -16.6], [19.4, -16.6]]) W.box(x, 0, z, .3, 5, .3, surf('planks', 1), 'wood');
+      H.slab(W, 18, 5, -18, 3.6, 3.6, surf('planks', 2)); W.sandbags(18, -19.6, 3.4, .9, 'x'); W.sandbags(18, -16.4, 3.4, .9, 'x'); W.box(18, 7.2, -18, 4, .15, 4, surf('thatch', 1), 'wood', { noCol: true });
+      H.room(W, 15, 8, 8, 7, 3, 0, { mat: 'adobe', doors: { w: [.5] }, win: { s: [.5] } });
+      W.vehicle(-12, 10, .4, 'truck'); W.vehicle(4, 12, -.3, 'car'); W.vehicle(-4, 33, PI / 2, 'humvee');
+      W.sandbags(0, 18, 5, 1.1, 'x'); W.sandbags(-16, -2, 4, 1.1, 'z'); W.sandbags(14, 0, 4, 1.1, 'x');
+      for (const [x, z] of [[-18, 16], [18, 18], [-19, -18], [-6, 4]]) W.tree(x, z, 7, 'palm');
+      for (const [x, z] of [[-14, -8], [-15, -6]]) W.barrel(x, z);
+      for (const [x, y, z] of [[-5, 3, -9], [5, 3, -9], [-5, 6.6, -9], [5, 6.6, -9], [0, 4, 6], [15, 2.8, 8], [0, 4, 22]]) H.light(W, x, y, z, '#ffd7a0', 1.1, 18);
+    },
+    guards: [[0, 0, 20, PI], [-6, 0, 19, PI, true], [8, 0, 4, PI], [-14, 0, 6, PI], [-17, 0, -10, PI / 2], [4, 0, -5, PI], [-6, 0, -4, PI],
+      [-5, 3.6, -6, PI], [6, 3.6, -13, 0], [-6, 7.2, -8, PI, true], [5, 7.2, -12, PI], [18, 5, -18, 3 * PI / 4, true], [17, 0, 6, PI / 2]],
+    hostages: [[-5, 0, -9, 0], [5, 3.6, -9, PI], [13, 0, 9, PI / 2]] },
 ];
 G.MISSION = Object.fromEntries(G.MISSIONS.map(m => [m.id, m]));
 

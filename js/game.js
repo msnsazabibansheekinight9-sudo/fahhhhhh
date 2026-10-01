@@ -332,17 +332,16 @@ Game.startMission = function (cfg) {
   Game.mode = 'mission'; Game.state = 'play';
   Game.cleanup(true);
   const M = G.MISSION[cfg.mission], tod = G.TOD[cfg.tod] || G.TOD.day;
-  const map = { id: 'm_' + M.id, era: 'mod', name: M.name, env: tod.env, ground: M.ground, weather: (M.weather || {})[cfg.tod] || null, amb: M.amb, reverb: M.reverb, build: W => M.build(W) };
+  const map = { id: 'm_' + M.id, era: 'mod', name: M.name, env: tod.env, ground: M.ground, weather: (M.weather || {})[cfg.tod] || null, amb: M.amb, reverb: M.reverb, build: W => { M.build(W); M._extra = M.out ? G.MissionHelpers.outskirts(W, M, M.out) : []; } };
   G.E.loadMap(map);
   const P = Game.player = new G.Player();
   P.setupWeapons([cfg.primary, cfg.secondary].filter(Boolean));
   P.pos.set(...M.player.pos); P.yaw = M.player.yaw; P.pitch = 0; P.hp = 100; P.alive = true; P.armorState = G.newArmorState();
-  const test = !!cfg.test; // weapon-test mode: respawns both sides, unlimited ammo, no hostages, no fail
-  if (test) for (const w of P.weapons) w.reserve = 9999;
   Game.bots = [];
   const R = G.rng(cfg.mission.length * 97 + (cfg.seed || Date.now() % 1000));
-  const roles = G.dealRoles(M, R), pick = l => l[Math.floor(R() * l.length)];
-  M.guards.forEach((g, i) => {
+  const posts = M.guards.concat(M._extra || []);
+  const roles = G.dealRoles({ guards: posts, player: M.player }, R), pick = l => l[Math.floor(R() * l.length)];
+  posts.forEach((g, i) => {
     const role = roles[i];
     let ti = cfg.tier === 'mixed' ? Math.min(3, Math.floor(R() * 4)) : Math.max(0, G.TIERS.findIndex(t => t.id === cfg.tier));
     if (role.tierUp) ti = Math.min(3, ti + 1);
@@ -358,7 +357,7 @@ Game.startMission = function (cfg) {
   Game.agents = [P, ...Game.bots];
   // hostages: civilians kneeling with their hands behind their heads — hitting one fails the mission
   const civ = ['u_civ_suit', 'u_civ_crew', 'u_civ_jeans', 'u_civ_hoodie'];
-  if (!test) M.hostages.forEach((h, i) => {
+  M.hostages.forEach((h, i) => {
     const kit = Object.assign({}, G.KIT_DEFAULT, { uniform: M.id === 'ship' ? 'u_civ_crew' : civ[i % civ.length], helmet: 'h_none', face: 'f_none', nvg: 'n_none', armor: 'a_none', plates: 'p_none', gloves: 'g_none', boots: 'b_combat', pack: 'k_none' });
     const S = G.buildSoldier({ era: 'mod', team: 0, tier: 'regular', weapon: null, kit });
     S.root.position.set(h[0], h[1], h[2]); S.root.rotation.y = h[3]; G.animateSoldier(S, { dt: 1, speed: 0 }); G.poseHostage(S);
@@ -370,13 +369,15 @@ Game.startMission = function (cfg) {
     };
     G.E.world.group.add(S.root); Game.targets.push(T);
   });
-  Game.mission = { cfg, M, test, total: Game.bots.length, killed: 0, heads: 0, deaths: 0, t: 0, dmgTaken: 0, hostages: test ? 0 : M.hostages.length, hostagesLost: 0, done: false,
+  Game.mission = { cfg, M, total: Game.bots.length, killed: 0, heads: 0, t: 0, dmgTaken: 0, hostages: M.hostages.length, hostagesLost: 0, done: false,
     roles: roles.reduce((o, r) => (o[r.n] = (o[r.n] || 0) + 1, o), {}) };
   Game.stats = { shots: 0, hits: 0 };
   Game.cfg = cfg; Game.map = map; Game.killfeed = [];
+  // pre-compile shaders and upload textures now, so the first firefight doesn't hitch
+  try { const R = G.E.renderer; R.compile(G.E.scene, G.E.camera); if (R.initTexture) G.E.scene.traverse(o => { const m = o.material; if (m && m.map) R.initTexture(m.map); }); } catch (e) {}
   G.UI.showHUD('mission');
-  const mix = Object.entries(Game.mission.roles).map(([n, c]) => `${c} ${n.toLowerCase()}${c > 1 ? 's' : ''}`).join(', ');
-  Game.toast(test ? `Weapon test · ${M.name} · ${tod.n} — hostiles re-man their posts, you respawn. Esc to end the session.` : `${M.name} · ${tod.n} — ${mix}; ${M.hostages.length} hostages. Clear the structure.`, 6);
+  const PL = { Rifleman: 'riflemen', Marksman: 'marksmen' }, mix = Object.entries(Game.mission.roles).map(([n, c]) => `${c} ${c > 1 ? (PL[n] || n.toLowerCase() + 's') : n.toLowerCase()}`).join(', ');
+  Game.toast(`${M.name} · ${tod.n} — ${mix}; ${M.hostages.length} hostages. Clear the structure.`, 6);
 };
 Game.endMission = function (ok, reason) {
   const Ms = Game.mission; if (!Ms || Ms.done) return; Ms.done = true; Ms.ok = ok; Ms.reason = reason;
@@ -391,28 +392,73 @@ Game.spawnPoint = function (team) {
 Game.cleanup = function (clearTargets) {
   if (Game.player) { G.E.vmScene.remove(Game.player.vm.pivot); for (const a of Game.player.vm.arms) { G.E.vmScene.remove(a.upper); G.E.vmScene.remove(a.fore); G.E.vmScene.remove(a.hand); G.E.vmScene.remove(a.cuff); } }
   for (const b of Game.bots) b.remove();
-  Game.bots = []; Game.agents = []; G.Ballistics.list = []; Game.grenades = [];
+  Game.bots = []; Game.agents = []; G.Ballistics.list = []; Game.grenades = []; for (const f of Game.frags || []) G.E.scene.remove(f.m); Game.frags = [];
   Game.killfeed = []; G.E.vmLight.intensity = 0;
+  for (const p of Game.pickups || []) if (p.own && p.obj.parent) p.obj.parent.remove(p.obj);
+  Game.pickups = []; Game.nearPick = null;
   if (clearTargets) Game.targets = [];
+};
+// ======================================================= WEAPON PICKUPS
+// p: { wp, L, mag, reserve, obj (Object3D lying in the world), own (we built the mesh), vel (while tumbling) }
+Game.pickups = [];
+Game.addPickup = function (p) { Game.pickups.push(p); return p; };
+// throw a weapon from the player's hands onto the ground
+Game.tossWeapon = function (w, P) {
+  const rig = G.buildGun(w.wp, w.L, { lod: 1 }), obj = G.mergeByMaterial(rig.root);
+  const fwd = new THREE.Vector3(-Math.sin(P.yaw), 0, -Math.cos(P.yaw));
+  obj.position.set(P.pos.x + fwd.x * .5, P.pos.y + 1.2, P.pos.z + fwd.z * .5); obj.rotation.set(0, P.yaw, 0);
+  obj.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  G.E.world.group.add(obj);
+  return Game.addPickup({ wp: w.wp, L: w.L, mag: w.mag, reserve: w.reserve, obj, own: true, vel: fwd.multiplyScalar(2.2).setY(1.6), spin: (Math.random() - .5) * 8 });
+};
+Game.updatePickups = function (dt, P, input) {
+  const W = G.E.world, tp = new THREE.Vector3();
+  for (const p of Game.pickups) if (p.vel) { // tumble and settle flat
+    p.vel.y -= 9.81 * dt; p.obj.position.addScaledVector(p.vel, dt); p.obj.rotation.x += p.spin * dt;
+    const gy = W.groundAt(p.obj.position.x, p.obj.position.z, p.obj.position.y + .3, .05);
+    if (p.obj.position.y <= gy + .04) { p.obj.position.y = gy + .04; p.obj.rotation.set(0, p.obj.rotation.y, Math.random() < .5 ? Math.PI / 2 : -Math.PI / 2); p.vel = null; }
+  }
+  Game.nearPick = null;
+  if (!P || !P.alive) return;
+  const eye = P.eye || P.pos, look = new THREE.Vector3(-Math.sin(P.yaw) * Math.cos(P.pitch), Math.sin(P.pitch), -Math.cos(P.yaw) * Math.cos(P.pitch));
+  let best = null, bs = -1e9;
+  for (const p of Game.pickups) {
+    if (!p.obj.parent || p.vel) continue;
+    p.obj.getWorldPosition(tp);
+    const dh = Math.hypot(tp.x - P.pos.x, tp.z - P.pos.z), dy = tp.y - P.pos.y; if (dh > 2 || dy < -.8 || dy > 1.4) continue;
+    const to = tp.clone().sub(eye).normalize(), sc = to.dot(look) * 2 - dh;
+    if (sc > bs) { bs = sc; best = p; }
+  }
+  Game.nearPick = best;
+  if (best && input.inspect) { input.inspect = false; Game.pickUp(best, P); }
+  if (input.drop) { const w = P.dropCurrent(); if (w) { Game.tossWeapon(w, P); Game.toast('Dropped ' + w.wp.n, 1.2); } else Game.toast("Can't drop your last weapon", 1.2); }
+};
+Game.pickUp = function (p, P) {
+  if (p.obj.parent) p.obj.parent.remove(p.obj);
+  Game.pickups = Game.pickups.filter(q => q !== p);
+  const old = P.takeWeapon(p.wp, p.L, p.mag, p.reserve);
+  if (old) { const q = Game.tossWeapon(old, P); q.vel.multiplyScalar(.4); }
+  Game.toast(`Picked up ${p.wp.n} · ${p.mag} + ${p.reserve}`, 1.6); P.hudDirty = true;
 };
 Game.onKill = function (killer, victim, weapon, head) {
   if (Game.mode === 'mission') {
     const Ms = Game.mission;
     Game.killfeed.unshift({ k: killer ? killer.name : '—', kt: killer ? killer.team : -1, v: victim.name, vt: victim.team, w: weapon ? weapon.n : '', head, t: 5 }); if (Game.killfeed.length > 6) Game.killfeed.pop();
     if (victim === Game.player) {
-      if (Ms.test) { Ms.deaths++; Game.respawnT = 3; Game.deathBy = killer; G.UI.dirty = true; return; }
       Game.endMission(false, `Killed by ${killer ? killer.name : 'enemy fire'}.`); return; }
     Ms.killed++; if (head) Ms.heads++;
     const rn = victim.role ? victim.role.n : 'Hostile';
-    if (killer === Game.player) { G.UI.hitmarker(true, head); G.Audio.hit(head, true); Game.toast(Ms.test ? `${head ? 'Headshot' : 'Kill'} · ${rn}` : `${head ? 'Headshot' : rn + ' down'} · ${Ms.total - Ms.killed} left`, 1.4); }
+    if (killer === Game.player) { G.UI.hitmarker(true, head); G.Audio.hit(head, true); Game.toast(`${head ? 'Headshot' : rn + ' down'} · ${Ms.total - Ms.killed} left`, 1.4); }
     G.UI.dirty = true;
-    if (!Ms.test && Ms.killed >= Ms.total) Game.endMission(true, 'Structure clear. All hostiles neutralised.');
+    if (Ms.killed >= Ms.total) Game.endMission(true, 'Structure clear. All hostiles neutralised.');
     return;
   }
 };
 Game.onPlayerHurt = function (d, dir, b) { G.UI.damage(d, dir); Game.player.shake = Math.min(1, Game.player.shake + .3); if (Game.mission) Game.mission.dmgTaken += d; };
 Game.onPlayerShot = function (w) {
   if (Game.stats) Game.stats.shots++;
+  if (Game.player) Game.player.lastShotT = Game.now;
+  if (Game.mode === 'mission' && w) { const r = w.S.sup ? 14 : 45, P = Game.player; for (const b of Game.bots) if (b.alive && b.alert === 'calm' && b.pos.distanceTo(P.pos) < r) { b.alert = 'search'; b.alertT = 30; b.sus = Math.max(b.sus, .45); b.suspect = P.pos.clone(); } }
   if (Game.mode === 'mission' && w) { const r = w.S.sup ? 14 : 45, P = Game.player; for (const b of Game.bots) if (b.alive && b.pos.distanceTo(P.pos) < r) b.lastHeard = P.pos.clone(); }
 };
 Game.toast = function (msg, t = 1.6) { G.UI.toast(msg, t); };
@@ -424,6 +470,27 @@ Game.melee = function (P, eye, d, reach, dmg) {
   }
   for (const T of Game.targets) { const t = T.rayTest(eye, d, reach); if (t >= 0) { T.onHit({ dmg, pen: 1, v0: 1, cal: '9×19mm' }, eye.clone().addScaledVector(d, t), d, 1, 1); return; } }
   const h = G.E.world.raycast(eye, d, reach); if (h) { G.FX.impact(h.p, h.n, d, h.mat, .5); G.Audio.impact(h.p, h.mat); }
+};
+// hand grenades: bounce and roll, 3.2 s fuse, the player gets a warning when one lands close
+Game.frags = [];
+Game.throwFrag = function (p, v, owner) {
+  const m = new THREE.Mesh(gSph(.045, 10), G.mat({ color: '#3e4630', roughness: .7, metalness: .2 })); m.position.copy(p); m.castShadow = true; G.E.scene.add(m);
+  Game.frags.push({ m, v: v.clone(), owner, t: 0, warned: false }); if (G.Audio.mech) G.Audio.mech('ping', p);
+};
+Game.updateFrags = function (dt) {
+  const W = G.E.world, P = Game.player;
+  for (let i = Game.frags.length - 1; i >= 0; i--) {
+    const f = Game.frags[i]; f.t += dt; const a = f.m.position.clone();
+    f.v.y -= 9.81 * dt; const step = f.v.clone().multiplyScalar(dt), L = step.length();
+    if (L > 1e-5) { const h = W.raycast(a, step.clone().normalize(), L + .05);
+      if (h) { const n = h.n; const vn = n.clone().multiplyScalar(f.v.dot(n)); f.v.sub(vn.multiplyScalar(1.45)).multiplyScalar(.55); f.m.position.copy(h.p).addScaledVector(n, .05); }
+      else f.m.position.add(step); }
+    const gy = W.groundAt(f.m.position.x, f.m.position.z, f.m.position.y + .3, .05);
+    if (f.m.position.y < gy + .045) { f.m.position.y = gy + .045; if (f.v.y < 0) f.v.y = -f.v.y * .3; f.v.x *= Math.pow(.05, dt); f.v.z *= Math.pow(.05, dt); }
+    f.m.rotation.x += f.v.z * dt * 8; f.m.rotation.z -= f.v.x * dt * 8;
+    if (P && P.alive && !f.warned && f.t > .5 && f.m.position.distanceTo(P.pos) < 9) { f.warned = true; Game.toast('⚠ GRENADE!', 1.6); }
+    if (f.t > 3.2) { G.E.scene.remove(f.m); Game.frags.splice(i, 1); Game.explode(f.m.position.clone().setY(f.m.position.y + .1), f.owner, { r: 8, dmg: 150, name: 'Frag grenade' }); }
+  }
 };
 Game.launchGrenade = function (p, v, owner) {
   const m = new THREE.Mesh(gCyl(.02, .02, .1, 10), G.mat({ color: '#5a5a3a', metalness: .5, roughness: .5 }));
@@ -448,6 +515,7 @@ Game.explode = function (p, owner, o = {}) {
 
 // ======================================================= UPDATE
 Game.update = function (dt, now) {
+  Game.now = now;
   const P = Game.player; if (!P) return;
   Game.time = now;
   const input = G.Input.frame();
@@ -458,17 +526,13 @@ Game.update = function (dt, now) {
       if (input.menu) G.UI.toggleRangeMenu();
       if (input.reset) { for (const T of Game.targets) T.reset && T.reset(); G.FX.clear(); Game.toast('Targets reset'); }
     }
+    Game.updatePickups(dt, P, input);
     if (P.alive) P.update(dt, input, now);
     else {
       P.hideVM = true;
       Game.respawnT -= dt;
       const cam = G.E.camera; cam.position.y = Math.max(P.pos.y + .3, cam.position.y - dt * 2); cam.rotation.z += dt * .3;
-      const Ms = Game.mission, testRs = Game.mode === 'mission' && Ms && Ms.test;
-      if (Game.respawnT <= 0 && Game.state === 'play' && (Game.mode !== 'mission' || testRs)) {
-        const s = testRs ? V3(...Ms.M.player.pos) : Game.spawnPoint(0); P.pos.copy(s); P.hp = 100; P.alive = true; P.armorState = G.newArmorState(); P.hideVM = false; P.yaw = testRs ? Ms.M.player.yaw : 0; P.pitch = 0; P.stance = 0;
-        for (const w of P.weapons) { w.mag = w.S.mag; w.reserve = testRs ? 9999 : w.S.mag * 6; } P.hudDirty = true; G.E.camera.rotation.z = 0;
-        if (testRs) for (const b of Game.bots) if (b.alive) { b.target = null; b.lastHeard = null; b.lastSeen = null; } // let the cell settle back on its posts
-      }
+      if (Game.respawnT <= 0 && Game.state === 'play' && Game.mode !== 'mission') { const s = Game.spawnPoint(0); P.pos.copy(s); P.hp = 100; P.alive = true; P.armorState = G.newArmorState(); P.hideVM = false; P.yaw = 0; P.pitch = 0; P.stance = 0; for (const w of P.weapons) { w.mag = w.S.mag; w.reserve = w.S.mag * 6; } P.hudDirty = true; }
       G.Input.lastDx = 0;
     }
     for (const b of Game.bots) b.update(dt, now);
@@ -482,6 +546,7 @@ Game.update = function (dt, now) {
     onSoldierHit: (b, S, zone, res) => { if (b.owner === P) { G.UI.hitmarker(res.killed, zone === 'head'); if (!res.killed) G.Audio.hit(zone === 'head', false); if (Game.stats) Game.stats.hits++; } },
     onTargetHit: (b, T, p, speed, r) => { if (b.owner === P && Game.mode === 'range') rangeStat(b, T, p, speed, r); },
   });
+  Game.updateFrags(dt);
   // grenades
   for (let i = Game.grenades.length - 1; i >= 0; i--) {
     const g = Game.grenades[i]; g.t += dt; const a = g.m.position.clone();

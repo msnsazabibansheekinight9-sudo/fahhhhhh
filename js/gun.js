@@ -1560,6 +1560,18 @@ G.makeCasing = function (cal) {
   return g;
 };
 
+// A live cartridge: case plus jacketed bullet (ogive), axis along z with the tip toward -z (down-range)
+G.makeRound = function (cal) {
+  const c = G.CAL[cal] || G.CAL['5.56×45mm'], g = G.makeCasing(cal);
+  if (c.shell) return g;
+  const r = c.cs[1] * .78, bl = c.cs[0] * (c.cs[0] > .05 ? .42 : .55);
+  const cu = G.copperMat || (G.copperMat = new THREE.MeshStandardMaterial({ color: '#b5653a', metalness: 1, roughness: .32 }));
+  const body = new THREE.Mesh(gCyl(r, r, bl * .45, 10), cu); body.position.z = -c.cs[0] / 2 - bl * .225; g.add(body);
+  const tip = new THREE.Mesh(gCyl(r, r * .12, bl * .55, 10), cu); tip.position.z = -c.cs[0] / 2 - bl * .45 - bl * .275; g.add(tip);
+  g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  return g;
+};
+
 // Merge meshes of a group by material into as few meshes as possible (static bake)
 G.mergeByMaterial = function (group) {
   group.updateMatrixWorld(true);

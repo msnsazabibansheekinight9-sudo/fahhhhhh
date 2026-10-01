@@ -126,6 +126,27 @@ class Player {
     return w;
   }
   computeZero(w) { w.zeroAng = G.Ballistics.zeroAngle(w.wp.gyro ? w.wp.gyro.v * .85 : w.S.v, w.S.k, Math.max(.02, w.rig.sightH), w.zero); }
+  // pick up a weapon: pistols go to the sidearm slot, everything else to the primary slot; returns the weapon it replaced
+  takeWeapon(wp, L, mag, reserve) {
+    this.finishAction(true);
+    const pistol = wp.c === 'PST', nw = this.makeWeapon(wp, L); nw.mag = Math.min(nw.S.mag, Math.max(0, mag)); nw.reserve = Math.max(0, reserve);
+    let i = this.weapons.findIndex(w => (w.wp.c === 'PST') === pistol), old = null;
+    if (i >= 0) { old = this.weapons[i]; this.vm.holder.remove(old.rig.root); this.weapons[i] = nw; }
+    else if (pistol) { this.weapons.push(nw); i = this.weapons.length - 1; }
+    else { this.weapons.unshift(nw); i = 0; }
+    this.cur = Math.min(this.cur, this.weapons.length - 1);
+    for (const w of this.weapons) w.rig.root.visible = false;
+    this.cur = i; this.equip(i, true); this.startAction('equip'); G.Audio.mech('equip');
+    return old;
+  }
+  // drop the weapon in hand (only while carrying another)
+  dropCurrent() {
+    if (this.weapons.length < 2) return null;
+    this.finishAction(true);
+    const w = this.W; this.vm.holder.remove(w.rig.root); this.weapons.splice(this.cur, 1);
+    this.cur = 0; for (const o of this.weapons) o.rig.root.visible = false; this.equip(0, true); this.startAction('equip');
+    return w;
+  }
   equip(i, instant) {
     if (!this.weapons[i]) return;
     // lower the current weapon first, then bring the new one up
@@ -808,10 +829,17 @@ class Player {
         const c = G.CAL[w.wp.cal] || G.CAL['.303 British'];
         const g = new THREE.Group();
         if (want === 'shell') { const cs = G.makeCasing(w.wp.cal); cs.rotation.y = Math.PI / 2; g.add(cs); g.position.set(0, -.03, -.01); }
-        else { const n = 5; const clip = new THREE.Mesh(gBox(.012, .004, .05), G.mat({ color: '#b98e3c', metalness: 1, roughness: .3 })); g.add(clip); for (let i = 0; i < n; i++) { const r = G.makeCasing(w.wp.cal); r.rotation.x = -Math.PI / 2; r.position.set(0, c.cs[0] / 2, -.02 + i * .01); g.add(r); } g.position.set(0, .01, 0); }
+        else { // stripper clip: five rounds stacked in a vertical clip, rims in the clip, bullet tips pointing down-range
+          const n = 5, sp = c.cs[1] * 1.9, inner = new THREE.Group(); g.add(inner);
+          const clip = new THREE.Mesh(gBox(.013, sp * n + .006, .004), G.mat({ color: '#9a9488', metalness: 1, roughness: .35 })); clip.position.set(0, sp * (n - 1) / 2, c.cs[0] / 2 - .001); inner.add(clip);
+          for (let i = 0; i < n; i++) { const r = G.makeRound(w.wp.cal); r.position.set(0, i * sp, (i % 2 ? .0015 : 0)); inner.add(r); }
+          inner.position.set(0, -sp * (n - 1) / 2, 0); g.userData.gunAligned = true; g.position.set(0, .01, 0); }
         g.traverse(m => { m.frustumCulled = false; }); hand.add(g); hand.userData.item = g;
       }
     }
+    // keep the clip square to the rifle whatever the hand's rotation: rounds horizontal, tips toward the muzzle
+    const it = hand.userData.item;
+    if (it && it.userData.gunAligned && w.rig) { const qg = w.rig.root.getWorldQuaternion(new THREE.Quaternion()), qh = hand.getWorldQuaternion(new THREE.Quaternion()); it.quaternion.copy(qh.invert().multiply(qg)); }
   }
   solveArm(arm, target, pole) {
     const up = .34, lo = .32;

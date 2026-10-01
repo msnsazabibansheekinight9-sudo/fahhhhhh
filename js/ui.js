@@ -151,7 +151,7 @@ function renderArmory(root) {
   const on = list.querySelector('.on'); if (on) on.scrollIntoView({ block: 'center' });
   $('#back').onclick = () => UI.show('menu');
   $('#torange').onclick = () => UI.startRange();
-  $('#tomis').onclick = () => { if (wp.c === 'PST') UI.mis.secondary = wp.id; else UI.mis.primary = wp.id; if (!G.WEAPON[UI.mis.primary] || G.WEAPON[UI.mis.primary].c === 'PST') UI.mis.primary = 'm4a1'; UI.mis.mode = 'test'; store.set('mis', UI.mis); G.Audio.init(); UI.deployMission(); };
+  $('#tomis').onclick = () => { if (wp.c === 'PST') UI.mis.secondary = wp.id; else UI.mis.primary = wp.id; if (!G.WEAPON[UI.mis.primary] || G.WEAPON[UI.mis.primary].c === 'PST') UI.mis.primary = 'm4a1'; store.set('mis', UI.mis); G.Audio.init(); UI.deployMission(); };
   $('#rnd').onclick = () => { const L2 = {}; for (const [s] of G.SLOTS) { const o = G.attachFor(wp, s); L2[s] = o[Math.floor(Math.random() * o.length)].id; } UI.saveLoadout(wp, L2); G.Audio.ui('attach'); refresh(); };
   $('#rst').onclick = () => { UI.saveLoadout(wp, G.defaultLoadout(wp)); refresh(); };
   let open = null;
@@ -232,8 +232,7 @@ function renderMissions(root) {
   const L = UI.loadoutFor(G.WEAPON[C.primary]);
   root.innerHTML = `<section class="screen" id="battle"><div class="setup">
     <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap"><div><div class="eyebrow">Counter-terror · solo</div><h1>Missions</h1></div><button class="btn small" id="back">Main menu</button></div>
-    <div><span class="lbl">Structure</span><div class="row">${G.MISSIONS.map(m => `<button class="card ${m.id === C.mission ? 'on' : ''}" data-mis="${m.id}"><small>${esc(m.loc)} · ${m.guards.length} hostiles · ${m.hostages.length} hostages</small><b>${esc(m.name)}</b><span>${esc(m.blurb)}</span></button>`).join('')}</div></div>
-    <div><span class="lbl">Mode</span><div class="row">${[['op', 'Operation', 'One life. Clear every hostile, keep the hostages alive, get a star rating.'], ['test', 'Weapon test', 'Respawns on both sides, unlimited ammo, no hostages, no fail. Try guns and kit against the full cell.']].map(([k, n, d]) => `<button class="card ${(C.mode || 'op') === k ? 'on' : ''}" data-mode="${k}"><b>${n}</b><span>${d}</span></button>`).join('')}</div></div>
+    <div><span class="lbl">Structure</span><div class="row">${G.MISSIONS.map(m => `<button class="card ${m.id === C.mission ? 'on' : ''}" data-mis="${m.id}"><small>${esc(m.loc)} · ${m.guards.length}–${m.guards.length + (m.out ? m.out.max : 0)} hostiles · ${m.hostages.length} hostages</small><b>${esc(m.name)}</b><span>${esc(m.blurb)}</span></button>`).join('')}</div></div>
     <div><span class="lbl">Hostiles</span><div class="row">${G.HOSTILE_ROLES.map(r => `<div class="card" style="cursor:default"><small>${r.id === 'leader' ? 'One per cell' : r.max ? 'Up to ' + r.max : 'Common'}</small><b>${esc(r.n)}</b><span>${esc(r.d)}</span></div>`).join('')}</div></div>
     <div><span class="lbl">Time of day</span><div class="row">${Object.entries(G.TOD).map(([k, t]) => `<button class="card ${k === C.tod ? 'on' : ''}" data-tod="${k}"><b>${t.n}</b><span>${t.d}</span></button>`).join('')}</div></div>
     <div><span class="lbl">Hostile tier</span><div class="row">${G.TIERS.map(t => `<button class="card ${C.tier === t.id ? 'on' : ''}" data-tier="${t.id}"><small style="color:${t.color}">Tier ${G.TIERS.indexOf(t) + 1}</small><b>${t.n}</b><span>${t.d}</span></button>`).join('')}<button class="card ${C.tier === 'mixed' ? 'on' : ''}" data-tier="mixed"><small>All tiers</small><b>Mixed cell</b><span>A mix of recruits and hardened fighters.</span></button></div></div>
@@ -242,13 +241,12 @@ function renderMissions(root) {
       <div><span class="lbl">Sidearm</span><div class="pick"><select id="msec">${opts(w => w.c === 'PST', C.secondary)}</select><button class="btn small" data-cust="sec">Customise</button></div></div>
       <div><span class="lbl">Your kit</span><div class="pick"><span class="muted" style="font-size:13px">${esc(G.GEARID[kit.helmet].n)} · ${esc(G.GEARID[kit.armor].n)}${G.GEARID[kit.armor].plates ? ' + ' + esc(G.GEARID[kit.plates].n) : ''} · NVG: ${esc(nv.n)}</span><button class="btn small" id="mkit">Kit locker</button></div></div>
     </div>
-    <div class="deploy"><span class="muted" style="max-width:62ch">${C.mode === 'test' ? 'Weapon test: you and the hostiles respawn, ammo is unlimited. Press Esc and choose End session for your stats.' : "No respawns. Don't hit the hostages."} Hostiles hold their posts and react to gunfire (breachers come for you) — a suppressor keeps them unaware longer.${C.tod === 'night' ? ` Night: ${nv.nv ? 'press J (or N) for night vision' : 'your kit has no night vision — pick some in the Kit locker'}${L.side === 'laser' || L.side === 'dbal' || L.side === 'peq2' ? ', L cycles your laser' : ''}.` : ''}</span><button class="btn primary" id="mgo" style="font-size:20px;padding:14px 36px">${C.mode === 'test' ? 'Start test' : 'Infiltrate'}</button></div>
+    <div class="deploy"><span class="muted" style="max-width:62ch">No respawns — the dead stay down. Don't hit the hostages. Dead hostiles drop their weapons: F picks one up, K drops yours. Hostiles hold their posts and react to gunfire (breachers come for you) — a suppressor keeps them unaware longer.${C.tod === 'night' ? ` Night: ${nv.nv ? 'press J (or N) for night vision' : 'your kit has no night vision — pick some in the Kit locker'}${L.side === 'laser' || L.side === 'dbal' || L.side === 'peq2' ? ', L cycles your laser' : ''}.` : ''}</span><button class="btn primary" id="mgo" style="font-size:20px;padding:14px 36px">Infiltrate</button></div>
   </div></section>`;
   const re = () => { store.set('mis', C); renderMissions(root); };
   root.querySelectorAll('[data-mis]').forEach(b => b.onclick = () => { C.mission = b.dataset.mis; G.Audio.ui(); re(); });
   root.querySelectorAll('[data-tod]').forEach(b => b.onclick = () => { C.tod = b.dataset.tod; G.Audio.ui(); re(); });
   root.querySelectorAll('[data-tier]').forEach(b => b.onclick = () => { C.tier = b.dataset.tier; G.Audio.ui(); re(); });
-  root.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { C.mode = b.dataset.mode; G.Audio.ui(); re(); });
   $('#mprim').onchange = e => { C.primary = e.target.value; store.set('mis', C); };
   $('#msec').onchange = e => { C.secondary = e.target.value; store.set('mis', C); };
   root.querySelectorAll('[data-cust]').forEach(b => b.onclick = () => { const id = b.dataset.cust === 'prim' ? C.primary : C.secondary; UI.sel.era = G.WEAPON[id].e; UI.sel.wp = id; store.set('sel', UI.sel); UI.show('armory'); });
@@ -258,7 +256,7 @@ function renderMissions(root) {
 }
 UI.deployMission = function () {
   const C = UI.mis, p = G.WEAPON[C.primary], s = G.WEAPON[C.secondary];
-  const cfg = { mission: C.mission, tod: C.tod, tier: C.tier, test: C.mode === 'test', primary: { wp: p, L: UI.loadoutFor(p) }, secondary: s ? { wp: s, L: UI.loadoutFor(s) } : null };
+  const cfg = { mission: C.mission, tod: C.tod, tier: C.tier, primary: { wp: p, L: UI.loadoutFor(p) }, secondary: s ? { wp: s, L: UI.loadoutFor(s) } : null };
   UI.lastMission = cfg;
   loading('Inserting…', () => G.Game.startMission(cfg));
 };
@@ -266,14 +264,13 @@ UI.showMissionResults = function () {
   const Gm = G.Game, Ms = Gm.mission; G.Input.unlock();
   const acc = Gm.stats && Gm.stats.shots ? Math.round(Gm.stats.hits / Gm.stats.shots * 100) : 0;
   const tm = Math.round(Ms.t), mm = `${(tm / 60) | 0}:${String(tm % 60).padStart(2, '0')}`;
-  const stars = !Ms.ok || Ms.test ? 0 : 1 + (Ms.dmgTaken < 60 ? 1 : 0) + (acc >= 45 ? 1 : 0);
+  const stars = !Ms.ok ? 0 : 1 + (Ms.dmgTaken < 60 ? 1 : 0) + (acc >= 45 ? 1 : 0);
   const P0 = Gm.player, wn = P0 && P0.weapons ? P0.weapons.map(w => w.wp.n).join(' + ') : '';
-  overlay(`<div class="dialog" style="width:min(560px,100%)"><div class="eyebrow">${esc(Ms.M.name)} · ${esc(G.TOD[Ms.cfg.tod].n)}</div><h2>${Ms.test ? 'Weapon test' : Ms.ok ? 'Mission complete' : 'Mission failed'}</h2>
+  overlay(`<div class="dialog" style="width:min(560px,100%)"><div class="eyebrow">${esc(Ms.M.name)} · ${esc(G.TOD[Ms.cfg.tod].n)}</div><h2>${Ms.ok ? 'Mission complete' : 'Mission failed'}</h2>
     <p class="muted">${esc(Ms.reason || '')}</p>
-    ${Ms.test ? `<p class="muted">${esc(wn)}</p>` : ''}${Ms.ok && !Ms.test ? `<div style="font:700 34px var(--f-ui);color:var(--accent,#c9a24b)">${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}</div>` : ''}
-    <dl class="spec">${(Ms.test ? [['Time', mm], ['Kills', Ms.killed], ['Deaths', Ms.deaths], ['K/D', (Ms.killed / Math.max(1, Ms.deaths)).toFixed(2)], ['Headshots', `${Ms.heads} (${Ms.killed ? Math.round(Ms.heads / Ms.killed * 100) : 0}%)`], ['Accuracy', `${acc}% (${Gm.stats ? Gm.stats.hits : 0}/${Gm.stats ? Gm.stats.shots : 0})`], ['Damage taken', Math.round(Ms.dmgTaken)]]
-      : [['Time', mm], ['Hostiles neutralised', `${Ms.killed} / ${Ms.total}`], ['Headshots', Ms.heads], ['Accuracy', `${acc}% (${Gm.stats ? Gm.stats.hits : 0}/${Gm.stats ? Gm.stats.shots : 0})`], ['Damage taken', Math.round(Ms.dmgTaken)], ['Hostages safe', `${Ms.hostages - Ms.hostagesLost} / ${Ms.hostages}`]]).map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(String(v))}</dd></div>`).join('')}</dl>
-    <div class="btns"><button class="btn primary" id="x-again">${Ms.test ? 'Again' : 'Retry'}</button><button class="btn" id="x-setup">Change mission</button>${Ms.test ? '<button class="btn" id="x-arm">Armory</button>' : ''}<button class="btn" id="x-kit">Kit locker</button><button class="btn" id="x-menu">Main menu</button></div></div>`);
+    <p class="muted">${esc(wn)}</p>${Ms.ok ? `<div style="font:700 34px var(--f-ui);color:var(--accent,#c9a24b)">${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}</div>` : ''}
+    <dl class="spec">${([['Time', mm], ['Hostiles neutralised', `${Ms.killed} / ${Ms.total}`], ['Headshots', Ms.heads], ['Accuracy', `${acc}% (${Gm.stats ? Gm.stats.hits : 0}/${Gm.stats ? Gm.stats.shots : 0})`], ['Damage taken', Math.round(Ms.dmgTaken)], ['Hostages safe', `${Ms.hostages - Ms.hostagesLost} / ${Ms.hostages}`]]).map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(String(v))}</dd></div>`).join('')}</dl>
+    <div class="btns"><button class="btn primary" id="x-again">Retry</button><button class="btn" id="x-setup">Change mission</button><button class="btn" id="x-arm">Armory</button><button class="btn" id="x-kit">Kit locker</button><button class="btn" id="x-menu">Main menu</button></div></div>`);
   $('#x-again').onclick = () => { UI.closeOverlay(); loading('Inserting…', () => G.Game.startMission(UI.lastMission)); };
   $('#x-setup').onclick = () => { UI.closeOverlay(); Gm.cleanup(); Gm.player = null; UI.show('missions'); };
   if ($('#x-arm')) $('#x-arm').onclick = () => { UI.closeOverlay(); Gm.cleanup(); Gm.player = null; UI.show('armory'); };
@@ -315,7 +312,7 @@ UI.pause = function (on) {
     Gm.state = Gm.state === 'end' ? 'end' : 'pause'; G.Input.unlock(); G.Input.clear();
     const o = overlay(`<div class="dialog"><div class="eyebrow">${Gm.mode === 'range' ? 'Firing range' : esc(Gm.map ? Gm.map.name : '')}</div><h2>Paused</h2><div class="btns">
       <button class="btn primary" id="p-res">Resume</button>
-      ${Gm.mode === 'range' ? '<button class="btn" id="p-tgt">Targets & wind (T)</button><button class="btn" id="p-arm">Change weapon</button>' : (Gm.mission && Gm.mission.test ? '<button class="btn" id="p-end">End session</button>' : '') + '<button class="btn" id="p-rs">Restart mission</button>'}
+      ${Gm.mode === 'range' ? '<button class="btn" id="p-tgt">Targets & wind (T)</button><button class="btn" id="p-arm">Change weapon</button>' : '<button class="btn" id="p-rs">Restart mission</button>'}
       <button class="btn" id="p-help">Controls</button><button class="btn" id="p-set">Settings</button><button class="btn" id="p-quit">Quit to main menu</button></div></div>`);
     $('#p-res').onclick = () => UI.resume();
     $('#p-set').onclick = () => UI.settings(() => UI.pause(true));
@@ -323,7 +320,6 @@ UI.pause = function (on) {
     $('#p-quit').onclick = () => { UI.closeOverlay(); Gm.cleanup(); Gm.state = 'menu'; Gm.player = null; UI.show('menu'); };
     if ($('#p-tgt')) $('#p-tgt').onclick = () => { UI.closeOverlay(); UI.toggleRangeMenu(true); };
     if ($('#p-arm')) $('#p-arm').onclick = () => { UI.closeOverlay(); Gm.cleanup(); Gm.state = 'menu'; Gm.player = null; UI.show('armory'); };
-    if ($('#p-end')) $('#p-end').onclick = () => { UI.closeOverlay(); Gm.state = 'play'; Gm.endMission(true, 'Session ended.'); };
     if ($('#p-rs')) $('#p-rs').onclick = () => { UI.closeOverlay(); loading('Inserting…', () => G.Game.startMission(UI.lastMission)); };
   } else UI.resume();
 };
@@ -334,7 +330,7 @@ UI.onEscape = function () {
   if (Gm.mode === 'menu') { if ($('#ov')) UI.closeOverlay(); return; }
   if (Gm.state === 'play') UI.pause(true); else if (Gm.state === 'pause') UI.resume();
 };
-const KEYS = [['W A S D', 'Move'], ['Mouse', 'Look'], ['Left click', 'Fire'], ['Right click', 'Aim down sights'], ['Shift', 'Sprint · hold breath when scoped'], ['Space', 'Jump'], ['C', 'Crouch'], ['Z', 'Prone (auto bipod)'], ['Q / E', 'Lean'], ['R', 'Reload'], ['B', 'Fire mode'], ['1 / 2 · wheel', 'Switch weapon'], ['[ / ]', 'Zeroing distance'], ['X', 'Bipod'], ['V', 'Melee / bayonet'], ['G', 'Underbarrel launcher'], ['L', 'Weapon light'], ['F', 'Inspect'], ['T', 'Range: targets & wind'], ['N', 'Range: fly mode'], ['Y', 'Range: reset targets'], ['Esc', 'Pause']];
+const KEYS = [['W A S D', 'Move'], ['Mouse', 'Look'], ['Left click', 'Fire'], ['Right click', 'Aim down sights'], ['Shift', 'Sprint · hold breath when scoped'], ['Space', 'Jump'], ['C', 'Crouch'], ['Z', 'Prone (auto bipod)'], ['Q / E', 'Lean'], ['R', 'Reload'], ['B', 'Fire mode'], ['1 / 2 · wheel', 'Switch weapon'], ['[ / ]', 'Zeroing distance'], ['X', 'Bipod'], ['V', 'Melee / bayonet'], ['G', 'Underbarrel launcher'], ['F', 'Pick up / swap weapon (inspect when none near)'], ['K', 'Drop weapon in hand'], ['L', 'Laser / light modes'], ['J', 'Night vision'], ['T', 'Range: targets & wind'], ['N', 'Range: fly mode'], ['Y', 'Range: reset targets'], ['Esc', 'Pause']];
 UI.toggleHelp = function (force, back) {
   let h = $('#helpov');
   if (h && !force) { h.remove(); return; }
@@ -389,7 +385,7 @@ UI.showHUD = function (mode) {
     <div class="hudbox" id="hp"><div class="v">100</div><div class="b"><i></i></div><div class="st"></div></div>
     ${mode === 'mission' ? '<div class="hudbox" id="score"><span class="a">0</span><span class="t">0:00</span><span class="e">0</span></div><div class="hudbox" id="feed"></div>' : ''}${mode === 'range' ? '<div class="hudbox" id="tcam" hidden><b></b></div><div class="hudbox" id="rstats"></div><div class="hudbox" id="rhint">T targets & wind · N fly · Y reset · [ ] zero · H controls</div>' : ''}
     <div class="hudbox" id="compass"><div class="strip"></div></div>
-    <div class="hudbox" id="toast"></div><div class="hudbox" id="center"></div><div class="hudbox" id="board" hidden></div>`;
+    <div class="hudbox" id="toast"></div><div id="pick" style="position:absolute;left:50%;top:62%;transform:translateX(-50%);font:600 15px var(--f-ui,sans-serif);color:#fff;background:rgba(0,0,0,.55);padding:6px 12px;border-radius:4px;pointer-events:none;display:none"></div><div class="hudbox" id="center"></div><div class="hudbox" id="board" hidden></div>`;
   const strip = $('#compass .strip'); let s = '';
   for (let k = 0; k < 3; k++) for (let d = 0; d < 360; d += 15) s += `<span>${{ 0: 'N', 90: 'E', 180: 'S', 270: 'W' }[d] || (d % 45 === 0 ? d : '·')}</span>`;
   strip.innerHTML = s;
@@ -446,11 +442,10 @@ UI.updateHUD = function (dt) {
   const deg = ((-P.yaw * 180 / PI) % 360 + 360) % 360;
   const strip = $('#compass .strip'); if (strip) strip.style.transform = `translateX(${180 - 15 - (deg + 360) * 2}px)`;
   // mission objective
+  { const pk = $('#pick'), np = Gm.nearPick; if (pk) { if (np) { const cur = P.weapons.find(w => (w.wp.c === 'PST') === (np.wp.c === 'PST')); pk.textContent = `F — ${cur ? 'swap ' + cur.wp.n + ' for' : 'pick up'} ${np.wp.n} (${np.mag} + ${np.reserve})`; pk.style.display = 'block'; } else pk.style.display = 'none'; } }
   if (Gm.mode === 'mission' && Gm.mission) {
     const Ms = Gm.mission, sc = $('#score'), t = Ms.t | 0, tm = `${(t / 60) | 0}:${String(t % 60).padStart(2, '0')}`;
-    if (sc) { if (Ms.test) { sc.children[0].textContent = Ms.killed; sc.children[2].textContent = Ms.deaths; sc.children[1].textContent = `${tm} · kills · deaths · weapon test`; }
-      else { sc.children[0].textContent = Ms.killed; sc.children[2].textContent = Ms.total - Ms.killed; sc.children[1].textContent = `${tm} · hostiles left · hostages ${Ms.hostages - Ms.hostagesLost}`; } }
-    const c = $('#center'); if (c) c.textContent = Ms.test && !P.alive && Gm.state === 'play' ? `Killed by ${Gm.deathBy ? Gm.deathBy.name + (Gm.deathBy.role ? ' (' + Gm.deathBy.role.n + ')' : '') : '—'} · respawning in ${Math.max(0, Gm.respawnT).toFixed(1)}` : '';
+    if (sc) { sc.children[0].textContent = Ms.killed; sc.children[2].textContent = Ms.total - Ms.killed; sc.children[1].textContent = `${tm} · hostiles left · hostages ${Ms.hostages - Ms.hostagesLost}`; }
     if (UI.dirty) { const f = $('#feed'); if (f) f.innerHTML = Gm.killfeed.map(k => `<div><span class="${k.kt === 0 ? 'a' : 'e'}">${esc(k.k)}</span><span class="w">${esc(k.w)}${k.head ? ' ⌖' : ''}</span><span class="${k.vt === 0 ? 'a' : 'e'}">${esc(k.v)}</span></div>`).join(''); UI.dirty = false; }
   }
   if (Gm.mode === 'range' && (UI.dirty || Gm.frame % 10 === 0)) {
