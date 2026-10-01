@@ -52,7 +52,7 @@ I.frame = function () {
     leanL: k('KeyQ'), leanR: k('KeyE'),
     fire: I.mb[0] || tb.fire, firePressed: I.mbEdge[0] || te.fire,
     ads: I.mb[2] || tb.ads,
-    reload: e('KeyR') || te.reload, inspect: e('KeyF'), drop: e('KeyK'), expUse: e('Digit3'), expNext: e('Digit4'), melee: e('KeyV'), gl: e('KeyG'), mode: e('KeyB') || te.mode, light: e('KeyL'),
+    reload: e('KeyR') || te.reload, inspect: e('KeyF'), take: e('KeyT'), drop: e('KeyK'), expUse: e('Digit3'), expNext: e('Digit4'), melee: e('KeyV'), gl: e('KeyG'), mode: e('KeyB') || te.mode, light: e('KeyL'),
     zeroUp: e('BracketRight') || e('PageUp'), zeroDown: e('BracketLeft') || e('PageDown'), bipod: e('KeyX'),
     fly: e('KeyN'), menu: e('KeyT'), reset: e('KeyY'), nvg: e('KeyJ'),
     altSight: e('KeyH'), stockT: e('KeyO'), supT: e('KeyU'), kitInfo: e('KeyI'),

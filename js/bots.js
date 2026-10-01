@@ -123,7 +123,7 @@ class Bot {
       if (M.dead > 0) G.animateSoldier(M, { dt, dead: true });
       this.respawnT -= dt;
       if (this.respawnT <= 1 && M.root.visible) { M.root.position.y -= dt * .6; }
-      if (this.respawnT <= 0 && this.game.state === 'play') { if (this.guard) { this.spawn(this.guard.pos.clone().setY(this.guard.pos.y + .05)); this.yaw = this.guard.yaw; this.lastHeard = null; } else this.spawn(this.game.spawnPoint(this.team)); }
+      if (this.respawnT <= 0 && this.game.state === 'play' && this.game.mode !== 'mission') { if (this.guard) { this.spawn(this.guard.pos.clone().setY(this.guard.pos.y + .05)); this.yaw = this.guard.yaw; this.lastHeard = null; } else this.spawn(this.game.spawnPoint(this.team)); }
       return;
     }
     this.spawnProt -= dt;

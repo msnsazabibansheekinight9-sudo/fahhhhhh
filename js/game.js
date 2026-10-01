@@ -386,6 +386,7 @@ Game.endMission = function (ok, reason) {
 };
 Game.spawnPoint = function (team) {
   const W = G.E.world; const list = W.spawns[team];
+  if (!list || !list.length) return (Game.player ? Game.player.pos : V3(0, 0, 0)).clone();
   let best = list[0], bd = -1;
   for (const s of list) { let d = 1e9; for (const a of Game.agents) if (a.alive && a.team !== team) d = Math.min(d, a.pos.distanceTo(s)); if (d > bd) { bd = d; best = s; } }
   const p = best.clone(); p.x += (Math.random() - .5) * 3; p.z += (Math.random() - .5) * 3; return p;
@@ -431,7 +432,7 @@ Game.updatePickups = function (dt, P, input) {
     if (sc > bs) { bs = sc; best = p; }
   }
   Game.nearPick = best;
-  if (best && input.inspect) { input.inspect = false; Game.pickUp(best, P); }
+  if (best && input.take) { input.take = false; Game.pickUp(best, P); }
   if (input.drop) { const w = P.dropCurrent(); if (w) { Game.tossWeapon(w, P); Game.toast('Dropped ' + w.wp.n, 1.2); } else Game.toast("Can't drop your last weapon", 1.2); }
 };
 Game.pickUp = function (p, P) {
