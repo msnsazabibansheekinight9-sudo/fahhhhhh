@@ -527,6 +527,7 @@ Game.update = function (dt, now) {
       if (input.reset) { for (const T of Game.targets) T.reset && T.reset(); G.FX.clear(); Game.toast('Targets reset'); }
     }
     Game.updatePickups(dt, P, input);
+    if (Game.playerExplosives) Game.playerExplosives(P, input);
     if (P.alive) P.update(dt, input, now);
     else {
       P.hideVM = true;
@@ -546,7 +547,7 @@ Game.update = function (dt, now) {
     onSoldierHit: (b, S, zone, res) => { if (b.owner === P) { G.UI.hitmarker(res.killed, zone === 'head'); if (!res.killed) G.Audio.hit(zone === 'head', false); if (Game.stats) Game.stats.hits++; } },
     onTargetHit: (b, T, p, speed, r) => { if (b.owner === P && Game.mode === 'range') rangeStat(b, T, p, speed, r); },
   });
-  Game.updateFrags(dt);
+  Game.updateFrags(dt); if (Game.updateOrdnance) Game.updateOrdnance(dt);
   // grenades
   for (let i = Game.grenades.length - 1; i >= 0; i--) {
     const g = Game.grenades[i]; g.t += dt; const a = g.m.position.clone();

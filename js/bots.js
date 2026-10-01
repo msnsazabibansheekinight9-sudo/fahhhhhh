@@ -129,6 +129,8 @@ class Bot {
     this.spawnProt -= dt;
     const W = G.E.world, T = this.tier;
     // ---- perception
+    // flash-banged: blind and deaf, staggering and crouching
+    if (this.stunT > 0) { this.stunT -= dt; this.duckT = Math.max(this.duckT, .2); this.yaw += Math.sin(now * 7 + this.idx) * dt * 1.5; }
     // ---- perception: people notice you over time, not instantly
     this.think -= dt;
     if (this.alertT > 0) { this.alertT -= dt; if (this.alertT <= 0 && this.alert === 'search') this.alert = 'calm'; }
@@ -144,6 +146,7 @@ class Bot {
         const fovK = d < 2.5 ? 1 : dot > Math.cos(65 * PI / 180) ? 1 : dot > Math.cos(110 * PI / 180) ? .3 : 0; // focus, peripheral, behind
         if (!fovK) continue;
         if (!W.los(eye, tp)) { if (!W.los(eye, e.eye)) continue; }
+        if (this.game.smokeBlocks && this.game.smokeBlocks(eye, tp)) continue; // can't see through a smoke screen
         const vis = e.stance === 2 ? .45 : e.stance === 1 ? .7 : 1;
         const flash = e.lastShotT && now - e.lastShotT < 1.2; // muzzle flash gives you away, even at night
         const range = (60 * vis + 25) * (this.role && this.role.sight || 1) * (night && !nvg && !flash ? .45 : 1) * (e.lightOn ? 1.5 : 1);
@@ -160,7 +163,7 @@ class Bot {
       if (Pl && Pl.alive && Pl.team !== this.team && !best) { const d = Pl.pos.distanceTo(this.pos), sp = Math.hypot(Pl.vel.x, Pl.vel.z), hr = (sp > 4 ? 14 : sp > 2 ? 7 : sp > .4 ? (Pl.stance ? 2 : 3.5) : 0) * this.pers.ears;
         if (d < hr && Math.abs(Pl.pos.y - this.pos.y) < 3) { this.lastHeard = Pl.pos.clone(); this.sus = Math.max(this.sus, .35); if (this.alert === 'calm') { this.alert = 'search'; this.alertT = 20; } } }
       const was = this.targetVisible;
-      this.targetVisible = !!best && this.sus >= 1;
+      this.targetVisible = !!best && this.sus >= 1 && !(this.stunT > 0);
       if (this.targetVisible) {
         if (best !== this.target || !was) { this.reactT = T.react / 1000 * this.pers.react * (.8 + Math.random() * .5) * (bd > 50 ? 1.3 : 1) * (this.alert === 'combat' ? .7 : 1.25); this.errT = 0; }
         if (this.alert !== 'combat') this.callout(best.pos);

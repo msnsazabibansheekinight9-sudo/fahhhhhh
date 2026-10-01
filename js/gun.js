@@ -740,12 +740,21 @@ G.buildGun = function (wp, L, opt = {}) {
         const l = len * ext; const c = curve;
         const pts = [];
         const N = 8;
-        for (let i = 0; i <= N; i++) { const u = i / N; pts.push([-depth / 2 - u * u * l * c * .9, .01 - u * l]); }
-        for (let i = N; i >= 0; i--) { const u = i / N; pts.push([depth / 2 - u * u * l * c * .9 + u * .008, .01 - u * l]); }
+        // cross-sections perpendicular to the curved centreline, so the base (and floorplate) sit square to the body
+        const cl = u => ({ z: -u * u * l * c * .9 + u * .004, y: .01 - u * l, nz: l, ny: -2 * u * l * c * .9 + .004 });
+        const sec = (u, sgn) => { const q = cl(u), L = Math.hypot(q.nz, q.ny); return [q.z + sgn * q.nz / L * depth / 2, q.y + sgn * q.ny / L * depth / 2]; };
+        for (let i = 0; i <= N; i++) pts.push(sec(i / N, -1));
+        for (let i = N; i >= 0; i--) pts.push(sec(i / N, 1));
         sgm(pts, mw);
         add(gCyl(Math.min(.0055, mw * .22), Math.min(.0045, mw * .18), depth * .85, 10), MT.brass, -mw * .12, .013, -.002, g); // top round
-        add(gRBox(mw * 1.3, .01, depth * 1.25, .003), mat === MT.clearPoly ? MT.poly : MT.metal, 0, -l, -l * c * .9 + .004, g).rotation.x = -c * .9;
-        if (small && G.isAK(wp)) for (const s of [-1, 1]) add(gProf(pts.map(p => [p[0] * .4, p[1] * .92]), .002, .0005), mat, s * mw * .52, 0, 0, g);
+        // floorplate square to the magazine's axis at the bottom (the body leans forward there by atan(1.8·c))
+        { const q = cl(1), L = Math.hypot(q.nz, q.ny), tz = -q.ny / L, ty = q.nz / L; // tz,ty: unit axis pointing back up the magazine
+          const fp = add(gRBox(mw * 1.3, .01, depth * 1.25, .003), mat === MT.clearPoly ? MT.poly : MT.metal, 0, q.y - ty * .004, q.z - tz * .004, g); fp.rotation.x = Math.atan2(-q.ny / L, q.nz / L); }
+        // AK: pressed reinforcing ribs on each side, following the magazine's own curve along its centreline
+        if (small && G.isAK(wp)) { const rib = []; const M2 = 8, hw = depth * .16;
+          for (let i = 0; i <= M2; i++) { const u = .06 + i / M2 * .84, q = cl(u), L = Math.hypot(q.nz, q.ny); rib.push([q.z - q.nz / L * hw, q.y - q.ny / L * hw]); }
+          for (let i = M2; i >= 0; i--) { const u = .06 + i / M2 * .84, q = cl(u), L = Math.hypot(q.nz, q.ny); rib.push([q.z + q.nz / L * hw, q.y + q.ny / L * hw]); }
+          for (const s of [-1, 1]) add(gProf(rib, .0016, .0004), mat, s * (mw / 2 + .0006), 0, 0, g); }
         if (type.includes('pair')) { const g2 = sgm(pts, mw); g2.position.set(mw * 1.2, 0, .01); add(gBox(mw * 2.4, .03, .02), MT.cloth, mw * .6, -l * .5, 0, g); }
         break; }
       case 'drum': { // pressed-steel drum: short feed tower, drum top tucked right under the receiver
@@ -849,9 +858,31 @@ G.buildGun = function (wp, L, opt = {}) {
     if (ang) g.rotation.x = ang;
     g.position.copy(pos);
     root.add(g);
+    magHousing(g);
     rig.magHome = { pos: g.position.clone(), rot: g.rotation.clone() };
     rig.magType = type;
     rig.magPos = pos.clone();
+  }
+
+  // magazine housing: where a magazine stops a few millimetres short of the receiver (round receiver tubes,
+  // side-feeding SMGs, drum feed towers), bridge the gap with a well/collar that is part of the gun, not the magazine
+  function magHousing(g) {
+    root.updateMatrixWorld(true);
+    const inv = new THREE.Matrix4().copy(root.matrixWorld).invert(), bb = o => new THREE.Box3().setFromObject(o).applyMatrix4(inv);
+    const gap = (a, b) => Math.hypot(Math.max(0, a.min.x - b.max.x, b.min.x - a.max.x), Math.max(0, a.min.y - b.max.y, b.min.y - a.max.y), Math.max(0, a.min.z - b.max.z, b.min.z - a.max.z));
+    const mb = bb(g); let near = null, nd = 1e9;
+    root.traverse(o => { if (!o.isMesh) return; let q = o; while (q && q !== root) { if (q === g || q === rig.bipod) return; q = q.parent; } const b = bb(o); const d = gap(mb, b); if (d < nd) { nd = d; near = b; } });
+    if (!near || nd < .0015 || nd > .02) return;
+    const parts = []; g.traverse(o => { if (o.isMesh) parts.push(bb(o)); });
+    const slice = test => { const r = new THREE.Box3(); for (const b of parts) if (test(b)) r.union(b); return r.isEmpty() ? null : r; };
+    if (mb.max.y <= near.min.y + .001) { // magazine hangs below: a short well down to its top
+      const t = slice(b => b.max.y > mb.max.y - .006); if (!t) return; const w = Math.min(t.max.x - t.min.x, .05) + .004, d = Math.min(t.max.z - t.min.z, .09) + .004, y0 = mb.max.y - .004, y1 = near.min.y + .006;
+      add(gRBox(w, y1 - y0, d, .002), MT.metal, (t.min.x + t.max.x) / 2, (y0 + y1) / 2, (t.min.z + t.max.z) / 2, root);
+    } else if (mb.max.x <= near.min.x + .001 || mb.min.x >= near.max.x - .001) { // side magazine: a housing collar out to the receiver
+      const left = mb.max.x <= near.min.x + .001, t = slice(b => left ? b.max.x > mb.max.x - .006 : b.min.x < mb.min.x + .006); if (!t) return;
+      const x0 = left ? mb.max.x - .012 : near.max.x - .006, x1 = left ? near.min.x + .006 : mb.min.x + .012;
+      add(gRBox(x1 - x0, Math.min(t.max.y - t.min.y, .05) + .006, Math.min(t.max.z - t.min.z, .06) + .006, .002), MT.metal, (x0 + x1) / 2, (t.min.y + t.max.y) / 2, (t.min.z + t.max.z) / 2, root);
+    }
   }
 
   // highest point of already-built geometry inside a thin corridor along the bore line (z0..z1, |x - cx| < hw)

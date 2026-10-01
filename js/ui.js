@@ -236,6 +236,7 @@ function renderMissions(root) {
     <div><span class="lbl">Hostiles</span><div class="row">${G.HOSTILE_ROLES.map(r => `<div class="card" style="cursor:default"><small>${r.id === 'leader' ? 'One per cell' : r.max ? 'Up to ' + r.max : 'Common'}</small><b>${esc(r.n)}</b><span>${esc(r.d)}</span></div>`).join('')}</div></div>
     <div><span class="lbl">Time of day</span><div class="row">${Object.entries(G.TOD).map(([k, t]) => `<button class="card ${k === C.tod ? 'on' : ''}" data-tod="${k}"><b>${t.n}</b><span>${t.d}</span></button>`).join('')}</div></div>
     <div><span class="lbl">Hostile tier</span><div class="row">${G.TIERS.map(t => `<button class="card ${C.tier === t.id ? 'on' : ''}" data-tier="${t.id}"><small style="color:${t.color}">Tier ${G.TIERS.indexOf(t) + 1}</small><b>${t.n}</b><span>${t.d}</span></button>`).join('')}<button class="card ${C.tier === 'mixed' ? 'on' : ''}" data-tier="mixed"><small>All tiers</small><b>Mixed cell</b><span>A mix of recruits and hardened fighters.</span></button></div></div>
+    <div><span class="lbl">Explosives pouch (pick up to 4)</span><div class="row">${G.EXPLOSIVES.map(e => `<button class="card ${(C.ex || ['m67', 'm84', 'm18', 'c4']).includes(e.id) ? 'on' : ''}" data-ex="${e.id}"><small>${esc(e.co)} · ${e.y}</small><b>${esc(e.n)}</b><span>${esc(e.d || ({ frag: 'Timed fragmentation grenade.', impact: 'Bursts on impact.', stun: 'Stun grenade.', smoke: 'Smoke screen.', fire: 'Incendiary.', charge: 'Placed charge, remote detonation.', mine: 'Directional mine.' })[e.kind])}</span></button>`).join('')}</div></div>
     <div class="loadrow">
       <div><span class="lbl">Primary (any era)</span><div class="pick"><select id="mprim">${opts(w => w.c !== 'PST', C.primary)}</select><button class="btn small" data-cust="prim">Customise</button></div></div>
       <div><span class="lbl">Sidearm</span><div class="pick"><select id="msec">${opts(w => w.c === 'PST', C.secondary)}</select><button class="btn small" data-cust="sec">Customise</button></div></div>
@@ -247,6 +248,7 @@ function renderMissions(root) {
   root.querySelectorAll('[data-mis]').forEach(b => b.onclick = () => { C.mission = b.dataset.mis; G.Audio.ui(); re(); });
   root.querySelectorAll('[data-tod]').forEach(b => b.onclick = () => { C.tod = b.dataset.tod; G.Audio.ui(); re(); });
   root.querySelectorAll('[data-tier]').forEach(b => b.onclick = () => { C.tier = b.dataset.tier; G.Audio.ui(); re(); });
+  root.querySelectorAll('[data-ex]').forEach(b => b.onclick = () => { const l = (C.ex || ['m67', 'm84', 'm18', 'c4']).slice(), i = l.indexOf(b.dataset.ex); if (i >= 0) l.splice(i, 1); else { if (l.length >= 4) l.shift(); l.push(b.dataset.ex); } C.ex = l; G.Audio.ui(); re(); });
   $('#mprim').onchange = e => { C.primary = e.target.value; store.set('mis', C); };
   $('#msec').onchange = e => { C.secondary = e.target.value; store.set('mis', C); };
   root.querySelectorAll('[data-cust]').forEach(b => b.onclick = () => { const id = b.dataset.cust === 'prim' ? C.primary : C.secondary; UI.sel.era = G.WEAPON[id].e; UI.sel.wp = id; store.set('sel', UI.sel); UI.show('armory'); });
@@ -256,7 +258,7 @@ function renderMissions(root) {
 }
 UI.deployMission = function () {
   const C = UI.mis, p = G.WEAPON[C.primary], s = G.WEAPON[C.secondary];
-  const cfg = { mission: C.mission, tod: C.tod, tier: C.tier, primary: { wp: p, L: UI.loadoutFor(p) }, secondary: s ? { wp: s, L: UI.loadoutFor(s) } : null };
+  const cfg = { mission: C.mission, tod: C.tod, tier: C.tier, explosives: (C.ex || ['m67', 'm84', 'm18', 'c4']).slice(), primary: { wp: p, L: UI.loadoutFor(p) }, secondary: s ? { wp: s, L: UI.loadoutFor(s) } : null };
   UI.lastMission = cfg;
   loading('Inserting…', () => G.Game.startMission(cfg));
 };
@@ -330,7 +332,7 @@ UI.onEscape = function () {
   if (Gm.mode === 'menu') { if ($('#ov')) UI.closeOverlay(); return; }
   if (Gm.state === 'play') UI.pause(true); else if (Gm.state === 'pause') UI.resume();
 };
-const KEYS = [['W A S D', 'Move'], ['Mouse', 'Look'], ['Left click', 'Fire'], ['Right click', 'Aim down sights'], ['Shift', 'Sprint · hold breath when scoped'], ['Space', 'Jump'], ['C', 'Crouch'], ['Z', 'Prone (auto bipod)'], ['Q / E', 'Lean'], ['R', 'Reload'], ['B', 'Fire mode'], ['1 / 2 · wheel', 'Switch weapon'], ['[ / ]', 'Zeroing distance'], ['X', 'Bipod'], ['V', 'Melee / bayonet'], ['G', 'Underbarrel launcher'], ['F', 'Pick up / swap weapon (inspect when none near)'], ['K', 'Drop weapon in hand'], ['L', 'Laser / light modes'], ['J', 'Night vision'], ['T', 'Range: targets & wind'], ['N', 'Range: fly mode'], ['Y', 'Range: reset targets'], ['Esc', 'Pause']];
+const KEYS = [['W A S D', 'Move'], ['Mouse', 'Look'], ['Left click', 'Fire'], ['Right click', 'Aim down sights'], ['Shift', 'Sprint · hold breath when scoped'], ['Space', 'Jump'], ['C', 'Crouch'], ['Z', 'Prone (auto bipod)'], ['Q / E', 'Lean'], ['R', 'Reload'], ['B', 'Fire mode'], ['1 / 2 · wheel', 'Switch weapon'], ['[ / ]', 'Zeroing distance'], ['X', 'Bipod'], ['V', 'Melee / bayonet'], ['G', 'Underbarrel launcher'], ['F', 'Pick up / swap weapon (inspect when none near)'], ['K', 'Drop weapon in hand'], ['3', 'Throw / place explosive (again: detonate charges)'], ['4', 'Next explosive type'], ['L', 'Laser / light modes'], ['J', 'Night vision'], ['T', 'Range: targets & wind'], ['N', 'Range: fly mode'], ['Y', 'Range: reset targets'], ['Esc', 'Pause']];
 UI.toggleHelp = function (force, back) {
   let h = $('#helpov');
   if (h && !force) { h.remove(); return; }
@@ -385,7 +387,7 @@ UI.showHUD = function (mode) {
     <div class="hudbox" id="hp"><div class="v">100</div><div class="b"><i></i></div><div class="st"></div></div>
     ${mode === 'mission' ? '<div class="hudbox" id="score"><span class="a">0</span><span class="t">0:00</span><span class="e">0</span></div><div class="hudbox" id="feed"></div>' : ''}${mode === 'range' ? '<div class="hudbox" id="tcam" hidden><b></b></div><div class="hudbox" id="rstats"></div><div class="hudbox" id="rhint">T targets & wind · N fly · Y reset · [ ] zero · H controls</div>' : ''}
     <div class="hudbox" id="compass"><div class="strip"></div></div>
-    <div class="hudbox" id="toast"></div><div id="pick" style="position:absolute;left:50%;top:62%;transform:translateX(-50%);font:600 15px var(--f-ui,sans-serif);color:#fff;background:rgba(0,0,0,.55);padding:6px 12px;border-radius:4px;pointer-events:none;display:none"></div><div class="hudbox" id="center"></div><div class="hudbox" id="board" hidden></div>`;
+    <div class="hudbox" id="toast"></div><div id="flashfx" style="position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none"></div><div id="expl" style="position:absolute;right:24px;bottom:150px;font:600 13px var(--f-mono,monospace);color:#e8e2cc;text-align:right;text-shadow:0 1px 2px #000;pointer-events:none"></div><div id="pick" style="position:absolute;left:50%;top:62%;transform:translateX(-50%);font:600 15px var(--f-ui,sans-serif);color:#fff;background:rgba(0,0,0,.55);padding:6px 12px;border-radius:4px;pointer-events:none;display:none"></div><div class="hudbox" id="center"></div><div class="hudbox" id="board" hidden></div>`;
   const strip = $('#compass .strip'); let s = '';
   for (let k = 0; k < 3; k++) for (let d = 0; d < 360; d += 15) s += `<span>${{ 0: 'N', 90: 'E', 180: 'S', 270: 'W' }[d] || (d % 45 === 0 ? d : '·')}</span>`;
   strip.innerHTML = s;
@@ -442,6 +444,7 @@ UI.updateHUD = function (dt) {
   const deg = ((-P.yaw * 180 / PI) % 360 + 360) % 360;
   const strip = $('#compass .strip'); if (strip) strip.style.transform = `translateX(${180 - 15 - (deg + 360) * 2}px)`;
   // mission objective
+  { const fx = $('#flashfx'); if (fx) fx.style.opacity = Math.min(1, (Gm.flashT || 0) / 2.5).toFixed(3); const ex = $('#expl'), X = P.expl; if (ex && X && X.list.length && (UI.dirty || Gm.frame % 10 === 0)) { const E = G.EXPLOSIVE[X.list[X.sel]]; ex.textContent = `${E.n} ×${X.counts[E.id] > 90 ? '∞' : X.counts[E.id]}  [3] use · [4] next`; } }
   { const pk = $('#pick'), np = Gm.nearPick; if (pk) { if (np) { const cur = P.weapons.find(w => (w.wp.c === 'PST') === (np.wp.c === 'PST')); pk.textContent = `F — ${cur ? 'swap ' + cur.wp.n + ' for' : 'pick up'} ${np.wp.n} (${np.mag} + ${np.reserve})`; pk.style.display = 'block'; } else pk.style.display = 'none'; } }
   if (Gm.mode === 'mission' && Gm.mission) {
     const Ms = Gm.mission, sc = $('#score'), t = Ms.t | 0, tm = `${(t / 60) | 0}:${String(t % 60).padStart(2, '0')}`;
