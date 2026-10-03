@@ -205,6 +205,7 @@ B.update = function (dt, ctx) {
       const segLen = tmpA.distanceTo(b.p); b.dist += segLen;
       trace(b, tmpA, b.p, segLen, ctx);
       if (b.t > 4 || b.p.y < -5) b.alive = false;
+      const WB = G.E.world.bounds || 1e9; if (Math.abs(b.p.x) > WB + 80 || Math.abs(b.p.z) > WB + 80) b.alive = false; // long gone past the edge of the map
     }
   }
   // tracers

@@ -341,6 +341,12 @@ class World {
         if (tX < tZ) { i += si; tX += dX; } else { j += sj; tZ += dZ; }
         if (i < 0 || j < 0 || i >= g.N || j >= g.N) break;
       }
+    } else if (g) {
+      // ray starts outside the grid: everything out there is in the big list; then enter the grid where the ray crosses its edge
+      for (const c of g.big) test(c);
+      const lo = -g.B + .01, hi = g.N * g.cs - g.B - .01; let t0 = 0, t1 = Math.min(maxT, bt);
+      for (const [o0, d0] of [[ro.x, rd.x], [ro.z, rd.z]]) { if (Math.abs(d0) < 1e-9) { if (o0 < lo || o0 > hi) t1 = -1; continue; } let a = (lo - o0) / d0, b2 = (hi - o0) / d0; if (a > b2) [a, b2] = [b2, a]; t0 = Math.max(t0, a); t1 = Math.min(t1, b2); }
+      if (t1 > t0 && t0 < bt) { const sub = this.raycast(ro.clone().addScaledVector(rd, t0 + .02), rd, Math.min(maxT, bt) - t0 - .02, o); if (sub && sub.t + t0 + .02 < bt && !sub.ground) { bt = sub.t + t0 + .02; best = { t: bt, c: sub.c, ax: sub.ax }; } }
     } else for (const c of this.colliders) test(c);
     // ground plane
     if (rd.y < 0) { const tg = (this.baseHeight - ro.y) / rd.y; if (tg > 0 && tg < bt) { bt = tg; best = { t: tg, c: null, ax: 1, ground: true }; } }
