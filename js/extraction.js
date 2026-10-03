@@ -129,7 +129,7 @@ X.capacity = kit => {
 const used = inv => inv.reduce((s, it) => s + itemSize(it), 0);
 
 // ------------------------------------------------------------------ random gear and weapons for bots and scav runs
-const NONPSY = () => G.WEAPONS.filter(w => w.e !== 'psycho' && !w.heavy);
+const NONPSY = () => G.WEAPONS.filter(w => w.e !== 'psycho' && !w.custom && !w.heavy);
 function randWeapon(q, R) {
   let pool = NONPSY();
   if (q === 0) pool = pool.filter(w => ['ww2', 'cold', 'mod'].includes(w.e) && w.c !== 'SR');
@@ -544,7 +544,7 @@ X.deploy = function () {
   const S = X.stash, prep = S.prep, Mp = G.RAID_MAP[prep.map];
   let cfg;
   if (prep.side === 'scav') {
-    const R = Math.random, wp = randWeapon(0, R), kit = randKit(0, prep.tod === 'night', R), pist = pick(G.WEAPONS.filter(w => w.c === 'PST' && w.e !== 'psycho'));
+    const R = Math.random, wp = randWeapon(0, R), kit = randKit(0, prep.tod === 'night', R), pist = pick(G.WEAPONS.filter(w => w.c === 'PST' && w.e !== 'psycho' && !w.custom));
     cfg = { map: Mp.id, tod: prep.tod, side: 'scav', primary: { wp, L: G.botLoadout(wp, 'rifleman', 0, false, R) }, secondary: R() < .4 ? { wp: pist, L: G.defaultLoadout(pist) } : null, kit, inv: [rollLoot(['med'], R), rollLoot(['food'], R)], explosives: ['rgd5'] };
   } else {
     const take = u => { const i = S.items.findIndex(x => x.u === u); return i >= 0 ? S.items.splice(i, 1)[0] : null; };

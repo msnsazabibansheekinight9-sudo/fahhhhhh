@@ -33,14 +33,14 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
 
 /* ---------- main menu */
 #menu { align-items: stretch; pointer-events: none; }
-#menu .left { pointer-events: auto; width: min(520px, 100%); padding: clamp(24px, 6vh, 64px) clamp(16px, 5vw, 56px); display: flex; flex-direction: column; gap: 22px; background: linear-gradient(90deg, rgba(10, 11, 9, .94) 55%, rgba(10, 11, 9, 0)); }
+#menu .left { pointer-events: auto; width: min(520px, 100%); padding: clamp(24px, 6vh, 64px) clamp(16px, 5vw, 56px); display: flex; flex-direction: column; gap: 22px; background: linear-gradient(90deg, rgba(10, 11, 9, .94) 55%, rgba(10, 11, 9, 0)); overflow-y: auto; max-height: 100vh; box-sizing: border-box; scrollbar-width: thin; }
 .logo { font: 900 clamp(56px, 11vw, 104px)/.82 var(--f-display); letter-spacing: .01em; color: var(--fg); text-wrap: balance; }
 .logo span { color: var(--brass); display: block; }
 .tag { font-size: 18px; color: var(--muted); max-width: 34ch; }
 .menu-list { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
-.menu-item { display: grid; grid-template-columns: 34px 1fr; gap: 4px 12px; text-align: left; background: transparent; border: 0; border-left: 2px solid transparent; padding: 12px 14px; }
+.menu-item { display: grid; grid-template-columns: 34px 1fr; gap: 4px 12px; text-align: left; background: transparent; border: 0; border-left: 2px solid transparent; padding: 8px 14px; }
 .menu-item:hover { border-left-color: var(--brass); background: rgba(201, 162, 75, .07); }
-.menu-item b { grid-column: 2; font: 700 28px/1 var(--f-ui); letter-spacing: .04em; text-transform: uppercase; }
+.menu-item b { grid-column: 2; font: 700 25px/1 var(--f-ui); letter-spacing: .04em; text-transform: uppercase; }
 .menu-item i { grid-column: 2; font-style: normal; color: var(--muted); font-size: 15px; }
 .menu-item .n { grid-row: 1 / span 2; font: 600 12px var(--f-mono); color: var(--brass); padding-top: 6px; }
 .menu-foot { margin-top: auto; font: 12px/1.6 var(--f-mono); color: var(--dim); }
@@ -203,6 +203,7 @@ input[type=range] { width: 100%; accent-color: var(--brass); }
 <script src="js/data4.js"></script><script src="js/data5.js"></script>
 <script src="js/data6.js"></script>
 <script src="js/data7.js"></script>
+<script src="js/builder.js"></script>
 <script src="js/gear.js"></script>
 <script src="js/gearperks.js"></script>
 <script src="js/tex.js"></script>
@@ -219,4 +220,4 @@ input[type=range] { width: 100%; accent-color: var(--brass); }
 <script src="js/vehicles.js"></script><script src="js/targets2.js"></script><script src="js/explosives.js"></script>
 <script src="js/missions.js"></script>
 <script src="js/input.js"></script><script src="js/extraction.js"></script>
-<script src="js/ui.js"></script><script src="js/battle.js"></script><script src="js/minimap.js"></script>
+<script src="js/ui.js"></script><script src="js/battle.js"></script><script src="js/minimap.js"></script><script src="js/workshop.js"></script><script src="js/bench.js"></script>

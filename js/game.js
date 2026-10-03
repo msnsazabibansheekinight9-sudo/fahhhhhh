@@ -322,7 +322,7 @@ Game.startRange = function (sel) {
   Game.agents = [P]; Game.bots = [];
   Game.stats = { shots: 0, hits: 0, last: null };
   G.Ballistics.wind.set(G.rangeWind || 0, 0, 0);
-  if (!Game.targets.length) { Game.addTarget('paper', 25); Game.addTarget('steel', 100); Game.addTarget('gel', 15); Game.addTarget('dummy', 50, { era: sel[0].wp.e, tier: 'regular' }); }
+  if (!Game.targets.length) { Game.addTarget('paper', 25); Game.addTarget('steel', 100); Game.addTarget('gel', 15); Game.addTarget('dummy', 50, { era: sel[0].wp.home || sel[0].wp.e, tier: 'regular' }); }
   else { const keep = Game.targets.map(t => [t.type, t.dist, { era: t.era, tier: t.tier && t.tier.id }]); Game.targets = []; for (const k of keep) Game.addTarget(...k); }
   G.UI.showHUD('range');
 };

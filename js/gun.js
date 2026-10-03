@@ -288,7 +288,7 @@ G.buildGun = function (wp, L, opt = {}) {
     const bz = zf - brlLen / 2;
     add(gCyl(br * 1.25, br * .95, brlLen, 16), brlMat, 0, 0, bz);
     if (S.bthick > 1.2 && small) for (let i = 0; i < 4; i++) { const q = add(gBox(.002, .002, brlLen * .6), MT.metal, Math.cos(i * PI / 2) * br * 1.2, Math.sin(i * PI / 2) * br * 1.2, bz - brlLen * .1); }
-    if (L.barrel === 'brl_fluted' && small) for (let i = 0; i < 6; i++) add(gBox(.002, .002, brlLen * .5), MT.metal, Math.cos(i * PI / 3) * br * 1.05, Math.sin(i * PI / 3) * br * 1.05, bz);
+    if (((G.ATT[L.barrel] && G.ATT[L.barrel].as) || L.barrel) === 'brl_fluted' && small) for (let i = 0; i < 6; i++) add(gBox(.002, .002, brlLen * .5), MT.metal, Math.cos(i * PI / 3) * br * 1.05, Math.sin(i * PI / 3) * br * 1.05, bz);
     add(gCyl(br * .45, br * .45, .004, 12), MT.rubber, 0, 0, muzzleZ - .001); // bore
   } else if (pistol) {
     add(gCyl(m.B[1] * 1.1, m.B[1] * 1.1, .02, 14), MT.steel, 0, 0, zf + .01);
@@ -715,7 +715,7 @@ G.buildGun = function (wp, L, opt = {}) {
     const mg = m.mag || ['int'];
     let type = mg[0], len = mg[1] || .15, curve = mg[2] || 0, mz = mg[3] !== undefined ? mg[3] : -.06, ang = mg[4] || 0;
     // loadout overrides
-    const Lm = L.mag;
+    const Lm = (G.ATT[L.mag] && G.ATT[L.mag].as) || L.mag;
     const ext = Lm === 'mag_ext' || Lm === 'smle_20' || Lm === 'glock33' || Lm === 'psy_quad' ? 1.5 : 1;
     if (Lm === 'mag_drum' || Lm === 'thompson50' || Lm === 'rpk75') type = 'drum';
     if (Lm === 'ppsh35') { type = 'curve'; len = .2; curve = .3; }
@@ -731,6 +731,7 @@ G.buildGun = function (wp, L, opt = {}) {
     const depth = ['9×19mm', '.45 ACP', '7.62×25mm', '.30 Carbine', '4.6×30mm', '5.7×28mm'].includes(wp.cal) ? .032 : (G.CAL[wp.cal].cs[0] + .014);
     const mw = Math.min(RW * .85, .03);
     const sgm = (pts, w, m2) => add(gProf(pts, w, .003, false), m2 || mat, 0, 0, 0, g);
+    if (type === 'pst' && !PS) { type = 'box'; len = Math.max(.1, len); } // grip magazine on a long gun (workshop designs)
     switch (type.replace('_pair', '')) {
       case 'box': case 'box_clear': {
         const l = len * ext;
@@ -1283,6 +1284,22 @@ G.buildGun = function (wp, L, opt = {}) {
     if (has('chassis')) { add(gRBox(RW * 1.3, RH * .9, RL * 1.2, .008), MT.metal, 0, -RH * .3, (zr + zf) / 2 + .02); }
     if (has('charge_both') && small) for (const s of [-1, 1]) add(gBox(.015, .008, .012), MT.steel, s * (RW * .5 + .008), top - .01, zr - .03);
     if (has('drumhook')) {}
+    // ---------- workshop-only parts (player-designed guns)
+    if (X.some(x => x.startsWith('xs_'))) {
+      const bl = Math.max(.08, pistol ? m.B[0] : blen), bz0 = pistol ? zf : zf;
+      if (has('xs_fins')) for (let i = 0; i < Math.max(3, Math.round(bl / .025)); i++) add(gCyl(br * 2.6, br * 2.6, .004, 18), MT.metal, 0, 0, bz0 - .02 - i * .025 * Math.min(1, (bl - .03) / (Math.max(3, Math.round(bl / .025)) * .025)));
+      if (has('xs_shield')) { add(gRBox(.2, .17, .008, .01), MT.metal, 0, .02, zf - .04); add(gBox(.05, .006, .03), MT.steel, 0, -br * 2, zf - .03); }
+      if (has('xs_tank')) { add(gCyl(.022, .022, Math.min(.22, RL * .8), 16), MT.hazard, -RW * .5 - .024, -RH * .1, (zr + zf) / 2); for (const dz of [-.06, .06]) add(gTor(.023, .003), MT.steel, -RW * .5 - .024, -RH * .1, (zr + zf) / 2 + dz); add(gCylY(.004, .004, .03), MT.rubber, -RW * .5 - .024, -RH * .1 + .03, (zr + zf) / 2); }
+      if (has('xs_coils')) { const cm = MT.glowC; for (let i = 0; i < 6; i++) add(gTor(br * 2.4, .0028), cm, 0, 0, zf - .03 - i * Math.min(.05, bl / 7)); }
+      if (has('xs_spikes')) for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2, sp = add(gCyl(.0035, 0, .03, 6), MT.bright, Math.cos(a) * br * 2.2, Math.sin(a) * br * 2.2, rig.muzzleZ - .012); sp.rotation.x = 0; }
+      if (has('xs_blade')) add(gProf([[0, .008], [-bl * .85, .004], [-bl * .9 - .03, -.006], [0, -.018]], .004, .0008), MT.bright, 0, -br * 2.6 - .02, zf - .01);
+      if (has('xs_handle')) { const hz = (zr + zf) / 2, hy = (['bolt', 'lever', 'semiw'].includes(t) ? RW * .5 : top) + .055; add(gRBox(.014, .012, Math.min(.16, RL * .6), .005), MT.poly, 0, hy, hz); for (const dz of [-1, 1]) add(gBox(.01, .05, .01), MT.metal, 0, hy - .028, hz + dz * Math.min(.075, RL * .28)); }
+      if (has('xs_drum2')) { const dg = grp(-RW * .5 - .045, bot - .02, -.04); add(gCylX(.05, .05, .045, 22), MT.metal, 0, 0, 0, dg); add(gCylX(.02, .02, .05, 12), MT.steel, 0, 0, 0, dg); add(gBox(.02, .04, .03), MT.metal, .03, .03, 0, dg); }
+      if (has('xs_cannon')) { const cz = zf - Math.min(.2, bl * .6) / 2 - .02; add(gCyl(.024, .024, Math.min(.2, bl * .6), 18), MT.metal, 0, -br * 2.4 - .03, cz); add(gCyl(.019, .019, .004, 16), MT.rubber, 0, -br * 2.4 - .03, cz - Math.min(.2, bl * .6) / 2 - .001); }
+      if (has('xs_armor')) for (const sd of [-1, 1]) add(gRBox(.006, RH * .7, RL * .7, .004), MT.metal, sd * (RW * .5 + .004), -RH * .1, (zr + zf) / 2);
+      if (has('xs_stab')) { const sz = rig.stockEnd ? rig.stockEnd.z - .12 : zr + .06; add(gCyl(.026, .026, .03, 22), MT.metal, 0, bot - .02, sz).rotation.x = Math.PI / 2; add(gCylY(.006, .006, .03), MT.steel, 0, bot + .0, sz); }
+      if (has('xs_spine')) { add(gBox(.008, .008, RL + bl * .7), MT.steel, 0, (['bolt', 'lever', 'semiw'].includes(t) ? RW * .5 : top) + .03, (zr + zf - bl * .7) / 2); for (let i = 0; i < 4; i++) add(gBox(.004, .03, .004), MT.steel, 0, (['bolt', 'lever', 'semiw'].includes(t) ? RW * .5 : top) + .015, zr - i * (RL + bl * .7) / 3.2); }
+    }
     // fixed bipod (folded, or deployed in the range)
     if (S.bip) {
       const bz = t === 'mg' || t === 'lmg' ? zf - Math.min(blen, hgL || blen) * .75 : zf - Math.min(blen * .6, .25);

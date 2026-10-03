@@ -10,7 +10,7 @@ const MAP = { KeyW: 'f', ArrowUp: 'f', KeyS: 'b', ArrowDown: 'b', KeyA: 'l', Arr
 I.init = function (canvas) {
   I.canvas = canvas;
   window.addEventListener('keydown', e => {
-    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA')) return;
     if (!I.keys[e.code]) I.edge[e.code] = true;
     I.keys[e.code] = true;
     if (G.Game.mode !== 'menu' && ['Space', 'Tab', 'PageUp', 'PageDown', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault();

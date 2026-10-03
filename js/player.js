@@ -111,7 +111,7 @@ class Player {
   setupWeapons(list) { // list: [{wp, L}]
     for (const w of this.weapons) if (w.rig) this.vm.holder.remove(w.rig.root);
     this.weapons = list.map(({ wp, L }) => this.makeWeapon(wp, L));
-    const era = list[0] ? list[0].wp.e : 'ww2';
+    const era = list[0] ? (list[0].wp.home || list[0].wp.e) : 'ww2';
     this.vm.arms = this.buildArms(era);
     this.cur = 0; this.equip(0, true);
   }

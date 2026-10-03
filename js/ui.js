@@ -38,7 +38,7 @@ function initShowroom() {
   c.addEventListener('pointerdown', e => { if (G.Game.mode !== 'menu') return; drag = true; lx = e.clientX; ly = e.clientY; SR.auto = false; });
   window.addEventListener('pointerup', () => { drag = false; });
   window.addEventListener('pointermove', e => { if (!drag) return; SR.yaw -= (e.clientX - lx) * .008; SR.pitch = Math.max(-.6, Math.min(1.2, SR.pitch + (e.clientY - ly) * .006)); lx = e.clientX; ly = e.clientY; });
-  c.addEventListener('wheel', e => { if (G.Game.mode !== 'menu') return; SR.dist = Math.max(.5, Math.min(4, SR.dist * (1 + Math.sign(e.deltaY) * .1))); }, { passive: true });
+  c.addEventListener('wheel', e => { if (G.Game.mode !== 'menu') return; SR.dist = Math.max(.25, Math.min(6, SR.dist * (1 + Math.sign(e.deltaY) * .1))); }, { passive: true });
 }
 SR.show = function (wp, L, st) {
   if (SR.rig) { SR.turn.remove(SR.rig.root); }
@@ -69,9 +69,9 @@ SR.render = function (dt) {
   // frame the gun inside the visible gap between side panels
   const mode = UI.screen;
   let off = 0;
-  if ((mode === 'armory' || mode === 'kit') && w > 900) off = (Math.min(300, w * .22) - Math.min(380, w * .28)) / 2 / w;
+  if ((mode === 'armory' || mode === 'kit' || mode === 'workshop' || mode === 'bench') && w > 900) off = (Math.min(300, w * .22) - Math.min(380, w * .28)) / 2 / w;
   if (mode === 'menu') off = w > 700 ? .18 : 0;
-  SR.cam.aspect = w / h; SR.cam.setViewOffset(w, h, -off * w, mode === 'armory' && w <= 900 ? -h * .15 : 0, w, h); SR.cam.updateProjectionMatrix();
+  SR.cam.aspect = w / h; SR.cam.setViewOffset(w, h, -off * w, (mode === 'armory' || mode === 'workshop' || mode === 'bench') && w <= 900 ? -h * .15 : 0, w, h); SR.cam.updateProjectionMatrix();
   const d = SR.dist;
   const tg = UI.screen === 'kit' && SR.kitS ? SR.target : V3(0, 0, 0);
   SR.cam.position.set(tg.x + Math.sin(SR.yaw) * Math.cos(SR.pitch) * d, tg.y + Math.sin(SR.pitch) * d, tg.z + Math.cos(SR.yaw) * Math.cos(SR.pitch) * d);
@@ -98,27 +98,47 @@ UI.buildStandalone = async function () {
   }
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Ironsight Armory</title>\n${links}\n${styles}</head><body>\n<canvas id="c" aria-label="3D view"></canvas><div id="ui"></div><div id="hud" hidden></div><div id="loading">Loading armory…</div>\n${out}</body></html>`;
 };
+// The published page on claude.ai: a link that opens the game in any browser tab, nothing to download
+const ARTIFACT_URL = 'https://claude.ai/artifact/98Ay2afhvBxVPgfMGSfiHh';
 UI.openChrome = async function () {
+  const u = location.href, ua = navigator.userAgent || '', bare = u.replace(/^https?:\/\//, '');
+  const framed = (() => { try { return window.top !== window; } catch (e) { return true; } })();
+  const tryOpen = url => { try { return window.open(url, '_blank'); } catch (e) { return null; } };
+  if (!framed) {
+    if (/^file:/.test(u)) { UI.toast('Open this file from Chrome: drag it into a Chrome window, or File → Open', 4); return; }
+    if (/Android/i.test(ua)) { location.href = `intent://${bare}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(u)};end`; return; }
+    if (/iPhone|iPad|iPod/i.test(ua)) { location.href = 'googlechromes://' + bare; return; }
+    if (!tryOpen(u)) location.href = u; return;
+  }
+  // inside claude.ai: open the game on its own in a new tab — no download
+  const w = /Android/i.test(ua) ? tryOpen(`intent://${ARTIFACT_URL.replace(/^https:\/\//, '')}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(ARTIFACT_URL)};end`) || tryOpen(ARTIFACT_URL)
+    : tryOpen(ARTIFACT_URL);
+  if (w) return;
+  // the host blocked new windows: hand over the link
+  const o = overlay(`<div class="dialog" style="width:min(560px,100%)"><div class="eyebrow">Open in Chrome</div><h2>Open the game in its own tab</h2>
+    <p class="muted">This frame isn't allowed to open new tabs, so use the link: click it, or copy it into Chrome's address bar. Nothing to download.</p>
+    <p><a id="oc-a" href="${ARTIFACT_URL}" target="_blank" rel="noopener" style="color:var(--brass2);font:600 15px var(--f-mono);word-break:break-all">${ARTIFACT_URL}</a></p>
+    <input id="oc-in" class="wsq" readonly value="${ARTIFACT_URL}" style="width:100%;user-select:text;-webkit-user-select:text">
+    <div class="btns"><button class="btn primary" id="oc-copy">Copy link</button><button class="btn" id="oc-file" title="A single self-contained file you can open in Chrome offline">Save as a file instead</button><button class="btn" id="oc-x">Close</button></div></div>`);
+  const inp = o.querySelector('#oc-in'); inp.onclick = () => inp.select();
+  o.querySelector('#oc-copy').onclick = async () => { inp.select(); let ok = false; try { await navigator.clipboard.writeText(ARTIFACT_URL); ok = true; } catch (e) { try { ok = document.execCommand('copy'); } catch (e2) {} } o.querySelector('#oc-copy').textContent = ok ? 'Copied — paste it into Chrome' : 'Select the link and copy it'; };
+  o.querySelector('#oc-x').onclick = () => UI.closeOverlay();
+  o.querySelector('#oc-file').onclick = () => { UI.closeOverlay(); UI.saveStandalone(); };
+};
+// fallback: one self-contained HTML file (needs the downloads capability inside claude.ai)
+UI.saveStandalone = async function () {
   const b = document.getElementById('openchrome');
   const dl = window.claude && window.claude.use ? await window.claude.use('downloads').catch(() => null) : null;
-  if (dl) {
-    try {
-      if (b) b.textContent = 'Preparing…';
-      const html = await UI.buildStandalone();
-      await dl.save({ filename: 'ironsight-armory.html', data: new Blob([html], { type: 'text/html' }) });
-      overlay(`<div class="dialog" style="width:min(520px,100%)"><div class="eyebrow">Open in Chrome</div><h2>Saved ironsight-armory.html</h2><p class="muted">Open that file in Chrome: double-click it, or drag it into a Chrome window (on Android, tap it in Downloads and choose Chrome). The whole game is in that one file and runs full-window with proper mouse capture. Your stash and settings there are separate from this page.</p><div class="btns"><button class="btn primary" id="oc-ok">OK</button></div></div>`);
-      $('#oc-ok').onclick = () => UI.closeOverlay();
-    } catch (e) {
-      if (e && e.code === 'declined') { /* the viewer said no */ }
-      else UI.toast('Could not save the file' + (e && e.message ? ': ' + e.message : ''), 3);
-    } finally { if (b) b.textContent = 'Open in Chrome ↗'; }
-    return;
-  }
-  const u = location.href, ua = navigator.userAgent || '', bare = u.replace(/^https?:\/\//, '');
-  if (/^file:/.test(u)) { UI.toast('Open this file from Chrome: drag it into a Chrome window, or File → Open', 4); return; }
-  if (/Android/i.test(ua)) location.href = `intent://${bare}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(u)};end`;
-  else if (/iPhone|iPad|iPod/i.test(ua)) location.href = 'googlechromes://' + bare;
-  else { const w = window.open(u, '_blank', 'noopener'); if (!w) location.href = u; }
+  try {
+    if (b) b.textContent = 'Preparing…';
+    const html = await UI.buildStandalone();
+    if (dl) await dl.save({ filename: 'ironsight-armory.html', data: new Blob([html], { type: 'text/html' }) });
+    else { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([html], { type: 'text/html' })); a.download = 'ironsight-armory.html'; document.body.appendChild(a); a.click(); a.remove(); }
+    overlay(`<div class="dialog" style="width:min(520px,100%)"><div class="eyebrow">Saved</div><h2>ironsight-armory.html</h2><p class="muted">Open that file in Chrome (double-click it, or drag it into a Chrome window). The whole game is in the one file.</p><div class="btns"><button class="btn primary" id="oc-ok">OK</button></div></div>`);
+    $('#oc-ok').onclick = () => UI.closeOverlay();
+  } catch (e) {
+    if (!(e && e.code === 'declined')) UI.toast('Could not save the file' + (e && e.message ? ': ' + e.message : ''), 3);
+  } finally { if (b) b.textContent = 'Open in Chrome ↗'; }
 };
 // already running full-window in Chrome: no need for the button
 const IN_CHROME = window.top === window && /Chrome\//.test(navigator.userAgent) && !/Edg\/|OPR\/|SamsungBrowser/.test(navigator.userAgent);
@@ -141,25 +161,30 @@ UI.show = function (name) {
   if (name === 'missions') renderMissions(root);
   if (name === 'extraction') G.Raid.render(root);
   if (name === 'battle') G.Battle.render(root);
+  if (name === 'workshop') G.Workshop.render(root);
+  if (name === 'bench') G.Bench.render(root);
   $('#hud').hidden = true;
 };
 function renderMenu(root) {
   G.Game.mode = 'menu';
   const pool = G.WEAPONS.filter(w => w.c !== 'PST');
   const wp = G.WEAPON[UI.sel.wp] || pool[0];
+  const nOrig = G.WEAPONS.filter(w => !w.custom).length;
   SR.show(wp, UI.loadoutFor(wp)); SR.auto = true; SR.pitch = .1;
   root.innerHTML = `<section class="screen" id="menu"><div class="left">
     <div class="eyebrow">Small-arms simulator · 1914 → today</div>
     <div class="logo">Ironsight<span>Armory</span></div>
-    <p class="tag">${G.WEAPONS.length} weapons across five eras, each with its own period-correct attachments. Test them on a 1,000 m ballistic range, then take them on solo counter-terror missions.</p>
+    <p class="tag">${nOrig} weapons across five eras, each with its own period-correct attachments. Test them on a 1,000 m ballistic range, then take them on solo counter-terror missions.</p>
     <nav class="menu-list">
-      <button class="menu-item" data-go="armory"><span class="n">01</span><b>Armory</b><i>Inspect and customise every weapon</i></button>
-      <button class="menu-item" data-go="range"><span class="n">02</span><b>Firing range</b><i>Paper, steel, gel, armour plates and mannequins out to 1,000 m</i></button>
-      <button class="menu-item" data-go="missions"><span class="n">03</span><b>Solo missions</b><i>Clear terrorists from ships, rigs, embassies and trains — dawn to night</i></button>
-      <button class="menu-item" data-go="battle"><span class="n">04</span><b>Mass battlefield</b><i>20 v 20 conquest across a 600 m map — artillery, jets, total chaos</i></button>
-      <button class="menu-item" data-go="extraction"><span class="n">05</span><b>Extraction</b><i>Hardcore loot-and-extract raids with your own guns and kit — lose it all if you die</i></button>
-      <button class="menu-item" data-go="kit"><span class="n">06</span><b>Kit locker</b><i>Helmets, armour, plates, camo and night vision from armies worldwide</i></button>
-      <button class="menu-item" data-go="settings"><span class="n">07</span><b>Settings</b><i>Sensitivity, field of view, audio, graphics</i></button>
+      <button class="menu-item" data-go="armory"><span class="n">01</span><b>Armory</b><i>Inspect and customise every weapon — or tick several and merge them</i></button>
+      <button class="menu-item" data-go="workshop"><span class="n">02</span><b>Weapon workshop</b><i>Merge real guns or build your own from scratch, part by part</i></button>
+      <button class="menu-item" data-go="bench"><span class="n">03</span><b>Handling bench</b><i>Load, rack and fire any gun by hand with the mouse</i></button>
+      <button class="menu-item" data-go="range"><span class="n">04</span><b>Firing range</b><i>Paper, steel, gel, armour plates and mannequins out to 1,000 m</i></button>
+      <button class="menu-item" data-go="missions"><span class="n">05</span><b>Solo missions</b><i>Clear terrorists from ships, rigs, embassies and trains — dawn to night</i></button>
+      <button class="menu-item" data-go="battle"><span class="n">06</span><b>Mass battlefield</b><i>20 v 20 conquest across a 600 m map — artillery, jets, total chaos</i></button>
+      <button class="menu-item" data-go="extraction"><span class="n">07</span><b>Extraction</b><i>Hardcore loot-and-extract raids with your own guns and kit — lose it all if you die</i></button>
+      <button class="menu-item" data-go="kit"><span class="n">08</span><b>Kit locker</b><i>Helmets, armour, plates, camo and night vision from armies worldwide</i></button>
+      <button class="menu-item" data-go="settings"><span class="n">09</span><b>Settings</b><i>Sensitivity, field of view, audio, graphics</i></button>
     </nav>
     <div class="menu-foot">Click the view to capture the mouse · F1 in game for controls<br>Headphones recommended</div>
   </div></section>
@@ -184,28 +209,35 @@ function statBars(wp, S) {
 }
 function renderArmory(root) {
   G.Game.mode = 'menu';
+  if (!G.WEAPONS.some(w => w.e === UI.sel.era)) UI.sel.era = 'ww2';
   const era = UI.sel.era;
   let wp = G.WEAPON[UI.sel.wp];
   if (!wp || wp.e !== era) { wp = G.WEAPONS.find(w => w.e === era); UI.sel.wp = wp.id; }
   const L = UI.loadoutFor(wp);
   root.innerHTML = `<section class="screen" id="armory">
-    <div class="col left"><div class="colhead"><div class="eyebrow">Era</div><div class="eras">${G.ERAS.map(e => `<button class="chip ${e.id === era ? 'on' : ''}" data-era="${e.id}" title="${e.span}">${esc(e.name)}</button>`).join('')}</div><div class="muted" style="font:12px var(--f-mono)">${G.ERA[era].span} · ${G.WEAPONS.filter(w => w.e === era).length} weapons</div></div>
+    <div class="col left"><div class="colhead"><div class="eyebrow">Era</div><div class="eras">${G.ERAS.map(e => `<button class="chip ${e.id === era ? 'on' : ''}" data-era="${e.id}" title="${e.span}">${esc(e.name)}</button>`).join('')}</div><div class="muted" style="font:12px var(--f-mono)">${G.ERA[era].span} · ${G.WEAPONS.filter(w => w.e === era).length} weapons</div>
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">${UI.mergeSel ? `<button class="btn small primary" id="domerge" ${UI.mergeSel.length < 2 ? 'disabled' : ''}>Merge ${UI.mergeSel.length} guns →</button><button class="btn small" id="mergeoff">Cancel</button>` : `<button class="btn small" id="mergeon" title="Tick two or more guns from any era and fuse their best features into a new weapon">Merge mode</button><button class="btn small" id="toworkshop">Workshop</button>`}</div>
+      ${UI.mergeSel ? `<div class="muted" style="font:12px var(--f-mono);margin-top:6px">Tick guns from any era. The first one ticked gives the receiver.${UI.mergeSel.length ? '<br>' + UI.mergeSel.map((id, i) => `${i + 1}. ${esc((G.WEAPON[id] || {}).n || id)}`).join('<br>') : ''}</div>` : ''}</div>
       <div class="scroll" id="wlist"></div></div>
     <div class="stage"><div class="top"><div><div class="eyebrow" id="wera"></div><h2 id="wname"></h2><div class="sub" id="wsub"></div></div><button class="btn small" id="back">Main menu</button></div>
-      <div><div class="actions"><button class="btn primary" id="torange">Take to the range</button><button class="btn" id="tomis">Test in a mission</button><button class="btn" id="rnd">Random build</button><button class="btn" id="rst">Factory</button></div><p class="hint">Drag to rotate · scroll to zoom</p></div></div>
+      <div><div class="actions"><button class="btn primary" id="torange">Take to the range</button><button class="btn" id="tomis">Test in a mission</button><button class="btn" id="rnd">Random build</button><button class="btn" id="rst">Factory</button><button class="btn" id="tobench">Handling bench</button>${wp.custom ? '<button class="btn" id="toedit">Edit design</button>' : ''}</div><p class="hint">Drag to rotate · scroll to zoom</p></div></div>
     <div class="col right"><div class="scroll" id="specs"></div></div>
   </section>`;
   const list = $('#wlist');
   const groups = {};
   for (const w of G.WEAPONS.filter(w => w.e === era)) { const k = w.psy ? 'PSY_' + w.psy : w.proto ? 'PROTO' : w.c; (groups[k] = groups[k] || []).push(w); }
   const order = ['PSY_feasible', 'PSY_overkill', 'AR', 'BR', 'CAR', 'RIF', 'SMG', 'LMG', 'DMR', 'SR', 'SG', 'PST', 'PROTO'];
-  list.innerHTML = order.filter(c => groups[c]).map(c => `<div class="wgroup">${c === 'PROTO' ? 'Prototype & experimental' : c.startsWith('PSY_') ? G.PSY_TIERS[c.slice(4)] : G.CLASS_NAMES[c]}</div>` + groups[c].map(w => `<button class="witem ${w.id === wp.id ? 'on' : ''}" data-wp="${w.id}"><b>${esc(w.n)}</b><em>${w.y}</em><span>${w.proto || w.psy ? G.CLASS_NAMES[w.c] + ' · ' : ''}${esc(w.co)} · ${esc(w.cal)}</span></button>`).join('')).join('');
-  list.querySelectorAll('[data-wp]').forEach(b => b.onclick = () => { UI.sel.wp = b.dataset.wp; store.set('sel', UI.sel); G.Audio.ui(); renderArmory(root); });
-  root.querySelectorAll('[data-era]').forEach(b => b.onclick = () => { UI.sel.era = b.dataset.era; UI.sel.wp = null; store.set('sel', UI.sel); G.Audio.ui(); renderArmory(root); });
-  const on = list.querySelector('.on'); if (on) on.scrollIntoView({ block: 'center' });
+  list.innerHTML = order.filter(c => groups[c]).map(c => `<div class="wgroup">${c === 'PROTO' ? 'Prototype & experimental' : c.startsWith('PSY_') ? G.PSY_TIERS[c.slice(4)] : G.CLASS_NAMES[c]}</div>` + groups[c].map(w => `<button class="witem ${w.id === wp.id ? 'on' : ''}" data-wp="${w.id}"><b>${UI.mergeSel ? `<span style="display:inline-block;width:15px;height:15px;margin-right:7px;vertical-align:-2px;border:1px solid var(--brass);border-radius:2px;background:${UI.mergeSel.includes(w.id) ? 'var(--brass)' : 'transparent'};color:#16140c;font:700 11px/15px var(--f-mono);text-align:center">${UI.mergeSel.includes(w.id) ? UI.mergeSel.indexOf(w.id) + 1 : ''}</span>` : ''}${esc(w.n)}</b><em>${w.y}</em><span>${w.proto || w.psy ? G.CLASS_NAMES[w.c] + ' · ' : ''}${esc(w.co)} · ${esc(w.cal)}</span></button>`).join('')).join('');
+  list.querySelectorAll('[data-wp]').forEach(b => b.onclick = () => { const id = b.dataset.wp; if (UI.mergeSel) { const i = UI.mergeSel.indexOf(id); if (i >= 0) UI.mergeSel.splice(i, 1); else UI.mergeSel.push(id); } UI.sel.wp = id; store.set('sel', UI.sel); G.Audio.ui(); const sc = list.scrollTop; renderArmory(root); $('#wlist').scrollTop = sc; });
+  root.querySelectorAll('[data-era]').forEach(b => b.onclick = () => { const e = b.dataset.era; if (!G.WEAPONS.some(w => w.e === e)) { G.Audio.ui(); UI.show('workshop'); return; } UI.sel.era = e; UI.sel.wp = null; store.set('sel', UI.sel); G.Audio.ui(); renderArmory(root); });
+  { const q = id => root.querySelector(id); if (q('#mergeon')) q('#mergeon').onclick = () => { UI.mergeSel = [wp.id]; G.Audio.ui(); renderArmory(root); }; if (q('#mergeoff')) q('#mergeoff').onclick = () => { UI.mergeSel = null; G.Audio.ui(); renderArmory(root); }; if (q('#toworkshop')) q('#toworkshop').onclick = () => UI.show('workshop');
+    if (q('#domerge')) q('#domerge').onclick = () => { const ids = UI.mergeSel.slice(); UI.mergeSel = null; G.Workshop.openMerge(ids); }; }
+  const on = list.querySelector('.on'); if (on && !UI.mergeSel) on.scrollIntoView({ block: 'center' });
   $('#back').onclick = () => UI.show('menu');
   $('#torange').onclick = () => UI.startRange();
   $('#tomis').onclick = () => UI.missionPicker(wp);
+  $('#tobench').onclick = () => G.Bench.open(wp.id);
+  if ($('#toedit')) $('#toedit').onclick = () => G.Workshop.openBuild(wp);
   $('#rnd').onclick = () => { const L2 = {}; for (const [s] of G.SLOTS) { const o = G.attachFor(wp, s); L2[s] = o[Math.floor(Math.random() * o.length)].id; } UI.saveLoadout(wp, L2); G.Audio.ui('attach'); refresh(); };
   $('#rst').onclick = () => { UI.saveLoadout(wp, G.defaultLoadout(wp)); refresh(); };
   let open = null; const fst = { fold: false, coll: false, supOff: false, alt: false };
@@ -393,7 +425,7 @@ UI.startRange = function (o = {}) {
   G.Audio.init();
   loading('Walking to the firing line…', () => { G.Game.startRange(list); if (o.kitTest) { G.Game.clearTargets(); G.Game.addTarget('kitdummy', 10, { orient: 'front' }); G.Game.addTarget('kitdummy', 25, { orient: 'rear' }); UI.rangeSel = Object.assign({ era: wp.e, tier: 'regular', veh: 'sedan' }, UI.rangeSel || {}, { type: 'kitdummy', dist: 10, orient: 'front' }); G.Game.toast('Your kit is on the mannequins — front at 10 m, back at 25 m. T for more targets.', 5); } });
 };
-UI.esc = esc; UI.store = store; UI.overlay = html => overlay(html); UI.loading = (m, f) => loading(m, f);
+UI.esc = esc; UI.store = store; UI.statBars = statBars; UI.barsHTML = barsHTML; UI.massOf = massOf; UI.overlay = html => overlay(html); UI.loading = (m, f) => loading(m, f);
 function loading(msg, fn) { const l = $('#loading'); l.textContent = msg; l.hidden = false; setTimeout(() => { try { fn(); } catch (e) { console.error(e); } l.hidden = true; }, 40); }
 
 // ------------------------------------------------------------ OVERLAYS
@@ -456,7 +488,7 @@ UI.toggleRangeMenu = function (force) {
   if (m && force !== true) { m.remove(); if (G.Game.state === 'pause') G.Game.state = 'play'; if (!G.Input.touch) G.Input.lock(); return; }
   if (m) m.remove();
   G.Input.unlock(); G.Game.state = 'pause';
-  const st = UI.rangeSel = UI.rangeSel || { type: 'paper', dist: 25, era: G.Game.player ? G.Game.player.W.wp.e : 'ww2', tier: 'regular', veh: 'sedan', orient: 'side' };
+  const st = UI.rangeSel = UI.rangeSel || { type: 'paper', dist: 25, era: G.Game.player ? (G.Game.player.W.wp.home || G.Game.player.W.wp.e) : 'ww2', tier: 'regular', veh: 'sedan', orient: 'side' };
   m = document.createElement('div'); m.id = 'rmenu';
   const draw = () => {
     m.innerHTML = `<div class="dialog"><div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px"><div><div class="eyebrow">Range control</div><h2>Targets</h2></div><span class="muted" style="font:12px var(--f-mono)">${G.Game.targets.length} / 9 placed</span></div>
@@ -464,7 +496,7 @@ UI.toggleRangeMenu = function (force) {
       ${st.type === 'vehicle' ? `<div><span class="lbl">Vehicle</span><div class="grid">${G.VEHICLES.map(v => `<button class="card ${st.veh === v.id ? 'on' : ''}" data-veh="${v.id}"><small>${G.ERA[v.era].name}</small><b>${esc(v.n)}</b><span>${esc(v.d)}</span></button>`).join('')}</div></div>
       <div><span class="lbl">Facing you</span><div class="eras">${[['side', 'Side'], ['front', 'Front'], ['rear', 'Rear'], ['quarter', '45° quarter']].map(([k, n]) => `<button class="chip ${st.orient === k ? 'on' : ''}" data-or="${k}">${n}</button>`).join('')}</div></div>` : ''}
       ${st.type === 'kitdummy' ? `<div><span class="lbl">Facing you</span><div class="eras">${[['front', 'Front'], ['rear', 'Back'], ['side', 'Side'], ['quarter', '45° quarter']].map(([k, n]) => `<button class="chip ${st.orient === k ? 'on' : ''}" data-or="${k}">${n}</button>`).join('')}</div><p class="muted" style="margin:6px 0 0">Wearing: ${esc(G.GEAR_SLOTS.map(([sl]) => G.GEARID[G.Kit.current[sl]]).filter(g => g && !/^(None|No plates|Bare hands)/.test(g.n)).map(g => g.n).join(' · '))}</p></div>` : ''}
-      ${st.type === 'dummy' || st.type === 'walker' ? `<div class="loadrow"><div><span class="lbl">Mannequin era</span><select id="r-era">${G.ERAS.map(e => `<option value="${e.id}" ${st.era === e.id ? 'selected' : ''}>${e.name}</option>`).join('')}</select></div><div><span class="lbl">Enemy tier</span><select id="r-tier">${G.TIERS.map(t => `<option value="${t.id}" ${st.tier === t.id ? 'selected' : ''}>${t.n}${t.armor < 1 ? ' (armoured from 1990)' : ''}</option>`).join('')}</select></div></div>` : ''}
+      ${st.type === 'dummy' || st.type === 'walker' ? `<div class="loadrow"><div><span class="lbl">Mannequin era</span><select id="r-era">${G.ERAS.filter(e => !e.custom).map(e => `<option value="${e.id}" ${st.era === e.id ? 'selected' : ''}>${e.name}</option>`).join('')}</select></div><div><span class="lbl">Enemy tier</span><select id="r-tier">${G.TIERS.map(t => `<option value="${t.id}" ${st.tier === t.id ? 'selected' : ''}>${t.n}${t.armor < 1 ? ' (armoured from 1990)' : ''}</option>`).join('')}</select></div></div>` : ''}
       <div><span class="lbl">Distance</span><div class="eras">${G.RANGE_DISTS.map(d => `<button class="chip ${st.dist === d ? 'on' : ''}" data-d="${d}">${d} m</button>`).join('')}</div></div>
       <label class="field">Crosswind<input type="range" id="r-wind" min="-10" max="10" step=".5" value="${G.rangeWind || 0}"><output>${(G.rangeWind || 0).toFixed(1)} m/s</output></label>
       <div class="deploy"><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" id="r-clear">Clear all</button><button class="btn" id="r-reset">Reset targets</button></div><div style="display:flex;gap:6px"><button class="btn" id="r-close">Close</button><button class="btn primary" id="r-add">Place target</button></div></div></div>`;
