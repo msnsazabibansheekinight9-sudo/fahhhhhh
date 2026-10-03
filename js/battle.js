@@ -77,7 +77,7 @@ BT.start = function (cfg) {
   // start: the middle and the far points are neutral; each side holds its two near points
   for (const f of flags) { if (f.pos.z > B * .2) { f.owner = 0; f.p = 1; } else if (f.pos.z < -B * .2) { f.owner = 1; f.p = -1; } }
   const hq = [V3(0, 0, B * .88), V3(0, 0, -B * .88)];
-  BT.st = { cfg, Mp, flags, hq, tickets: [cfg.tickets || 400, cfg.tickets || 400], t: 0, limit: 25 * 60, bleedT: 0, artT: 22, morT: 12, jetT: 55, events: [], jets: [], fires: [], deployT: 0, dead: false, stats: { kills: 0, deaths: 0, caps: 0, assists: 0 }, spot: new Map(), done: false, chevT: 0 };
+  BT.st = { cfg, Mp, flags, hq, tickets: [cfg.tickets || 400, cfg.tickets || 400], t: 0, limit: 25 * 60, bleedT: 0, artT: 14, morT: 7, jetT: 30, events: [], jets: [], fires: [], deployT: 0, dead: false, stats: { kills: 0, deaths: 0, caps: 0, assists: 0 }, spot: new Map(), done: false, chevT: 0 };
   // burning wrecks: some of the vehicles keep burning all battle
   for (const c of W.colliders) if (c.mat === 'metal' && c.max.y - c.min.y > 1.2 && c.max.y - c.min.y < 3.2 && (c.max.x - c.min.x) * (c.max.z - c.min.z) > 6 && (c.max.x - c.min.x) * (c.max.z - c.min.z) < 30 && Math.random() < .25 && BT.st.fires.length < 18) BT.st.fires.push(V3((c.min.x + c.max.x) / 2, c.max.y, (c.min.z + c.max.z) / 2));
   // player
@@ -91,7 +91,8 @@ BT.start = function (cfg) {
   for (const t of [0, 1]) for (let i = 0; i < (t === 0 ? n - 1 : n); i++) {
     const tier = cfg.tier === 'mixed' ? pick(tiers) : tiers[Math.max(0, Math.min(3, ti + (Math.random() < .25 ? 1 : 0) - (Math.random() < .25 ? 1 : 0)))];
     const b = new G.Bot(Game, t, tier, era, i, { look: era });
-    b.spawn(spotNear(W, hq[t].x + (Math.random() - .5) * 20, hq[t].z, 8)); b.spawnProt = 3;
+    const fw = flags.filter(f => f.owner === t), at = fw.length && i % 3 ? fw[i % fw.length].pos : hq[t]; // most start at their side's forward points
+    b.spawn(spotNear(W, at.x + (Math.random() - .5) * 16, at.z + (Math.random() - .5) * 10, 8)); b.spawnProt = 3;
     b.chev = chevron(t); b.model.root.add(b.chev); b.chev.visible = t === 0;
     Game.bots.push(b);
   }
