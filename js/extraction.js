@@ -68,22 +68,22 @@ const CONT = { // container kinds: name, colour, size, loot categories, slots
 // ------------------------------------------------------------------ maps
 // core: a mission structure in the middle (its guards become the boss and his guards); B: half-size of the map in metres
 G.RAID_MAPS = [
-  { id: 'pinewood', n: 'Pinewood', d: 'Dense pine forest with a sawmill, hunters\' cabins and an abandoned army camp. Long sightlines between the trunks.', core: null, B: 170, time: 40, ground: 'grass', env: 'forest',
+  { id: 'pinewood', n: 'Pinewood', d: 'Dense pine forest with a sawmill, hunters\' cabins and an abandoned army camp. Long sightlines between the trunks.', core: null, B: 420, time: 55, ground: 'grass', env: 'forest',
     ex: [['Logging road', [0, 1], 'open'], ['Lake bridge', [-1, 0], 'open'], ['Forest ranger post', [1, -.2], 'chance'], ['Mountain trail', [.6, -1], 'nopack'], ['Truck to town', [-.7, .9], 'pay']] },
-  { id: 'hub', n: 'Logistics Hub', d: 'A bonded warehouse in a sprawl of container stacks, sheds and cranes on the waterfront.', core: 'warehouse', B: 165, time: 40, style: 'dock',
+  { id: 'hub', n: 'Logistics Hub', d: 'A bonded warehouse in a sprawl of container stacks, sheds and cranes on the waterfront.', core: 'warehouse', B: 400, time: 55, style: 'dock',
     ex: [['Crane gate', [1, .6], 'open'], ['Rail crossing', [-1, -.4], 'open'], ['Boat dock', [.2, -1], 'late'], ['Scav checkpoint', [-.5, 1], 'scav'], ['Smuggler\'s van', [-1, .8], 'pay']] },
-  { id: 'oldtown', n: 'Old Town', d: 'A walled consulate in the old quarter: tight streets, courtyards and rooftops.', core: 'embassy', B: 160, time: 40, style: 'urban',
+  { id: 'oldtown', n: 'Old Town', d: 'A walled consulate in the old quarter: tight streets, courtyards and rooftops.', core: 'embassy', B: 400, time: 55, style: 'urban',
     ex: [['Tram depot', [1, 1], 'open'], ['Sewer outlet', [-1, -.3], 'nopack'], ['Cathedral steps', [0, -1], 'open'], ['Taxi rank', [-.8, .9], 'pay'], ['Military roadblock', [1, -.6], 'chance']] },
-  { id: 'plaza', n: 'Meridian Plaza', d: 'A business hotel at the heart of a shopping district — the lobby, the ballroom and the shops around it.', core: 'hotel', B: 160, time: 45, style: 'urban',
+  { id: 'plaza', n: 'Meridian Plaza', d: 'A business hotel at the heart of a shopping district — the lobby, the ballroom and the shops around it.', core: 'hotel', B: 400, time: 55, style: 'urban',
     ex: [['Parking garage', [1, .5], 'open'], ['Loading bay', [-1, .2], 'open'], ['Metro entrance', [0, -1], 'late'], ['Hotel shuttle', [-.6, 1], 'pay'], ['Fire escape', [.9, -.9], 'nopack']] },
-  { id: 'junction', n: 'Rail Junction', d: 'A stalled express in a rail yard full of wagons, signal huts and sidings.', core: 'train', B: 170, time: 45, style: 'yard',
+  { id: 'junction', n: 'Rail Junction', d: 'A stalled express in a rail yard full of wagons, signal huts and sidings.', core: 'train', B: 420, time: 60, style: 'yard',
     ex: [['Armoured train', [0, 1], 'late'], ['Signal box', [1, -.5], 'open'], ['Freight tunnel', [-1, .3], 'open'], ['Handcar', [.7, 1], 'chance'], ['Bridge underpass', [-.4, -1], 'nopack']] },
-  { id: 'airfield', n: 'Northern Airfield', d: 'A regional airport: the hijacked airliner on the apron, hangars, fuel trucks and an open runway.', core: 'airliner', B: 175, time: 45, style: 'airport',
+  { id: 'airfield', n: 'Northern Airfield', d: 'A regional airport: the hijacked airliner on the apron, hangars, fuel trucks and an open runway.', core: 'airliner', B: 440, time: 60, style: 'airport',
     ex: [['Runway end', [0, -1], 'open'], ['Perimeter gap', [1, .3], 'open'], ['Cargo plane', [-1, -.6], 'late'], ['Fuel convoy', [-.8, 1], 'pay'], ['Drainage culvert', [1, -1], 'nopack']] },
-  { id: 'fortress', n: 'Desert Fortress', d: 'A walled compound among adobe villages, dry wadis and burnt-out technicals.', core: 'compound', B: 165, time: 40, style: 'desert',
+  { id: 'fortress', n: 'Desert Fortress', d: 'A walled compound among adobe villages, dry wadis and burnt-out technicals.', core: 'compound', B: 400, time: 55, style: 'desert',
     ex: [['Wadi', [-1, 0], 'open'], ['Goat track', [1, .7], 'nopack'], ['Smuggler\'s pickup', [0, 1], 'pay'], ['Helicopter LZ', [.5, -1], 'late'], ['Village well', [-.8, -.8], 'chance']] },
-  { id: 'portside', n: 'Portside Terminal', d: 'A container ship tied up at a long quay. Fight along the stacks, then up the superstructure.', core: 'ship', B: 80, time: 35, quay: true,
-    ex: [['North quay gate', [45, -70], 'open'], ['South quay gate', [45, 70], 'open'], ['Pilot boat', [72, -20], 'pay'], ['Bow rope', [0, -46], 'nopack']] },
+  { id: 'portside', n: 'Portside Terminal', d: 'A container ship tied up in a sprawling container port. Fight through the stacks, cranes and sheds, then up the superstructure.', core: 'ship', B: 240, time: 45, quay: true,
+    ex: [['North quay gate', [45, -224], 'open'], ['South quay gate', [45, 224], 'open'], ['Port main gate', [232, 0], 'open'], ['Pilot boat', [72, -20], 'pay'], ['Rail spur', [215, -210], 'chance'], ['Bow rope', [0, -46], 'nopack']] },
 ];
 G.RAID_MAP = Object.fromEntries(G.RAID_MAPS.map(m => [m.id, m]));
 const EXK = { open: 'Always open', chance: 'Open in some raids', nopack: 'No backpack (too narrow)', pay: 'Costs ₮7,000', late: 'Opens after 10 min', scav: 'Scavs only' };
@@ -156,23 +156,26 @@ const PMC_N = ['Reaper', 'Nomad', 'Havoc', 'Specter', 'Atlas', 'Bishop', 'Crowba
 // ------------------------------------------------------------------ world building
 function freeAt(W, x, z, y, r = .5) {
   const gy = W.groundAt(x, z, y + 1.5, .2); if (Math.abs(gy - y) > .3) return null;
-  for (const c of W.colliders) { if (c.soft || c.noMove) continue; if (c.max.x > x - r && c.min.x < x + r && c.max.z > z - r && c.min.z < z + r && c.max.y > gy + .2 && c.min.y < gy + 1.7) return null; }
+  for (const c of W.near(x - r - 1, z - r - 1, x + r + 1, z + r + 1)) { if (c.soft || c.noMove) continue; if (c.max.x > x - r && c.min.x < x + r && c.max.z > z - r && c.min.z < z + r && c.max.y > gy + .2 && c.min.y < gy + 1.7) return null; }
   return gy;
 }
 function forest(W, Mp, R) {
   const H = G.MissionHelpers, B = Mp.B, posts = [], surf = (k, r) => G.surf(k, r);
   // stands of pine with clearings between them, birch at the edges, undergrowth
-  const stands = Array.from({ length: 34 }, () => [(R() - .5) * 2 * (B - 10), (R() - .5) * 2 * (B - 10), 14 + R() * 26]);
+  const stands = Array.from({ length: 150 }, () => [(R() - .5) * 2 * (B - 10), (R() - .5) * 2 * (B - 10), 14 + R() * 30]);
   const clear = (x, z) => Math.hypot(x - 30, z + 40) < 22 || Math.hypot(x + 50, z + 20) < 30 || Math.hypot(x, z) < 12;
-  for (let i = 0; i < 760; i++) { const st = stands[i % stands.length], a = R() * PI * 2, r = Math.sqrt(R()) * st[2], x = i < 600 ? st[0] + Math.cos(a) * r : (R() - .5) * 2 * (B - 6), z = i < 600 ? st[1] + Math.sin(a) * r : (R() - .5) * 2 * (B - 6);
+  for (let i = 0; i < 3600; i++) { const st = stands[i % stands.length], a = R() * PI * 2, r = Math.sqrt(R()) * st[2], x = i < 2900 ? st[0] + Math.cos(a) * r : (R() - .5) * 2 * (B - 6), z = i < 2900 ? st[1] + Math.sin(a) * r : (R() - .5) * 2 * (B - 6);
     if (Math.abs(x) > B - 4 || Math.abs(z) > B - 4 || clear(x, z)) continue;
     W.tree(x, z, 9 + R() * 9, R() < .88 ? 'pine' : 'birch'); W.addCol(V3(x - .35, 0, z - .35), V3(x + .35, 6, z + .35), 'wood'); }
-  for (let i = 0; i < 260; i++) { const x = (R() - .5) * 2 * (B - 6), z = (R() - .5) * 2 * (B - 6); if (clear(x, z)) continue; const m = new THREE.Mesh(new THREE.IcosahedronGeometry(.6 + R() * .8, 0), surf('hedge')); m.position.set(x, .35, z); m.scale.y = .7; W.static.add(m); }
-  for (let i = 0; i < 60; i++) { const x = (R() - .5) * 2 * (B - 10), z = (R() - .5) * 2 * (B - 10); W.box(x, 0, z, 2 + R() * 3, .8 + R() * 1.6, 2 + R() * 3, surf('stone', 1), 'stone'); if (R() < .3) posts.push([x + 2.6, 0, z, R() * 6, 1]); }
-  for (let i = 0; i < 25; i++) { const x = (R() - .5) * 2 * (B - 20), z = (R() - .5) * 2 * (B - 20); for (let k = 0; k < 3; k++) { const l = new THREE.Mesh(gCylY(.3, .3, 6, 8), surf('bark')); l.rotation.z = PI / 2; l.position.set(x, .3 + k * .55, z + k * .3 - .3); W.static.add(l); } W.addCol(V3(x - 3, 0, z - .9), V3(x + 3, 1.4, z + .9), 'wood'); }
+  for (let i = 0; i < 1200; i++) { const x = (R() - .5) * 2 * (B - 6), z = (R() - .5) * 2 * (B - 6); if (clear(x, z)) continue; const m = new THREE.Mesh(new THREE.IcosahedronGeometry(.6 + R() * .8, 0), surf('hedge')); m.position.set(x, .35, z); m.scale.y = .7; W.static.add(m); }
+  for (let i = 0; i < 300; i++) { const x = (R() - .5) * 2 * (B - 10), z = (R() - .5) * 2 * (B - 10); W.box(x, 0, z, 2 + R() * 3, .8 + R() * 1.6, 2 + R() * 3, surf('stone', 1), 'stone'); if (R() < .3) posts.push([x + 2.6, 0, z, R() * 6, 1]); }
+  for (let i = 0; i < 110; i++) { const x = (R() - .5) * 2 * (B - 20), z = (R() - .5) * 2 * (B - 20); for (let k = 0; k < 3; k++) { const l = new THREE.Mesh(gCylY(.3, .3, 6, 8), surf('bark')); l.rotation.z = PI / 2; l.position.set(x, .3 + k * .55, z + k * .3 - .3); W.static.add(l); } W.addCol(V3(x - 3, 0, z - .9), V3(x + 3, 1.4, z + .9), 'wood'); }
   // sawmill, cabins, army camp
   H.room(W, 30, -40, 20, 12, 6, 0, { mat: 'planks', doors: { s: [.3, .7], n: [.5] }, win: { e: [.5], w: [.5] } }); posts.push([30, 0, -40, 0], [24, 0, -33, 0], [38, 0, -48, PI]);
-  for (const [x, z] of [[-90, 60], [100, 90], [-120, -100], [80, -120], [-30, 120]]) { H.room(W, x, z, 6, 5, 3, 0, { mat: 'planks', doors: { s: [.5] }, win: { e: [.5], n: [.5] } }); posts.push([x, 0, z, R() * 6], [x + 4.5, 0, z + 3, R() * 6]); }
+  const cabins = [[-90, 60], [100, 90], [-120, -100], [80, -120], [-30, 120]]; for (let i = 0; i < 26; i++) cabins.push([(R() - .5) * 2 * (B - 30), (R() - .5) * 2 * (B - 30)]);
+  // a second camp and a hunting lodge far out
+  for (const [cx, cz] of [[B * .55, -B * .5], [-B * .6, B * .55]]) { for (let i = 0; i < 5; i++) { const x = cx + (i % 3) * 9, z = cz + Math.floor(i / 3) * 10; H.room(W, x, z, 6, 4, 2.6, 0, { mat: 'olive', doors: { s: [.5] } }); posts.push([x, 0, z + 3.4, R() * 6]); } W.box(cx - 8, 0, cz - 6, 2, 6, 2, surf('planks', 1), 'wood'); H.slab(W, cx - 8, 6, cz - 6, 3, 3, 'planks'); posts.push([cx - 8, 6, cz - 6, R() * 6, 1]); }
+  for (const [x, z] of cabins) { H.room(W, x, z, 6, 5, 3, 0, { mat: 'planks', doors: { s: [.5] }, win: { e: [.5], n: [.5] } }); posts.push([x, 0, z, R() * 6], [x + 4.5, 0, z + 3, R() * 6]); }
   for (let i = 0; i < 6; i++) { const x = -60 + (i % 3) * 9, z = -20 + Math.floor(i / 3) * 10; H.room(W, x, z, 6, 4, 2.6, 0, { mat: 'olive', doors: { s: [.5] }, roof: true }); posts.push([x, 0, z + 3.4, R() * 6]); }
   for (const [x, z] of [[-70, -32], [-40, -32]]) { W.box(x, 0, z, 2, 6, 2, surf('planks', 1), 'wood'); H.slab(W, x, 6, z, 3, 3, 'planks'); posts.push([x, 6, z, R() * 6, 1]); }
   W.vehicle(-52, -40, .4, 'truck'); W.vehicle(-30, -10, 1.2, 'burnt');
@@ -184,8 +187,8 @@ function buildRaid(W, Mp, M, R) {
   if (Mp.env === 'forest') posts = forest(W, Mp, R);
   else {
     M.build(W);
-    if (Mp.quay) posts = H.outskirts(W, M, Object.assign({}, M.out, { max: 18, guardP: .6 }));
-    else { const av = M.out.avoid || [], B = Mp.B; posts = H.outskirts(W, M, { style: Mp.style, bounds: B, regions: [[-B + 8, -B + 8, B - 8, B - 8]], avoid: av, start: [0, B - 6], max: 26, cell: 19, density: .62, guardP: .5, seed: 1 + Math.floor(R() * 999) }); }
+    if (Mp.quay) posts = H.outskirts(W, M, Object.assign({}, M.out, { max: 40, guardP: .5, falloff: 0 }));
+    else { const av = M.out.avoid || [], B = Mp.B; posts = H.outskirts(W, M, { style: Mp.style, bounds: B, regions: [[-B + 8, -B + 8, B - 8, B - 8]], avoid: av, start: [0, B - 6], max: 60, cell: 25, density: .56, guardP: .4, seed: 1 + Math.floor(R() * 999) }); }
   }
   W.bounds = Mp.B; W.border(4);
   return posts;
@@ -198,13 +201,13 @@ X.start = function (cfg) {
   Game.cleanup(true);
   const Mp = G.RAID_MAP[cfg.map], M = Mp.core ? G.MISSION[Mp.core] : null, tod = G.TOD[cfg.tod] || G.TOD.day, R = G.rng(Date.now() % 100000);
   let posts = [];
-  const map = { id: 'raid_' + Mp.id, era: 'mod', name: Mp.n, env: tod.env, ground: Mp.ground || (M && M.ground) || 'dirt', weather: M && (M.weather || {})[cfg.tod] || null, amb: M ? M.amb : 'wind', reverb: M ? M.reverb : 'outdoor',
+  const map = { id: 'raid_' + Mp.id, era: 'mod', name: Mp.n, size: Mp.B, env: tod.env, ground: Mp.ground || (M && M.ground) || 'dirt', weather: M && (M.weather || {})[cfg.tod] || null, amb: M ? M.amb : 'wind', reverb: M ? M.reverb : 'outdoor',
     build: W => { posts = buildRaid(W, Mp, M, R); } };
   G.E.loadMap(map);
   const W = G.E.world, B = Mp.B, base = Mp.quay ? 2.3 : 0;
   // spawn on the map edge
   const spot = (x, z, y = base) => { for (let k = 0; k < 40; k++) { const xx = x + (R() - .5) * k * 1.5, zz = z + (R() - .5) * k * 1.5; const gy = freeAt(W, xx, zz, y); if (gy !== null) return V3(xx, gy, zz); } return V3(x, y, z); };
-  const edge = () => { const a = R() * PI * 2; return Mp.quay ? spot(20 + R() * 50, (R() < .5 ? -1 : 1) * (40 + R() * 30)) : spot(Math.cos(a) * B * .88, Math.sin(a) * B * .88); };
+  const edge = () => { const a = R() * PI * 2; return Mp.quay ? spot(30 + R() * 190, (R() < .5 ? -1 : 1) * (80 + R() * 140)) : spot(Math.cos(a) * B * .88, Math.sin(a) * B * .88); };
   const P = Game.player = new G.Player();
   P.kit = Object.assign({}, cfg.kit); P.km = G.kitMods(P.kit, G.kitEnv()); P.kmT = 0; P.kitKg = G.kitWeight(P.kit); P.kitK = Math.max(.72, Math.min(1.04, 1.04 - Math.max(0, P.kitKg - 5) * .012));
   P.setupWeapons([cfg.primary, cfg.secondary].filter(Boolean));
@@ -229,11 +232,11 @@ X.start = function (cfg) {
     if (kind === 'weapon' && R() < .4) items.push({ t: 'g', id: pick(G.gearFor(pick(['helmet', 'armor', 'plates', 'nvg', 'comms'], R)).filter(g => !g.cat && !/_none$/.test(g.id)), R).id, u: uid() });
     conts.push({ kind, n: c[0], pos: p.clone().setY(p.y + .4), items, searched: 0, mesh: m }); };
   const kinds = Object.keys(CONT);
-  for (let i = 0, tries = 0; i < (Mp.quay ? 30 : 70) && tries < 900; tries++) {
-    const x = Mp.quay ? 15 + R() * 60 : (R() - .5) * 2 * (B - 10), z = Mp.quay ? (R() - .5) * 140 : (R() - .5) * 2 * (B - 10), y = freeAt(W, x, z, base);
+  for (let i = 0, tries = 0; i < (Mp.quay ? 110 : 200) && tries < 3000; tries++) {
+    const x = Mp.quay ? 15 + R() * 220 : (R() - .5) * 2 * (B - 10), z = Mp.quay ? (R() - .5) * 450 : (R() - .5) * 2 * (B - 10), y = freeAt(W, x, z, base);
     if (y === null) continue;
     // prefer spots next to something (a wall within 2.5 m)
-    let near = false; for (const c of W.colliders) if (!c.soft && c.max.y > y + 1 && c.min.y < y + 1 && c.max.x > x - 2.5 && c.min.x < x + 2.5 && c.max.z > z - 2.5 && c.min.z < z + 2.5) { near = true; break; }
+    let near = false; for (const c of W.near(x - 3, z - 3, x + 3, z + 3)) if (!c.soft && c.max.y > y + 1 && c.min.y < y + 1 && c.max.x > x - 2.5 && c.min.x < x + 2.5 && c.max.z > z - 2.5 && c.min.z < z + 2.5) { near = true; break; }
     if (!near && R() < .8) continue;
     addCont(pick(kinds.filter(k => k !== 'safe'), R), V3(x, y, z), R() * PI); i++;
   }
@@ -250,14 +253,14 @@ X.start = function (cfg) {
     b.spawn(pos.clone().setY(pos.y + .05)); b.yaw = yaw; b.spawnProt = 0;
     Game.bots.push(b); return b;
   };
-  const scavPosts = posts.slice().sort(() => R() - .5).slice(0, Mp.quay ? 14 : 24);
+  const scavPosts = posts.slice().sort(() => R() - .5).slice(0, Mp.quay ? 30 : 42);
   scavPosts.forEach((g, i) => mk(1, R() < .15 ? 1 : 0, V3(g[0], g[1], g[2]), g[3], R() < .75 ? { crouch: g[4] } : null, role(pick(['rifleman', 'rifleman', 'breacher', 'gunner'], R)), (cfg.side === 'scav' ? 'Scav ' : '') + pick(SCAV_N, R)));
   if (M) { // boss and guards hold the core
     const gs = M.guards.slice().sort(() => R() - .5);
     gs.slice(0, 1).forEach(g => { const b = mk(1, 3, V3(g[0], g[1], g[2]), g[3], { crouch: false }, role('heavy'), pick(['Boss Kabanov', 'Boss Rezo', 'Boss Shturm', 'Boss Gluhar'], R)); b.boss = true; });
     gs.slice(1, 4).forEach(g => mk(1, 2, V3(g[0], g[1], g[2]), g[3], { crouch: g[4] }, role('leader'), 'Guard ' + pick(SCAV_N, R)));
   }
-  const nP = Mp.quay ? 3 : 4 + Math.floor(R() * 3);
+  const nP = Mp.quay ? 6 : 8 + Math.floor(R() * 4);
   for (let i = 0; i < nP; i++) { const p = edge(); mk(2, 2, p, Math.atan2(p.x, p.z), null, role(pick(['rifleman', 'marksman', 'breacher'], R)), 'PMC ' + PMC_N[i % PMC_N.length]); }
   Game.agents = [P, ...Game.bots];
   // extra roaming hotspots: containers and extracts draw PMCs across the map

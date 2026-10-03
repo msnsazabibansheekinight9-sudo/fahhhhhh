@@ -79,7 +79,27 @@ class World {
   // collider: min/max Vector3, surface material, flags
   addCol(min, max, mat, o = {}) {
     const c = { min, max, mat, pen: o.pen ?? PENRES[mat] ?? 3, soft: !!o.soft, noMove: !!o.noMove, noShoot: !!o.noShoot, see: !!o.see, obj: o.obj || null, target: o.target || null };
-    this.colliders.push(c); return c;
+    this.colliders.push(c); if (this.grid) this._gridAdd(c); return c;
+  }
+  // ---------------------------------------------------------- spatial grid: colliders bucketed into 10 m columns
+  buildGrid() {
+    const B = this.bounds + 12, cs = 10, N = Math.ceil(2 * B / cs);
+    this.grid = { B, cs, N, cells: new Array(N * N), big: [] }; this._q = 0;
+    for (const c of this.colliders) this._gridAdd(c);
+  }
+  _gridAdd(c) {
+    const g = this.grid, i0 = Math.floor((c.min.x + g.B) / g.cs), i1 = Math.floor((c.max.x + g.B) / g.cs), j0 = Math.floor((c.min.z + g.B) / g.cs), j1 = Math.floor((c.max.z + g.B) / g.cs);
+    if (i0 < 0 || j0 < 0 || i1 >= g.N || j1 >= g.N || (i1 - i0 + 1) * (j1 - j0 + 1) > 80) { g.big.push(c); return; }
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const k = j * g.N + i; (g.cells[k] || (g.cells[k] = [])).push(c); }
+  }
+  // colliders overlapping an xz box (each once)
+  near(x0, z0, x1, z1) {
+    const g = this.grid; if (!g) return this.colliders;
+    const q = ++this._q, out = [];
+    for (const c of g.big) { c._q = q; out.push(c); }
+    const i0 = Math.max(0, Math.floor((x0 + g.B) / g.cs)), i1 = Math.min(g.N - 1, Math.floor((x1 + g.B) / g.cs)), j0 = Math.max(0, Math.floor((z0 + g.B) / g.cs)), j1 = Math.min(g.N - 1, Math.floor((z1 + g.B) / g.cs));
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const l = g.cells[j * g.N + i]; if (l) for (const c of l) if (c._q !== q) { c._q = q; out.push(c); } }
+    return out;
   }
   // ---------------------------------------------------------- kit
   box(x, y, z, w, h, d, m, mat, o = {}) {
@@ -257,7 +277,7 @@ class World {
   // ---------------------------------------------------------- queries
   groundAt(x, z, fromY = 100, r = 0) {
     let g = this.baseHeight || 0;
-    for (const c of this.colliders) {
+    for (const c of this.near(x - r, z - r, x + r, z + r)) {
       if (c.noMove || c.soft) continue;
       if (x + r < c.min.x || x - r > c.max.x || z + r < c.min.z || z - r > c.max.z) continue;
       if (c.max.y <= fromY + .02 && c.max.y > g) g = c.max.y;
@@ -268,8 +288,9 @@ class World {
   move(pos, dx, dz, r, h, step = .45) {
     const feet = pos.y;
     const blocks = c => !c.noMove && c.max.y > feet + step && c.min.y < feet + h;
+    const m = Math.abs(dx) + Math.abs(dz) + r + .1, cand = this.near(pos.x - m, pos.z - m, pos.x + m, pos.z + m);
     const resolve = () => {
-      for (const c of this.colliders) {
+      for (const c of cand) {
         if (!blocks(c)) continue;
         const cx = Math.max(c.min.x, Math.min(pos.x, c.max.x)), cz = Math.max(c.min.z, Math.min(pos.z, c.max.z));
         let ddx = pos.x - cx, ddz = pos.z - cz; const d2 = ddx * ddx + ddz * ddz;
@@ -289,9 +310,9 @@ class World {
   raycast(ro, rd, maxT, o = {}) {
     let best = null, bt = maxT;
     const inv = V3(1 / rd.x, 1 / rd.y, 1 / rd.z);
-    for (const c of this.colliders) {
-      if (o.skip && o.skip(c)) continue;
-      if (c.noShoot && !o.all) continue;
+    const test = c => {
+      if (o.skip && o.skip(c)) return;
+      if (c.noShoot && !o.all) return;
       let t1 = (c.min.x - ro.x) * inv.x, t2 = (c.max.x - ro.x) * inv.x;
       let tmin = Math.min(t1, t2), tmax = Math.max(t1, t2), ax = 0;
       t1 = (c.min.y - ro.y) * inv.y; t2 = (c.max.y - ro.y) * inv.y;
@@ -300,10 +321,27 @@ class World {
       t1 = (c.min.z - ro.z) * inv.z; t2 = (c.max.z - ro.z) * inv.z;
       a = Math.min(t1, t2); b = Math.max(t1, t2);
       if (a > tmin) { tmin = a; ax = 2; } tmax = Math.min(tmax, b);
-      if (tmax < Math.max(0, tmin) || tmin > bt) continue;
-      if (tmin < 0) continue; // origin inside
+      if (tmax < Math.max(0, tmin) || tmin > bt) return;
+      if (tmin < 0) return;
       bt = tmin; best = { t: tmin, c, ax };
-    }
+    };
+    const g = this.grid;
+    const gx = ro.x + (g ? g.B : 0), gz = ro.z + (g ? g.B : 0);
+    if (g && gx >= 0 && gz >= 0 && gx < g.N * g.cs && gz < g.N * g.cs) {
+      // walk the grid columns the ray crosses (2D DDA in x/z); stop once the nearest hit is behind the next boundary
+      const q = ++this._q;
+      for (const c of g.big) { c._q = q; test(c); }
+      let i = Math.floor(gx / g.cs), j = Math.floor(gz / g.cs);
+      const si = rd.x > 0 ? 1 : -1, sj = rd.z > 0 ? 1 : -1, ax = Math.abs(rd.x), az = Math.abs(rd.z);
+      const dX = ax > 1e-9 ? g.cs / ax : Infinity, dZ = az > 1e-9 ? g.cs / az : Infinity;
+      let tX = ax > 1e-9 ? (si > 0 ? (i + 1) * g.cs - gx : gx - i * g.cs) / ax : Infinity, tZ = az > 1e-9 ? (sj > 0 ? (j + 1) * g.cs - gz : gz - j * g.cs) / az : Infinity;
+      for (;;) {
+        const l = g.cells[j * g.N + i]; if (l) for (const c of l) if (c._q !== q) { c._q = q; test(c); }
+        const tn = Math.min(tX, tZ); if (tn >= bt || tn > maxT) break;
+        if (tX < tZ) { i += si; tX += dX; } else { j += sj; tZ += dZ; }
+        if (i < 0 || j < 0 || i >= g.N || j >= g.N) break;
+      }
+    } else for (const c of this.colliders) test(c);
     // ground plane
     if (rd.y < 0) { const tg = (this.baseHeight - ro.y) / rd.y; if (tg > 0 && tg < bt) { bt = tg; best = { t: tg, c: null, ax: 1, ground: true }; } }
     if (!best) return null;
@@ -339,26 +377,29 @@ class World {
   findPath(from, to) {
     const { N, cs, B } = this.nav;
     let [si, sj] = this.nearestFree(...this.cell(from)), [ti, tj] = this.nearestFree(...this.cell(to));
-    const start = sj * N + si, goal = tj * N + ti;
-    const gS = new Float32Array(N * N).fill(1e9), came = new Int32Array(N * N).fill(-1), closed = new Uint8Array(N * N);
-    const open = [start]; gS[start] = 0; const fS = new Float32Array(N * N).fill(1e9); fS[start] = Math.hypot(ti - si, tj - sj);
-    let iter = 0;
-    while (open.length && iter++ < 6000) {
-      let bi = 0; for (let k = 1; k < open.length; k++) if (fS[open[k]] < fS[open[bi]]) bi = k;
-      const cur = open[bi]; open[bi] = open[open.length - 1]; open.pop();
+    const start = sj * N + si; let goal = tj * N + ti;
+    // reusable buffers stamped per search (no per-call allocation), binary-heap open list
+    const P = this._pf && this._pf.n === N * N ? this._pf : (this._pf = { n: N * N, g: new Float32Array(N * N), came: new Int32Array(N * N), seen: new Uint32Array(N * N), shut: new Uint32Array(N * N), gen: 0 });
+    const gen = ++P.gen, gS = P.g, came = P.came, seen = P.seen, shut = P.shut;
+    const hk = [], hf = [];
+    const push = (k, f) => { let n = hk.length; hk.push(k); hf.push(f); while (n > 0) { const pn = (n - 1) >> 1; if (hf[pn] <= f) break; hk[n] = hk[pn]; hf[n] = hf[pn]; n = pn; } hk[n] = k; hf[n] = f; };
+    const pop = () => { const top = hk[0], lk = hk.pop(), lf = hf.pop(); if (hk.length) { let n = 0; const L = hk.length; for (;;) { let c = 2 * n + 1; if (c >= L) break; if (c + 1 < L && hf[c + 1] < hf[c]) c++; if (hf[c] >= lf) break; hk[n] = hk[c]; hf[n] = hf[c]; n = c; } hk[n] = lk; hf[n] = lf; } return top; };
+    seen[start] = gen; gS[start] = 0; came[start] = -1; push(start, Math.hypot(ti - si, tj - sj));
+    let iter = 0, best = start, bestH = 1e9;
+    while (hk.length && iter++ < 12000) {
+      const cur = pop(); if (shut[cur] === gen) continue; shut[cur] = gen;
       if (cur === goal) break;
-      closed[cur] = 1;
-      const ci = cur % N, cj = (cur / N) | 0;
+      const ci = cur % N, cj = (cur / N) | 0, h = Math.hypot(ti - ci, tj - cj); if (h < bestH) { bestH = h; best = cur; }
       for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
         if (!di && !dj) continue; const ni = ci + di, nj = cj + dj;
         if (!this.free(ni, nj)) continue;
         if (di && dj && (!this.free(ci + di, cj) || !this.free(ci, cj + dj))) continue;
-        const nk = nj * N + ni; if (closed[nk]) continue;
+        const nk = nj * N + ni; if (shut[nk] === gen) continue;
         const g2 = gS[cur] + (di && dj ? 1.414 : 1);
-        if (g2 < gS[nk]) { gS[nk] = g2; came[nk] = cur; fS[nk] = g2 + Math.hypot(ti - ni, tj - nj); if (!open.includes(nk)) open.push(nk); }
+        if (seen[nk] !== gen || g2 < gS[nk]) { seen[nk] = gen; gS[nk] = g2; came[nk] = cur; push(nk, g2 + Math.hypot(ti - ni, tj - nj) * 1.15); }
       }
     }
-    if (came[goal] < 0 && goal !== start) return [to.clone()];
+    if (shut[goal] !== gen) { if (best === start) return [to.clone()]; goal = best; } // far goal: head for the closest point reached; the bot repaths as it goes
     const path = []; let k = goal;
     while (k !== start && k >= 0) { path.push(V3(-B + (k % N + .5) * cs, 0, -B + (((k / N) | 0) + .5) * cs)); k = came[k]; }
     path.reverse();

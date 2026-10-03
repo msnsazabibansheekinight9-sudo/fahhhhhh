@@ -332,7 +332,7 @@ Game.startMission = function (cfg) {
   Game.mode = 'mission'; Game.state = 'play';
   Game.cleanup(true);
   const M = G.MISSION[cfg.mission], tod = G.TOD[cfg.tod] || G.TOD.day;
-  const map = { id: 'm_' + M.id, era: 'mod', name: M.name, env: tod.env, ground: M.ground, weather: (M.weather || {})[cfg.tod] || null, amb: M.amb, reverb: M.reverb, build: W => { M.build(W); M._extra = M.out ? G.MissionHelpers.outskirts(W, M, M.out) : []; } };
+  const map = { id: 'm_' + M.id, era: 'mod', name: M.name, size: M.out ? M.out.bounds : 80, env: tod.env, ground: M.ground, weather: (M.weather || {})[cfg.tod] || null, amb: M.amb, reverb: M.reverb, build: W => { M.build(W); M._extra = M.out ? G.MissionHelpers.outskirts(W, M, M.out) : []; } };
   G.E.loadMap(map);
   const P = Game.player = new G.Player();
   P.setupWeapons([cfg.primary, cfg.secondary].filter(Boolean));
@@ -353,6 +353,7 @@ Game.startMission = function (cfg) {
     b.role = role; b.kit = kit; b.armorState = G.newArmorState();
     b.guard = { pos: V3(g[0], g[1], g[2]), yaw: g[3], crouch: !!g[4] || !!role.crouch, leash: role.rush || 0 };
     b.spawn(V3(g[0], g[1] + .05, g[2])); b.yaw = g[3]; b.spawnProt = 0;
+    b.core = i < M.guards.length; // holds the structure itself (the objective); the rest are in the outlying district
     Game.bots.push(b);
   });
   Game.agents = [P, ...Game.bots];
@@ -370,7 +371,7 @@ Game.startMission = function (cfg) {
     };
     G.E.world.group.add(S.root); Game.targets.push(T);
   });
-  Game.mission = { cfg, M, total: Game.bots.length, killed: 0, heads: 0, t: 0, dmgTaken: 0, hostages: M.hostages.length, hostagesLost: 0, done: false,
+  Game.mission = { cfg, M, total: Game.bots.filter(b => b.core).length, outTotal: Game.bots.filter(b => !b.core).length, outKilled: 0, killed: 0, heads: 0, t: 0, dmgTaken: 0, hostages: M.hostages.length, hostagesLost: 0, done: false,
     roles: roles.reduce((o, r) => (o[r.n] = (o[r.n] || 0) + 1, o), {}) };
   Game.stats = { shots: 0, hits: 0 };
   Game.cfg = cfg; Game.map = map; Game.killfeed = [];
@@ -378,7 +379,7 @@ Game.startMission = function (cfg) {
   try { const R = G.E.renderer; R.compile(G.E.scene, G.E.camera); if (R.initTexture) G.E.scene.traverse(o => { const m = o.material; if (m && m.map) R.initTexture(m.map); }); } catch (e) {}
   G.UI.showHUD('mission');
   const PL = { Rifleman: 'riflemen', Marksman: 'marksmen' }, mix = Object.entries(Game.mission.roles).map(([n, c]) => `${c} ${c > 1 ? (PL[n] || n.toLowerCase() + 's') : n.toLowerCase()}`).join(', ');
-  Game.toast(`${M.name} · ${tod.n} — ${mix}; ${M.hostages.length} hostages. Clear the structure.`, 6);
+  Game.toast(`${M.name} · ${tod.n} — ${mix}; ${M.hostages.length} hostages. Clear the structure (${Game.mission.total} inside); ${Game.mission.outTotal} more hold the district around it.`, 7);
 };
 Game.endMission = function (ok, reason) {
   const Ms = Game.mission; if (!Ms || Ms.done) return; Ms.done = true; Ms.ok = ok; Ms.reason = reason;
@@ -448,11 +449,11 @@ Game.onKill = function (killer, victim, weapon, head) {
     Game.killfeed.unshift({ k: killer ? killer.name : '—', kt: killer ? killer.team : -1, v: victim.name, vt: victim.team, w: weapon ? weapon.n : '', head, t: 5 }); if (Game.killfeed.length > 6) Game.killfeed.pop();
     if (victim === Game.player) {
       Game.endMission(false, `Killed by ${killer ? killer.name : 'enemy fire'}.`); return; }
-    Ms.killed++; if (head) Ms.heads++;
+    if (victim.core) Ms.killed++; else Ms.outKilled++; if (head) Ms.heads++;
     const rn = victim.role ? victim.role.n : 'Hostile';
-    if (killer === Game.player) { G.UI.hitmarker(true, head); G.Audio.hit(head, true); Game.toast(`${head ? 'Headshot' : rn + ' down'} · ${Ms.total - Ms.killed} left`, 1.4); }
+    if (killer === Game.player) { G.UI.hitmarker(true, head); G.Audio.hit(head, true); Game.toast(`${head ? 'Headshot' : rn + ' down'} · ${Ms.total - Ms.killed} left in the structure`, 1.4); }
     G.UI.dirty = true;
-    if (Ms.killed >= Ms.total) Game.endMission(true, 'Structure clear. All hostiles neutralised.');
+    if (Ms.killed >= Ms.total) Game.endMission(true, `Structure clear.${Ms.outTotal ? ` ${Ms.outKilled} of ${Ms.outTotal} outlying hostiles neutralised.` : ''}`);
     return;
   }
 };

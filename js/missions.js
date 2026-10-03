@@ -66,7 +66,7 @@ G.MissionHelpers = H;
 // where there is real floor and no geometry at body height. o: { style, base, bounds, regions, avoid, start, max, seed }
 function freeSpot(W, x, y, z, r = .45) {
   const gy = W.groundAt(x, z, y + .45, .15); if (Math.abs(gy - y) > .15) return false;
-  for (const c of W.colliders) { if (c.soft || c.noMove) continue; if (c.max.x > x - r && c.min.x < x + r && c.max.z > z - r && c.min.z < z + r && c.max.y > y + .2 && c.min.y < y + 1.7) return false; }
+  for (const c of W.near(x - r - 1, z - r - 1, x + r + 1, z + r + 1)) { if (c.soft || c.noMove) continue; if (c.max.x > x - r && c.min.x < x + r && c.max.z > z - r && c.min.z < z + r && c.max.y > y + .2 && c.min.y < y + 1.7) return false; }
   return true;
 }
 const CLUSTERS = {
@@ -121,7 +121,8 @@ H.outskirts = function (W, M, o) {
   }
   let manned = 0, lit = 0;
   for (const [x, z] of cand) {
-    if (R() > (o.density || .72)) continue;
+    const fall = o.falloff ? Math.max(.28, Math.min(1, o.falloff / Math.max(1, Math.hypot(x, z)))) : 1; // sparser far from the structure
+    if (R() > (o.density || .72) * fall) continue;
     const kind = list[Math.floor(R() * list.length)], ry = R() < .5 ? 0 : PI / 2;
     const spots = kinds[kind](x, z, ry) || [];
     if (manned < (o.max || 10) && R() < (o.guardP || .5)) for (const sp of spots.sort(() => R() - .5)) if (add(sp[0], sp[1], sp[2])) { manned++; break; }
@@ -458,6 +459,18 @@ G.MISSIONS = [
       [-5, 3.6, -6, PI], [6, 3.6, -13, 0], [-6, 7.2, -8, PI, true], [5, 7.2, -12, PI], [18, 5, -18, 3 * PI / 4, true], [17, 0, 6, PI / 2]],
     hostages: [[-5, 0, -9, 0], [5, 3.6, -9, PI], [13, 0, 9, PI / 2]] },
 ];
+// every land mission now spreads over roughly 480 m: the structure in the middle, a wide outlying district around it
+const BIG = 240;
+for (const M of G.MISSIONS) {
+  if (!M.out || M.id === 'rig') continue;
+  if (M.id === 'ship') { // the quay grows into a whole container port
+    const b0 = M.build;
+    M.build = W => { b0(W); const c = G.surf('concrete', 30); W.box(45, 0, -153, 68, 2.3, 154, c, 'concrete'); W.box(45, 0, 153, 68, 2.3, 154, c, 'concrete'); W.box(160, 0, 0, 162, 2.3, 460, c, 'concrete'); };
+    Object.assign(M.out, { bounds: BIG, regions: [[13, -228, 236, 228]], max: (M.out.max || 10) + 14, falloff: 120, cell: 15 });
+    continue;
+  }
+  Object.assign(M.out, { bounds: BIG, regions: [[-BIG + 6, -BIG + 6, BIG - 6, BIG - 6]], max: (M.out.max || 10) + 14, falloff: 110, cell: 15 });
+}
 G.MISSION = Object.fromEntries(G.MISSIONS.map(m => [m.id, m]));
 
 // hostile loadouts: militant kit and the weapons such cells actually use

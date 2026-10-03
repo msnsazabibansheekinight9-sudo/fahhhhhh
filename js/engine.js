@@ -81,7 +81,7 @@ function buildSky() {
 }
 
 // ------------------------------------------------------------------ environment
-E.setEnv = function (key, groundKind, weather) {
+E.setEnv = function (key, groundKind, weather, mapSize) {
   const P = G.ENV[key] || G.ENV.sunny;
   const u = E.sky.material.uniforms;
   u.top.value.set(P.sky[0]).convertSRGBToLinear(); u.mid.value.set(P.sky[1]).convertSRGBToLinear(); u.bot.value.set(P.sky[2]).convertSRGBToLinear();
@@ -89,7 +89,7 @@ E.setEnv = function (key, groundKind, weather) {
   u.clouds.value = key === 'overcast' || key === 'grey' ? 1 : key === 'winter' ? .9 : key === 'desert' ? .15 : .5;
   u.night.value = key === 'night' ? 1 : 0;
   const fogC = new THREE.Color(P.fog[0]).convertSRGBToLinear();
-  E.scene.fog = new THREE.Fog(fogC, P.fog[1], P.fog[2]);
+  const fogK = Math.max(1, (mapSize || 0) / 220); E.scene.fog = new THREE.Fog(fogC, P.fog[1] * Math.min(2, fogK), P.fog[2] * fogK);
   E.sun.color.set(P.sun[3]).convertSRGBToLinear(); E.sun.intensity = P.sun[4];
   E.sunDir = sd; E.hemi.color.set(P.hemi[0]).convertSRGBToLinear(); E.hemi.groundColor.set(P.hemi[1]).convertSRGBToLinear(); E.hemi.intensity = P.hemi[2];
   E.vmHemi.color.copy(E.hemi.color); E.vmHemi.groundColor.copy(E.hemi.groundColor); E.vmHemi.intensity = P.hemi[2] * 1.1;
@@ -110,18 +110,18 @@ E.setEnv = function (key, groundKind, weather) {
   }
   E.envRT = E.pmrem.fromScene(E.skyScene, .04);
   E.scene.environment = E.envRT.texture; E.vmScene.environment = E.envRT.texture;
-  G.FX.setFog(fogC, P.fog[1], P.fog[2]);
+  G.FX.setFog(fogC, P.fog[1] * Math.min(2, fogK), P.fog[2] * fogK); // big maps: thinner haze so you can see across them
   // ground
   if (E.ground) E.scene.remove(E.ground);
   const big = key === 'range';
-  const gt = G.texGround(groundKind || 'dirt').clone(); gt.needsUpdate = true; const size = big ? 5000 : 600; gt.repeat.set(size / 6, size / 6);
+  const gt = G.texGround(groundKind || 'dirt').clone(); gt.needsUpdate = true; const size = big ? 5000 : Math.max(600, (mapSize || 0) * 2 + 500); gt.repeat.set(size / 6, size / 6);
   E.ground = new THREE.Mesh(new THREE.PlaneGeometry(size, size), G.mat({ map: gt, roughness: groundKind === 'snow' ? .8 : 1, metalness: 0 }));
   E.ground.rotation.x = -Math.PI / 2; E.ground.receiveShadow = true; E.scene.add(E.ground);
   if (E.hills) E.scene.remove(E.hills);
   E.hills = new THREE.Group();
   const hc = new THREE.Color(P.fog[0]).lerp(new THREE.Color(P.hemi[1]), .45);
   const hm = G.mat({ color: '#' + hc.getHexString(), roughness: 1, flatShading: true });
-  for (let i = 0; i < 26; i++) { const a = i / 26 * Math.PI * 2, r = big ? 1500 : 220 + Math.random() * 60; const h = new THREE.Mesh(new THREE.ConeGeometry(40 + Math.random() * 60, 20 + Math.random() * 40, 6), hm); h.position.set(Math.cos(a) * r, 0, Math.sin(a) * r); E.hills.add(h); }
+  for (let i = 0; i < 26; i++) { const a = i / 26 * Math.PI * 2, r = big ? 1500 : Math.max(220, (mapSize || 0) + 60) + Math.random() * 60; const h = new THREE.Mesh(new THREE.ConeGeometry((40 + Math.random() * 60) * Math.max(1, (mapSize || 0) / 200), (20 + Math.random() * 40) * Math.max(1, (mapSize || 0) / 250), 6), hm); h.position.set(Math.cos(a) * r, 0, Math.sin(a) * r); E.hills.add(h); }
   E.scene.add(E.hills); E.ground.visible = true;
   E.weather = weather; E.weatherT = 0;
   E.groundKind = groundKind;
@@ -132,13 +132,14 @@ E.loadMap = function (def) {
   const W = E.world; W.reset();
   G.FX.clear();
   W.groundMat = { mud: 'mud', grass: 'grass', jungle: 'dirt', sand: 'sand', snow: 'snow', concrete: 'concrete', asphalt: 'concrete', dirt: 'dirt', rubble: 'dirt', gravel: 'dirt' }[def.ground] || 'dirt';
-  E.setEnv(def.env, def.ground, def.weather);
+  E.setEnv(def.env, def.ground, def.weather, def.size);
   def.build(W);
   if (def.id !== 'range') W.border();
   // bake static geometry per material
   const merged = G.mergeByMaterial(W.static);
   W.group.remove(W.static); W.static = merged; W.group.add(merged);
   if (def.id !== 'range') W.buildNav();
+  W.buildGrid();
   E.map = def;
   G.Audio.setEnv(def.reverb || 'open');
   G.Audio.ambience(def.amb || null);

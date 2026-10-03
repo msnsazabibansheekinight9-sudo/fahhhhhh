@@ -82,19 +82,52 @@ SR.render = function (dt) {
 
 // ============================================================ SCREENS
 // "Open in Chrome": opens this page on its own, full-window, in Chrome (Android intent / iOS scheme / new tab on desktop)
-UI.openChrome = function () {
-  let u = /^https?:/.test(location.href) ? location.href : (document.referrer || 'https://claude.ai/artifact/98Ay2afhvBxVPgfMGSfiHh');
-  const ua = navigator.userAgent || '', bare = u.replace(/^https?:\/\//, '');
+// "Open in Chrome". Inside claude.ai the game runs in a sandboxed frame that may not open new windows,
+// so the button builds a single self-contained copy of the game (every script inlined, three.js from
+// its CDN) and offers it as a download: open that file in Chrome and it runs full-window with real
+// mouse capture. Outside claude.ai it hands the page to Chrome directly.
+UI.buildStandalone = async function () {
+  const styles = Array.from(document.querySelectorAll('style')).map(x => x.outerHTML).join('\n');
+  const links = Array.from(document.querySelectorAll('link[rel="stylesheet"], link[rel="preconnect"]')).map(x => x.outerHTML).join('\n');
+  const scripts = Array.from(document.querySelectorAll('script[src]')).filter(x => /\/js\/[\w-]+\.js(\?|$)|cdnjs\.cloudflare\.com/.test(x.src));
+  let out = '';
+  for (const sc of scripts) {
+    if (/cdnjs\.cloudflare\.com/.test(sc.src)) { out += `<script src="${sc.src}"></script>\n`; continue; }
+    const r = await fetch(sc.src, { cache: 'no-store' }); if (!r.ok) throw new Error('Could not read ' + sc.src);
+    out += '<script>\n' + (await r.text()).replace(/<\/script/gi, '<\\/script') + '\n</script>\n';
+  }
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Ironsight Armory</title>\n${links}\n${styles}</head><body>\n<canvas id="c" aria-label="3D view"></canvas><div id="ui"></div><div id="hud" hidden></div><div id="loading">Loading armory…</div>\n${out}</body></html>`;
+};
+UI.openChrome = async function () {
+  const b = document.getElementById('openchrome');
+  const dl = window.claude && window.claude.use ? await window.claude.use('downloads').catch(() => null) : null;
+  if (dl) {
+    try {
+      if (b) b.textContent = 'Preparing…';
+      const html = await UI.buildStandalone();
+      await dl.save({ filename: 'ironsight-armory.html', data: new Blob([html], { type: 'text/html' }) });
+      overlay(`<div class="dialog" style="width:min(520px,100%)"><div class="eyebrow">Open in Chrome</div><h2>Saved ironsight-armory.html</h2><p class="muted">Open that file in Chrome: double-click it, or drag it into a Chrome window (on Android, tap it in Downloads and choose Chrome). The whole game is in that one file and runs full-window with proper mouse capture. Your stash and settings there are separate from this page.</p><div class="btns"><button class="btn primary" id="oc-ok">OK</button></div></div>`);
+      $('#oc-ok').onclick = () => UI.closeOverlay();
+    } catch (e) {
+      if (e && e.code === 'declined') { /* the viewer said no */ }
+      else UI.toast('Could not save the file' + (e && e.message ? ': ' + e.message : ''), 3);
+    } finally { if (b) b.textContent = 'Open in Chrome ↗'; }
+    return;
+  }
+  const u = location.href, ua = navigator.userAgent || '', bare = u.replace(/^https?:\/\//, '');
+  if (/^file:/.test(u)) { UI.toast('Open this file from Chrome: drag it into a Chrome window, or File → Open', 4); return; }
   if (/Android/i.test(ua)) location.href = `intent://${bare}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(u)};end`;
   else if (/iPhone|iPad|iPod/i.test(ua)) location.href = 'googlechromes://' + bare;
   else { const w = window.open(u, '_blank', 'noopener'); if (!w) location.href = u; }
 };
+// already running full-window in Chrome: no need for the button
+const IN_CHROME = window.top === window && /Chrome\//.test(navigator.userAgent) && !/Edg\/|OPR\/|SamsungBrowser/.test(navigator.userAgent);
 function chromeBar(show) {
   let b = document.getElementById('openchrome');
   if (!b) { b = document.createElement('button'); b.id = 'openchrome'; b.textContent = 'Open in Chrome ↗'; b.title = 'Open the game full-window in Chrome (best for mouse capture and performance)';
     b.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:50;padding:6px 14px;font:600 13px var(--f-ui,sans-serif);letter-spacing:.04em;color:#111;background:#e6c572;border:0;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,.5);cursor:pointer';
     b.onclick = () => UI.openChrome(); document.body.appendChild(b); }
-  b.style.display = show ? 'block' : 'none';
+  b.style.display = show && !IN_CHROME ? 'block' : 'none';
 }
 UI.chromeBar = chromeBar;
 UI.show = function (name) {
@@ -170,7 +203,7 @@ function renderArmory(root) {
   const on = list.querySelector('.on'); if (on) on.scrollIntoView({ block: 'center' });
   $('#back').onclick = () => UI.show('menu');
   $('#torange').onclick = () => UI.startRange();
-  $('#tomis').onclick = () => { if (wp.c === 'PST') UI.mis.secondary = wp.id; else UI.mis.primary = wp.id; if (!G.WEAPON[UI.mis.primary] || G.WEAPON[UI.mis.primary].c === 'PST') UI.mis.primary = 'm4a1'; store.set('mis', UI.mis); G.Audio.init(); UI.deployMission(); };
+  $('#tomis').onclick = () => UI.missionPicker(wp);
   $('#rnd').onclick = () => { const L2 = {}; for (const [s] of G.SLOTS) { const o = G.attachFor(wp, s); L2[s] = o[Math.floor(Math.random() * o.length)].id; } UI.saveLoadout(wp, L2); G.Audio.ui('attach'); refresh(); };
   $('#rst').onclick = () => { UI.saveLoadout(wp, G.defaultLoadout(wp)); refresh(); };
   let open = null; const fst = { fold: false, coll: false, supOff: false, alt: false };
@@ -270,7 +303,7 @@ function renderMissions(root) {
   const L = UI.loadoutFor(G.WEAPON[C.primary]);
   root.innerHTML = `<section class="screen" id="battle"><div class="setup">
     <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap"><div><div class="eyebrow">Counter-terror · solo</div><h1>Missions</h1></div><button class="btn small" id="back">Main menu</button></div>
-    <div><span class="lbl">Structure</span><div class="row">${G.MISSIONS.map(m => `<button class="card ${m.id === C.mission ? 'on' : ''}" data-mis="${m.id}"><small>${esc(m.loc)} · ${m.guards.length}–${m.guards.length + (m.out ? m.out.max : 0)} hostiles · ${m.hostages.length} hostages</small><b>${esc(m.name)}</b><span>${esc(m.blurb)}</span></button>`).join('')}</div></div>
+    <div><span class="lbl">Structure</span><div class="row">${G.MISSIONS.map(m => `<button class="card ${m.id === C.mission ? 'on' : ''}" data-mis="${m.id}"><small>${esc(m.loc)} · ${m.out ? Math.round(m.out.bounds * 2) + ' m area · ' : ''}${m.guards.length} in the structure + up to ${m.out ? m.out.max : 0} around · ${m.hostages.length} hostages</small><b>${esc(m.name)}</b><span>${esc(m.blurb)}</span></button>`).join('')}</div></div>
     <div><span class="lbl">Hostiles</span><div class="row">${G.HOSTILE_ROLES.map(r => `<div class="card" style="cursor:default"><small>${r.id === 'leader' ? 'One per cell' : r.max ? 'Up to ' + r.max : 'Common'}</small><b>${esc(r.n)}</b><span>${esc(r.d)}</span></div>`).join('')}</div></div>
     <div><span class="lbl">Time of day</span><div class="row">${Object.entries(G.TOD).map(([k, t]) => `<button class="card ${k === C.tod ? 'on' : ''}" data-tod="${k}"><b>${t.n}</b><span>${t.d}</span></button>`).join('')}</div></div>
     <div><span class="lbl">Hostile tier</span><div class="row">${G.TIERS.map(t => `<button class="card ${C.tier === t.id ? 'on' : ''}" data-tier="${t.id}"><small style="color:${t.color}">Tier ${G.TIERS.indexOf(t) + 1}</small><b>${t.n}</b><span>${t.d}</span></button>`).join('')}<button class="card ${C.tier === 'mixed' ? 'on' : ''}" data-tier="mixed"><small>All tiers</small><b>Mixed cell</b><span>A mix of recruits and hardened fighters.</span></button></div></div>
@@ -307,6 +340,23 @@ UI.randomLoadout = function (C) {
   store.set('mis', C);
   return `${p.n} + ${s.n} · ${G.GEARID[kit.helmet].n}, ${G.GEARID[kit.armor].n}`;
 };
+// Armory → "Test in a mission": pick the mission map, time of day and difficulty, then deploy with this gun
+UI.missionPicker = function (wp) {
+  const C = UI.mis; if (!G.MISSION[C.mission]) C.mission = G.MISSIONS[0].id;
+  const draw = () => {
+    const o = overlay(`<div class="dialog" style="width:min(1060px,100%);max-height:92vh;overflow:auto"><div class="eyebrow">Test in a mission · ${esc(wp.n)}</div><h2>Choose the operation</h2>
+      <span class="lbl">Mission map</span><div class="row" style="margin-bottom:10px">${G.MISSIONS.map(m => `<button class="card ${m.id === C.mission ? 'on' : ''}" data-pm="${m.id}"><small>${esc(m.loc)}${m.out ? ' · ' + Math.round(m.out.bounds * 2) + ' m' : ''}</small><b>${esc(m.name)}</b><span>${esc(m.blurb)}</span></button>`).join('')}</div>
+      <span class="lbl">Difficulty</span><div class="row" style="margin-bottom:10px">${G.TIERS.map((t, i) => `<button class="card ${C.tier === t.id ? 'on' : ''}" data-pt="${t.id}"><small style="color:${t.color}">Tier ${i + 1}</small><b>${t.n}</b><span>${t.d}</span></button>`).join('')}<button class="card ${C.tier === 'mixed' ? 'on' : ''}" data-pt="mixed"><small>All tiers</small><b>Mixed cell</b><span>Recruits and hardened fighters together.</span></button></div>
+      <span class="lbl">Time of day</span><div class="row" style="margin-bottom:14px">${Object.entries(G.TOD).map(([k, t]) => `<button class="card ${k === C.tod ? 'on' : ''}" data-pd="${k}"><b>${t.n}</b><span>${t.d}</span></button>`).join('')}</div>
+      <div class="btns"><button class="btn primary" id="pm-go" style="font-size:18px;padding:12px 30px">Deploy with the ${esc(wp.n)}</button><button class="btn" id="pm-cancel">Cancel</button></div></div>`);
+    o.querySelectorAll('[data-pm]').forEach(b => b.onclick = () => { C.mission = b.dataset.pm; G.Audio.ui(); draw(); });
+    o.querySelectorAll('[data-pt]').forEach(b => b.onclick = () => { C.tier = b.dataset.pt; G.Audio.ui(); draw(); });
+    o.querySelectorAll('[data-pd]').forEach(b => b.onclick = () => { C.tod = b.dataset.pd; G.Audio.ui(); draw(); });
+    $('#pm-cancel').onclick = () => UI.closeOverlay();
+    $('#pm-go').onclick = () => { UI.closeOverlay(); if (wp.c === 'PST') C.secondary = wp.id; else C.primary = wp.id; if (!G.WEAPON[C.primary] || G.WEAPON[C.primary].c === 'PST') C.primary = 'm4a1'; const rnd = C.rnd; C.rnd = false; store.set('mis', C); G.Audio.init(); UI.deployMission(); C.rnd = rnd; store.set('mis', C); };
+  };
+  draw();
+};
 UI.deployMission = function () {
   if (UI.mis.rnd) UI.randomLoadout(UI.mis);
   const C = UI.mis, p = G.WEAPON[C.primary], s = G.WEAPON[C.secondary];
@@ -323,7 +373,7 @@ UI.showMissionResults = function () {
   overlay(`<div class="dialog" style="width:min(560px,100%)"><div class="eyebrow">${esc(Ms.M.name)} · ${esc(G.TOD[Ms.cfg.tod].n)}</div><h2>${Ms.ok ? 'Mission complete' : 'Mission failed'}</h2>
     <p class="muted">${esc(Ms.reason || '')}</p>
     <p class="muted">${esc(wn)}</p>${Ms.ok ? `<div style="font:700 34px var(--f-ui);color:var(--accent,#c9a24b)">${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}</div>` : ''}
-    <dl class="spec">${([['Time', mm], ['Hostiles neutralised', `${Ms.killed} / ${Ms.total}`], ['Headshots', Ms.heads], ['Accuracy', `${acc}% (${Gm.stats ? Gm.stats.hits : 0}/${Gm.stats ? Gm.stats.shots : 0})`], ['Damage taken', Math.round(Ms.dmgTaken)], ['Hostages safe', `${Ms.hostages - Ms.hostagesLost} / ${Ms.hostages}`]]).map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(String(v))}</dd></div>`).join('')}</dl>
+    <dl class="spec">${([['Time', mm], ['Structure hostiles', `${Ms.killed} / ${Ms.total}`], ['Outlying hostiles', `${Ms.outKilled || 0} / ${Ms.outTotal || 0}`], ['Headshots', Ms.heads], ['Accuracy', `${acc}% (${Gm.stats ? Gm.stats.hits : 0}/${Gm.stats ? Gm.stats.shots : 0})`], ['Damage taken', Math.round(Ms.dmgTaken)], ['Hostages safe', `${Ms.hostages - Ms.hostagesLost} / ${Ms.hostages}`]]).map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(String(v))}</dd></div>`).join('')}</dl>
     <div class="btns"><button class="btn primary" id="x-again">Retry</button><button class="btn" id="x-setup">Change mission</button><button class="btn" id="x-arm">Armory</button><button class="btn" id="x-kit">Kit locker</button><button class="btn" id="x-menu">Main menu</button></div></div>`);
   $('#x-again').onclick = () => { UI.closeOverlay(); if (UI.mis.rnd) { Gm.cleanup(); Gm.player = null; UI.deployMission(); } else loading('Inserting…', () => G.Game.startMission(UI.lastMission)); };
   $('#x-setup').onclick = () => { UI.closeOverlay(); Gm.cleanup(); Gm.player = null; UI.show('missions'); };
