@@ -177,6 +177,10 @@ A.explosion = function (pos) {
   tone(dest, t, { f: 70, f2: 22, gain: 1.6, dur: .9 });
   noise(dest, t + .05, { type: 'bandpass', f: 400, gain: .8, dur: 2.2, atk: .05 });
 };
+// incoming shell: a falling whistle from where it will land
+A.whistle = function (pos) { if (!A.ready) return; const dest = out(pos, .4), t = ctx.currentTime; tone(dest, t, { f: 2100, f2: 380, gain: .22, dur: 1.7 }); };
+// jet flyover: a long roaring sweep
+A.jet = function (pos) { if (!A.ready) return; const dest = out(pos, .6), t = ctx.currentTime; noise(dest, t, { type: 'bandpass', f: 900, f2: 300, gain: 1.1, dur: 3.2, atk: .8 }); noise(dest, t, { type: 'lowpass', f: 400, f2: 120, gain: .9, dur: 3.6, atk: 1 }); };
 A.ui = function (kind) {
   if (!A.ready) return;
   const dest = out(null, 0), t = ctx.currentTime;

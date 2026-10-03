@@ -140,6 +140,7 @@ UI.show = function (name) {
   if (name === 'kit') renderKit(root);
   if (name === 'missions') renderMissions(root);
   if (name === 'extraction') G.Raid.render(root);
+  if (name === 'battle') G.Battle.render(root);
   $('#hud').hidden = true;
 };
 function renderMenu(root) {
@@ -155,9 +156,10 @@ function renderMenu(root) {
       <button class="menu-item" data-go="armory"><span class="n">01</span><b>Armory</b><i>Inspect and customise every weapon</i></button>
       <button class="menu-item" data-go="range"><span class="n">02</span><b>Firing range</b><i>Paper, steel, gel, armour plates and mannequins out to 1,000 m</i></button>
       <button class="menu-item" data-go="missions"><span class="n">03</span><b>Solo missions</b><i>Clear terrorists from ships, rigs, embassies and trains — dawn to night</i></button>
-      <button class="menu-item" data-go="extraction"><span class="n">04</span><b>Extraction</b><i>Hardcore loot-and-extract raids with your own guns and kit — lose it all if you die</i></button>
-      <button class="menu-item" data-go="kit"><span class="n">05</span><b>Kit locker</b><i>Helmets, armour, plates, camo and night vision from armies worldwide</i></button>
-      <button class="menu-item" data-go="settings"><span class="n">06</span><b>Settings</b><i>Sensitivity, field of view, audio, graphics</i></button>
+      <button class="menu-item" data-go="battle"><span class="n">04</span><b>Mass battlefield</b><i>20 v 20 conquest across a 600 m map — artillery, jets, total chaos</i></button>
+      <button class="menu-item" data-go="extraction"><span class="n">05</span><b>Extraction</b><i>Hardcore loot-and-extract raids with your own guns and kit — lose it all if you die</i></button>
+      <button class="menu-item" data-go="kit"><span class="n">06</span><b>Kit locker</b><i>Helmets, armour, plates, camo and night vision from armies worldwide</i></button>
+      <button class="menu-item" data-go="settings"><span class="n">07</span><b>Settings</b><i>Sensitivity, field of view, audio, graphics</i></button>
     </nav>
     <div class="menu-foot">Click the view to capture the mouse · F1 in game for controls<br>Headphones recommended</div>
   </div></section>

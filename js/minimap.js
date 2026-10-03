@@ -65,11 +65,11 @@ MM.update = function () {
   if (cv.parentNode !== hud) hud.appendChild(cv);
   cv.style.display = 'block';
   const dpr = Math.min(2, window.devicePixelRatio || 1);
-  if (cv.width !== size * dpr) { cv.width = cv.height = size * dpr; cv.style.width = cv.style.height = size + 'px'; }
-  if (Gm.frame % 2) return;
+  const px = Math.round(size * dpr); // integer backing size: a fractional one never matches and would wipe the canvas every frame
+  if (cv.width !== px) { cv.width = cv.height = px; cv.style.width = cv.style.height = size + 'px'; }
   const key = (G.E.map && G.E.map.id) + ':' + G.E.world.colliders.length + ':' + G.E.world.bounds;
   if (MM.key !== key || !MM.layer) { MM.layer = buildLayer(); MM.key = key; }
-  const L = MM.layer, x = cv.getContext('2d'), S = size * dpr;
+  const L = MM.layer, x = cv.getContext('2d'), S = px;
   x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, S, S);
   // view window in world metres
   const span = MM.full ? 2 * L.B : 180, cx = MM.full ? 0 : P.pos.x, cz = MM.full ? 0 : P.pos.z;
@@ -92,6 +92,16 @@ MM.update = function () {
     x.font = `600 ${9 * f}px sans-serif`; x.textAlign = px > S * .7 ? 'right' : px < S * .3 ? 'left' : 'center';
     const lbl = e.n + (out ? ` ${Math.round(e.pos.distanceTo(P.pos))}m` : '');
     x.lineWidth = 3 * dpr; x.strokeStyle = 'rgba(0,0,0,.8)'; x.strokeText(lbl, px, py - 7 * f); x.fillText(lbl, px, py - 7 * f);
+  }
+  // mass battlefield: capture points, HQs, friendlies and spotted enemies
+  const BS = G.Battle && G.Battle.st;
+  if (Gm.mode === 'battle' && BS) {
+    const TC = ['#4a86ff', '#ff4a4a'];
+    for (const t of [0, 1]) { const [hx, hy] = toPx(BS.hq[t].x, BS.hq[t].z); x.fillStyle = TC[t]; x.fillRect(hx - 5 * f, hy - 5 * f, 10 * f, 10 * f); x.fillStyle = '#fff'; x.font = `700 ${7 * f}px sans-serif`; x.textAlign = 'center'; x.fillText('HQ', hx, hy + 2.5 * f); }
+    for (const b of Gm.bots) { if (!b.alive) continue; const seen = b.team === 0 || (BS.spot.get(b) || 0) > BS.t; if (!seen) continue; const [bx, by] = toPx(b.pos.x, b.pos.z); if (bx < 0 || by < 0 || bx > S || by > S) continue; x.fillStyle = TC[b.team]; x.beginPath(); x.arc(bx, by, (b.team ? 3 : 2.4) * f, 0, 7); x.fill(); }
+    for (const fl of BS.flags) { const [fx, fy] = toPx(fl.pos.x, fl.pos.z), col = fl.owner === null ? '#dddddd' : TC[fl.owner], hot = fl.n[0] && fl.n[1];
+      x.beginPath(); x.arc(fx, fy, fl.r / span * S, 0, 7); x.fillStyle = col + '33'; x.fill(); x.lineWidth = (hot ? 2.5 : 1.5) * dpr; x.strokeStyle = hot ? '#ffd04a' : col; x.stroke();
+      x.fillStyle = col; x.font = `700 ${11 * f}px sans-serif`; x.textAlign = 'center'; x.lineWidth = 3 * dpr; x.strokeStyle = 'rgba(0,0,0,.85)'; x.strokeText(fl.id, fx, fy + 4 * f); x.fillText(fl.id, fx, fy + 4 * f); }
   }
   // the player: an arrow pointing the way you face (yaw 0 = north / -z)
   const [ppx, ppy] = toPx(P.pos.x, P.pos.z), dx = -Math.sin(P.yaw), dz = -Math.cos(P.yaw), ang = Math.atan2(dz, dx);

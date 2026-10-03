@@ -149,7 +149,7 @@ function randKit(q, night, R) {
   for (const [s] of G.GEAR_SLOTS) if (!G.GEARID[kit[s]]) kit[s] = G.gearFor(s)[0].id;
   return kit;
 }
-X.randKit = randKit; X.randWeapon = randWeapon;
+X.randKit = randKit; X.randWeapon = randWeapon; X.forest = (W, Mp, R) => forest(W, Mp, R);
 const SCAV_N = ['Vasya', 'Kolya', 'Lyokha', 'Sanya', 'Zhenya', 'Tolik', 'Grisha', 'Fedya', 'Petya', 'Slava', 'Dima', 'Borya', 'Yura', 'Misha', 'Venya', 'Stas', 'Gosha', 'Roma'];
 const PMC_N = ['Reaper', 'Nomad', 'Havoc', 'Specter', 'Atlas', 'Bishop', 'Crowbar', 'Dagger', 'Echo', 'Fury', 'Gunny', 'Hex', 'Ivan', 'Jinx', 'Kilo', 'Lynx'];
 
