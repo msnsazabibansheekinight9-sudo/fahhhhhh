@@ -485,7 +485,7 @@ function ensureParts(B) {
   for (const sk in bySec) { const gr = new THREE.Group(); gr.name = 'sec_' + sk; root.add(gr); for (const mm of bySec[sk]) gr.add(mm); parts.push({ key: sk, sec: sk, name: SECNAME[sk] || sk, obj: gr }); }
   // give every part its own materials (for highlighting, X-ray and dirt)
   for (const p of parts) { p.obj.traverse(o => { if (o.isMesh && o.material && !o.userData.proxy && !o.material.userData.own) { o.material = o.material.clone(); o.material.userData.own = true; o.material.userData.base = { c: o.material.color ? o.material.color.clone() : null, r: o.material.roughness }; } }); p.home = p.obj.position.clone(); p.homeQ = p.obj.quaternion.clone(); }
-  B.inner = buildInner(B);
+  B.inner = (BN.buildInner2 && BN.buildInner2(B)) || buildInner(B);
   B.parts = parts;
   return parts;
 }
@@ -495,10 +495,10 @@ function stepList(B) {
   const list = parts.filter(p => p.key !== 'receiver' && !(p.key === 'mag' && B.rig.mag && B.rig.mag.parent !== B.root)).sort((a, b) => rank(a.key) - rank(b.key));
   const steps = [];
   for (const p of list) {
-    if (rank(p.key) > ORDER.indexOf('INNER') && !steps.innerDone) { steps.innerDone = true; for (const ip of B.inner.parts) steps.push({ inner: true, key: 'i:' + ip.key, name: ip.name, part: ip, txt: txt['i:' + ip.key] || `Remove the ${ip.name.toLowerCase()}` }); }
+    if (rank(p.key) > ORDER.indexOf('INNER') && !steps.innerDone) { steps.innerDone = true; for (const ip of B.inner.parts) steps.push({ inner: true, key: 'i:' + ip.key, name: ip.name, part: ip, txt: ip.strip || txt['i:' + ip.key] || `Remove the ${ip.name.toLowerCase()}` }); }
     steps.push({ key: p.key, name: p.name, part: p, txt: txt[p.key.replace(/_\d+$/, '')] || `Remove the ${p.name.toLowerCase()}` });
   }
-  if (!steps.innerDone) for (const ip of B.inner.parts) steps.push({ inner: true, key: 'i:' + ip.key, name: ip.name, part: ip, txt: txt['i:' + ip.key] || `Remove the ${ip.name.toLowerCase()}` });
+  if (!steps.innerDone) for (const ip of B.inner.parts) steps.push({ inner: true, key: 'i:' + ip.key, name: ip.name, part: ip, txt: ip.strip || txt['i:' + ip.key] || `Remove the ${ip.name.toLowerCase()}` });
   return steps;
 }
 // lay a removed part out on the bench / ground in front of the gun
@@ -530,7 +530,7 @@ function setXray(B, on) {
   ensureParts(B); BN.xray = on;
   const shellSecs = ['receiver', 'stock', 'handguard', 'grip', 'barrel', 'extras', 'sights', 'action', 'attach', 'muzzle', 'trigger'];
   for (const p of B.parts) {
-    const shell = shellSecs.includes(p.sec) || ['slide', 'cover', 'brk', 'recoilG', 'bolt'].includes(p.key);
+    const shell = shellSecs.includes(p.sec) || ['slide', 'cover', 'brk', 'recoilG', 'bolt', 'cyl', 'drum'].includes(p.key);
     p.obj.traverse(o => { if (o.isMesh && o.material && !o.userData.proxy && !o.userData.inner) { o.material.transparent = on && shell; o.material.opacity = on && shell ? .16 : 1; o.material.depthWrite = !(on && shell); o.material.needsUpdate = true; } });
   }
   B.inner.group.visible = on || !!(BN.strip && BN.strip.steps.some(s => s.inner && s.done)) || BN.tab === 'works';

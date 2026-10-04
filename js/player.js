@@ -454,7 +454,7 @@ class Player {
     const sens = .0022 * G.settings.sens * (this.scoped ? 1 / Math.max(1, (S.zoom || 1) * .7) : lerp(1, .75, this.ads));
     this.yaw -= input.dx * sens; this.pitch -= input.dy * sens * (G.settings.invertY ? -1 : 1);
     // recoil recovery
-    const rec = Math.min(this.recoilBank, dt * 1.6 * (this.fireHeld ? .4 : 1.2));
+    const rec = Math.min(this.recoilBank, dt * 1.6 * (this.fireHeld ? .4 : 1.2) * (S && S.recover ? clamp(.28 / S.recover, .6, 1.5) : 1));
     this.pitch -= rec; this.recoilBank -= rec;
     this.pitch = clamp(this.pitch, -1.5, 1.5);
     // stance
@@ -665,8 +665,10 @@ class Player {
     for (const a of vm.arms) { a.upper.visible = a.fore.visible = a.hand.visible = a.cuff.visible = vm.pivot.visible; }
     // mouse-lag sway
     const inp = G.Input;
-    this.swayL.x += (clamp(-inp.lastDx * .0009, -.06, .06) - this.swayL.x) * Math.min(1, dt * 7);
-    this.swayL.y += (clamp(-inp.lastDy * .0009, -.06, .06) - this.swayL.y) * Math.min(1, dt * 7);
+    // heavier, longer, front-heavy guns lag further behind the view and settle more slowly
+    const inr = S.inertia || 1;
+    this.swayL.x += (clamp(-inp.lastDx * .0009 * inr, -.06 * inr, .06 * inr) - this.swayL.x) * Math.min(1, dt * 7 / inr);
+    this.swayL.y += (clamp(-inp.lastDy * .0009 * inr, -.06 * inr, .06 * inr) - this.swayL.y) * Math.min(1, dt * 7 / inr);
     // hip and ADS placements
     const pst = wp.c === 'PST';
     const hip = pst ? V3(.12, -.11 - rig.gripPos.y * .3, -.4) : V3(.14, -.13 - Math.max(0, rig.sightH - .03) * .5, -.4 - (wp.heavy ? .03 : 0));

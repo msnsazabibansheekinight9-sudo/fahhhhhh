@@ -176,6 +176,7 @@ function setAction(p) { // p: 0 closed … 1 fully back
 }
 // mechanical events as the action moves
 function actionOpened() { // reached the rear: extract whatever is in the chamber
+  if (BN.mal && BN.mal.onOpened && BN.mal.onOpened(B)) { A().mech('boltback'); return; }
   if (B.chamber) { eject(B.chamber === 1); B.chamber = 0; }
   A().mech(B.type === 'bolt' ? 'boltback' : B.type === 'pump' ? 'pump' : B.type === 'lever' ? 'lever' : B.type === 'slide' ? 'slide' : 'boltback');
 }
@@ -195,6 +196,7 @@ function actionClosed() {
 function canLockOpen() { return (B.lockback && B.feed === 'box' && B.magIn && B.rounds <= 0) || (B.feed === 'int' && B.selfLoad && B.rounds <= 0 && !B.tube && B.type !== 'none'); }
 function drive(to, dur, done) { B.anim = { from: B.open, to, t: 0, dur, done }; }
 function rack() { // full quick cycle by click
+  if (BN.mal && BN.mal.onRack(B)) { panel(); return; }
   if (B.hold) { if (B.open > .5) { drive(0, .18, () => { actionClosed(); panel(); }); } else drive(1, .22, () => { actionOpened(); say('Action open.'); panel(); }); return; }
   if (B.locked) { release(); return; }
   drive(1, .14, () => { actionOpened(); if (canLockOpen()) { B.locked = true; say('Empty magazine — locked open.'); panel(); return; } drive(0, .1, () => { actionClosed(); panel(); }); });
@@ -210,13 +212,16 @@ function pullTrigger() {
   if (B.rev) {
     if (B.cylOpen) { say('Close the cylinder first.'); return false; }
     B.cylIdx = (B.cylIdx + 1) % B.cyl.length; B.rig.cyl.userData.tgt = B.cylIdx * 2 * PI / B.cyl.length;
-    if (B.cyl[B.cylIdx] === 1) { B.cyl[B.cylIdx] = 2; shoot(); return true; }
+    if (B.cyl[B.cylIdx] === 1) { if (BN.mal && BN.mal.preFire(B, true)) { panel(); return false; } B.cyl[B.cylIdx] = 2; shoot(); if (BN.onFire) BN.onFire(B); return true; }
     A().mech('dry'); say('Click — empty chamber.'); panel(); return false;
   }
   if (B.coverOpen) { say('Close the feed cover first.'); return false; }
+  if (BN.mal && BN.mal.blockTrigger(B)) { panel(); return false; }
   if ((B.open > .05 && !(B.kick > 0)) || B.locked) { say('The action is open.'); return false; }
   if (B.chamber !== 1) { A().mech('dry'); B.cocked = false; say(B.chamber === 2 ? 'Click — spent case in the chamber. Work the action.' : 'Click — nothing in the chamber.'); panel(); return false; }
-  B.chamber = 2; shoot();
+  if (BN.mal && BN.mal.preFire(B)) { panel(); return false; }
+  B.chamber = 2; shoot(); if (BN.onFire) BN.onFire(B);
+  if (B.selfLoad && !CYCLE[mode] && BN.mal && BN.mal.postFire(B)) { panel(); return true; }
   if (B.selfLoad && !CYCLE[mode]) { // the gun cycles itself
     eject(false); B.chamber = 0; B.cocked = true;
     if (!feedOne() && canLockOpen()) { B.locked = true; setAction(1); say('Last round — locked open.'); }
@@ -325,6 +330,7 @@ function onDown(e) {
   e.stopPropagation(); e.preventDefault(); G.Audio.init();
   const part = h.part;
   B.press = { part, x: e.clientX, y: e.clientY, moved: 0, t: performance.now() };
+  if (part === 'handle' && BN.mal && BN.mal.lockHandle && BN.mal.lockHandle(B)) { panel(); return; }
   if (part === 'handle' && !B.anim) { B.drag = { part, axis: dragAxis(part), p0: B.open, x: e.clientX, y: e.clientY, opened: B.open > .95, wasLocked: B.locked }; B.locked = false; }
   else if (part === 'mag' && B.magIn) B.drag = { part, axis: dragAxis('mag'), d: 0, x: e.clientX, y: e.clientY };
   else if (part === 'trigger') { B.fireHeld = true; B.fireT = 0; const md = B.S.modes[B.mode]; B.burstLeft = md === 'burst3' ? 3 : md === 'burst2' ? 2 : 0; if (pullTrigger() && B.burstLeft) B.burstLeft--; }
@@ -483,10 +489,10 @@ function panel() {
   const feed = B.feed === 'box' ? (B.magIn ? `In the gun — ${B.rounds}/${B.cap}` : `On the bench — ${B.rounds}/${B.cap}`) : B.feed === 'belt' ? `${B.rounds}/${B.cap} on the belt${B.rig.cover ? (B.coverOpen ? ' · cover open' : ' · cover closed') : ''}` : B.feed === 'cyl' ? (B.cylOpen ? 'Cylinder open' : 'Cylinder closed') : `${B.rounds}/${B.cap} in the ${B.mt === 'tube' || B.mt === 'tube2' ? 'tube' : B.mt === 'enbloc' ? 'clip' : 'magazine'}`;
   const act = B.locked ? 'Locked open' : B.open > .9 ? 'Open' : B.open > .05 ? 'Part open' : 'Closed';
   const K = BN.kinds && BN.kinds[B.kind], rows = K && K.status ? K.status(B) : [['Chamber', ch], ['Feed', feed], ['Action', act]];
-  el.innerHTML = (BN.tabsHTML ? BN.tabsHTML(B) : '') + `<div class="wsok" style="border-color:var(--brass);color:var(--brass2)"><b>Next:</b> ${esc(nextStep())}</div>
+  el.innerHTML = (BN.tabsHTML ? BN.tabsHTML(B) : '') + (BN.opTop ? BN.opTop(B) : '') + `<div class="wsok" style="border-color:var(--brass);color:var(--brass2)"><b>Next:</b> ${esc(nextStep())}</div>
     <dl class="spec">${rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}${B.kind === 'std' ? `<div><dt>Safety</dt><dd>${B.safety ? 'ON' : 'off'}</dd></div><div><dt>Selector</dt><dd>${esc(MODE_N[md] || md)}</dd></div>` : ''}<div><dt>Shots fired</dt><dd>${B.shots || 0}</dd></div></dl>
     <div class="wsbtns"><button class="btn small ${B.safety ? 'primary' : ''}" id="bs-saf" ${B.kind !== 'std' ? 'hidden' : ''}>Safety ${B.safety ? 'ON' : 'off'} (F)</button>${B.S.modes.length > 1 ? `<button class="btn small" id="bs-mode">Selector: ${esc(MODE_N[md] || md)} (B)</button>` : ''}${B.locked ? '<button class="btn small primary" id="bs-rel">Release bolt</button>' : ''}${B.lockback && !B.locked && B.open < .05 ? '<button class="btn small" id="bs-lock" title="Pull back and lock the action open">Lock open</button>' : ''}${!B.handle && !B.rev && B.kind === 'std' ? '<button class="btn small" id="bs-cyc">Cycle action</button>' : ''}<button class="btn small" id="bs-fire">Fire</button><button class="btn small" id="bs-clear">Unload all</button></div>
-    <div class="lbl" style="padding:8px 16px 0">What happened</div><div style="padding:4px 16px 10px;font-size:13px;line-height:1.5">${B.log.map((l, i) => `<div style="opacity:${1 - i * .12}">${esc(l)}</div>`).join('')}</div>
+    ${BN.opExtra ? BN.opExtra(B) : ''}<div class="lbl" style="padding:8px 16px 0">What happened</div><div style="padding:4px 16px 10px;font-size:13px;line-height:1.5">${B.log.map((l, i) => `<div style="opacity:${1 - i * .12}">${esc(l)}</div>`).join('')}</div>
     <div class="lbl" style="padding:8px 16px 0">How to handle it</div><ul style="margin:4px 0 16px;padding:0 16px 0 32px;font-size:13px;line-height:1.55;color:var(--muted)">
       ${B.feed === 'box' ? '<li><b>Magazine:</b> drag it out of the gun; click it on the bench to put it back.</li>' : ''}
       <li><b>Ammo box:</b> click to load one round, hold to keep going, Shift-click for five.</li>
@@ -497,6 +503,7 @@ function panel() {
   if (BN.tabsBind) BN.tabsBind(el, B);
   if (K && K.howto) { const ul = el.querySelector('ul'); if (ul) ul.innerHTML = K.howto(B).map(t => `<li>${t}</li>`).join(''); }
   q('#bs-saf').onclick = toggleSafety;
+  if (BN.opBind) BN.opBind(el, B);
   if (q('#bs-mode')) q('#bs-mode').onclick = nextMode;
   if (q('#bs-rel')) q('#bs-rel').onclick = release;
   if (q('#bs-cyc')) q('#bs-cyc').onclick = rack;
@@ -508,5 +515,5 @@ const api = { say, panel: () => panel(), shoot: () => shoot(), eject: l => eject
 BN.api = api;
 BN._state = () => B; // for tests
 BN._tick = dt => { if (B) tick(dt); };
-BN._api = { setup, loadFromBox, pullTrigger, rack, release, magToGun, magToBench, toggleCyl, toggleSafety, nextMode, setAction, actionOpened, actionClosed };
+BN._api = { setup, loadFromBox, pullTrigger, rack, release, magToGun, magToBench, toggleCyl, toggleSafety, nextMode, setAction, actionOpened, actionClosed, eject, feedOne, shoot, canLockOpen, drive, say, panel: () => panel() };
 })();

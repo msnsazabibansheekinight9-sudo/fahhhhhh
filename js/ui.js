@@ -73,7 +73,7 @@ SR.render = function (dt) {
   if (mode === 'menu') off = w > 700 ? .18 : 0;
   SR.cam.aspect = w / h; SR.cam.setViewOffset(w, h, -off * w, (mode === 'armory' || mode === 'workshop' || mode === 'bench') && w <= 900 ? -h * .15 : 0, w, h); SR.cam.updateProjectionMatrix();
   const d = SR.dist;
-  const tg = UI.screen === 'kit' && SR.kitS ? SR.target : V3(0, 0, 0);
+  const tg = UI.screen === 'kit' && SR.kitS ? SR.target : UI.screen === 'bench' && SR.benchTgt ? SR.benchTgt : V3(0, 0, 0);
   SR.cam.position.set(tg.x + Math.sin(SR.yaw) * Math.cos(SR.pitch) * d, tg.y + Math.sin(SR.pitch) * d, tg.z + Math.cos(SR.yaw) * Math.cos(SR.pitch) * d);
   SR.cam.lookAt(tg);
   R.toneMappingExposure = 1.05;
@@ -250,6 +250,7 @@ function renderArmory(root) {
     const b = statBars(wp, S), b0 = statBars(wp, S0);
     const blen = Math.round((wp.m.B ? wp.m.B[0] : (wp.m.L || 0)) * S.blen * 1000);
     const spec = [['Rate of fire', S.modes.includes('bolt') ? `~${wp.rpm} rpm (aimed)` : `${S.rpm} rpm`], ['Capacity', `${S.mag} rds`], ['Muzzle velocity', `${Math.round(S.v)} m/s`], ['Weight (empty)', `${S.wt.toFixed(2)} kg${Math.abs(S.wt - wp.wt) > .005 ? ` (base ${wp.wt.toFixed(2)})` : ''}`], ['Barrel', `${blen} mm`], ['Fire modes', S.modes.map(m => ({ semi: 'Semi', auto: 'Auto', burst3: '3-rd', burst2: '2-rd', bolt: 'Bolt', pump: 'Pump', lever: 'Lever' }[m])).join(' / ')], ['Dispersion', `${S.acc.toFixed(1)} MOA`], ['Energy @ muzzle', `${Math.round(.5 * ((G.MASS || {})[wp.cal] || massOf(wp.cal)) / 1000 * S.v * S.v)} J`]];
+    if (G.handlingRows) spec.push(...G.handlingRows(S));
     { const sp = []; if (S.he) sp.push(`explosive rounds (${S.he.r} m blast)`); if (S.homing) sp.push('seeker rounds'); if (wp.spin) sp.push(`rotary, ${wp.spin}s spin-up`); if (wp.charge) sp.push(`hold to charge (${wp.charge}s)`); if (wp.salvo) sp.push(`${wp.salvo}-barrel salvo`); if (wp.gyro) sp.push('rocket-propelled'); if (wp.caseless) sp.push('caseless'); if (wp.duplex) sp.push('duplex rounds'); if (wp.intSup) sp.push('integral suppressor'); if (S.inc) sp.push('incendiary'); if (sp.length) spec.push(['Special', sp.join(' · ')]); }
     $('#specs').innerHTML = `${wp.blurb ? `<p class="blurb">${esc(wp.blurb)}</p>` : ''}<dl class="spec">${spec.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
       <div class="bars" id="wbars">${barsHTML(b, b0)}</div>
