@@ -174,13 +174,14 @@ const PN = {
 CW.partName = (k, v) => (PN[k] && PN[k][v]) || String(v).replace(/_/g, ' ');
 
 // ------------------------------------------------------------------ merging
-const isHand = w => w.c === 'PST' || ['pistol', 'rev'].includes(w.m.t);
+const isHand = w => w.c === 'PST' || ['pistol', 'rev', 'fpistol'].includes(w.m.t);
+const special = w => !!(G.SPECIAL_T && w.m && G.SPECIAL_T.has(w.m.t));
 const autoish = w => w.modes.some(m => m === 'auto' || m.startsWith('burst'));
 const short = w => { const ws = w.n.replace(/\(.*?\)|[“”"].*?[“”"]/g, '').trim().split(/\s+/), o = []; for (const x of ws) { o.push(x); if (/\d/.test(x) || o.length >= 2) break; } return o.join(' ').replace(/[,]$/, ''); };
 CW.merge = function (ids) {
   const ws = ids.map(id => G.WEAPON[id]).filter(Boolean);
   if (ws.length < 2) return null;
-  const P = ws[0], fam = ws.filter(w => isHand(w) === isHand(P));
+  const P = ws[0], fam = special(P) ? [P] : ws.filter(w => isHand(w) === isHand(P) && !special(w));
   const best = (arr, f) => arr.reduce((a, b) => f(b) > f(a) ? b : a);
   const hit = best(ws, w => w.dmg * (w.pellets || 1) * (w.he ? 2 : 1));
   const reach = best(fam, w => w.v);
@@ -248,6 +249,10 @@ CW.merge = function (ids) {
   if (from.sights) feats.push(['Sights', from.sights]);
   const sp = []; if (wp.spin) sp.push('rotary spin-up'); if (wp.charge) sp.push('coil charge'); if (wp.salvo) sp.push(`${wp.salvo}-round salvo`); if (wp.he) sp.push('explosive rounds'); if (wp.homing) sp.push('seeker rounds'); if (wp.inc) sp.push('incendiary'); if (wp.intSup) sp.push('integral suppressor'); if (wp.gyro) sp.push('rocket rounds'); if (wp.duplex) sp.push('duplex'); if (wp.caseless) sp.push('caseless'); if (wp.hyper) sp.push('hyperburst'); if (wp.m.bip) sp.push('bipod');
   if (sp.length) feats.push(['Special mechanics', sp.join(' · ')]);
+  // the body decides how it is fired and reloaded
+  for (const k of ['emplaced', 'lock', 'misfire', 'loft', 'reloadKind', 'backblast', 'home', 'tubeLoad', 'enbloc']) { if (P[k] !== undefined) wp[k] = P[k]; else delete wp[k]; }
+  { const sm = Math.max(0, ...ws.map(w => w.smoke || 0)); if (sm) wp.smoke = sm; }
+  if (special(P)) { wp.act = P.act; wp.c = P.c; }
   wp.blurb = `Workshop merge of ${ws.map(w => w.n).join(', ')}.`;
   // fall back to the first gun's body if the mix will not assemble
   if (CW.validate(wp)) { wp.m = clone(P.m); wp.m.x = Array.from(new Set([...(P.m.x || []), ...ws.flatMap(w => (w.m.x || []).filter(x => /^rail|^bip|heat|vents|lug/.test(x)))])); }
@@ -263,7 +268,7 @@ CW.random = function (R = Math.random) {
   const V = CW.vocab(), pick = a => a[Math.floor(R() * a.length)], keys = k => Array.from(V[k].keys());
   const base = pick(G.WEAPONS.filter(w => !w.custom));
   const wp = clone(base); wp.id = undefined; wp.donors = [base.id];
-  const hand = isHand(base);
+  const hand = isHand(base) || special(base);
   if (!hand) {
     for (const k of ['stk', 'mz', 'sgt']) if (R() < .7) wp.m[k] = pick(keys(k));
     if (R() < .7) { const h = pick(keys('hg')); wp.m.hg = clone(V.hg.get(h).smp); }
@@ -276,5 +281,46 @@ CW.random = function (R = Math.random) {
   if (R() < .15) wp.he = { r: 1 + R() * 2.5, dmg: 30 + R() * 50 }; if (R() < .12) wp.homing = 2 + R() * 2; if (R() < .15) wp.inc = true; if (R() < .1) wp.salvo = 2 + Math.floor(R() * 3);
   wp.n = 'Chaos ' + short(base) + ' ' + Math.floor(R() * 90 + 10);
   return normalize(wp);
+};
+
+// ------------------------------------------------------------------ random merge: 2–10 random guns, a random base, then random edits
+const SYL = ['Vor', 'Kra', 'Tal', 'Ze', 'Mor', 'Ash', 'Dra', 'Quin', 'Bel', 'Ryn', 'Hex', 'Ost', 'Ul', 'Vex', 'Kor', 'Sab', 'Tor', 'Gal', 'Nyx', 'Fen'];
+CW.randomName = (R = Math.random) => SYL[Math.floor(R() * SYL.length)] + SYL[Math.floor(R() * SYL.length)].toLowerCase() + ' ' + ['Mk ', 'Model ', 'Type ', 'M', 'X-', 'R'][Math.floor(R() * 6)] + (Math.floor(R() * 90) + 1);
+CW.randomMerge = function (R = Math.random, opts = {}) {
+  const pool = G.WEAPONS.filter(w => !w.custom && (opts.heavy || !w.emplaced));
+  const n = 2 + Math.floor(Math.pow(R(), 1.3) * 9), ids = [];
+  while (ids.length < n) { const w = pool[Math.floor(R() * pool.length)]; if (!ids.includes(w.id)) ids.push(w.id); }
+  const res = CW.merge(ids); if (!res) return null;
+  const wp = res.wp, V = CW.vocab(), pick = a => a[Math.floor(R() * a.length)], edits = [];
+  if (R() < .7) { wp.m.pl = pick(Array.from(V.pl.keys())); wp.m.mt = pick(Array.from(V.mt.keys())); edits.push('new finish'); }
+  const xs = CW.XS.filter(() => R() < .22).map(x => x[0]); if (xs.length) { wp.m.x = Array.from(new Set((wp.m.x || []).concat(xs))); edits.push(xs.map(x => XSM[x][1].toLowerCase()).join(', ')); }
+  const j = (k, lo, hi) => { const f = lo + R() * (hi - lo); wp[k] = +(wp[k] * f).toFixed(k === 'acc' ? 2 : 0); return f; };
+  const fd = j('dmg', .85, 1.25), fr = j('rpm', .8, 1.3); j('v', .9, 1.15); const fa = j('acc', .7, 1.3);
+  edits.push(`damage ${fd > 1 ? '+' : ''}${Math.round((fd - 1) * 100)}%`, `rate ${fr > 1 ? '+' : ''}${Math.round((fr - 1) * 100)}%`, `groups ${fa < 1 ? 'tighter' : 'wider'}`);
+  if (R() < .2 && !special(wp)) { wp.cal = pick(Object.keys(G.CAL).filter(c => !G.CAL[c].ball && !G.CAL[c].bag)); edits.push('rechambered in ' + wp.cal); }
+  if (R() < .12) { wp.he = { r: 1.5 + R() * 3, dmg: 40 + R() * 80 }; edits.push('explosive rounds'); }
+  if (R() < .1) { wp.homing = 2 + R() * 2; edits.push('seeker rounds'); }
+  wp.n = CW.randomName(R);
+  res.feats.unshift(['Random base', G.WEAPON[ids[0]].n]);
+  res.feats.push(['Random edits', edits.join(' · ')]);
+  if (CW.validate(normalize(wp))) return CW.randomMerge(R, opts);
+  return { ids, wp: normalize(wp), L: res.L, feats: res.feats };
+};
+// ------------------------------------------------------------------ randomise one section of a scratch design (or all of it)
+CW.randomize = function (d, sec = 'all', R = Math.random) {
+  const V = CW.vocab(), pick = a => a[Math.floor(R() * a.length)], keys = k => Array.from(V[k].keys()).filter(x => !(G.SPECIAL_T && G.SPECIAL_T.has(x)));
+  for (let tries = 0; tries < 12; tries++) {
+    const w = clone(d); const sp = special(w), all = sec === 'all';
+    if (all || sec === 'Identity') { w.n = CW.randomName(R); w.c = pick(Object.keys(G.CLASS_NAMES).filter(c => sp === ['MUS', 'CAN', 'ART', 'MOR', 'ATG', 'AAG', 'HVY', 'NAV', 'RCL'].includes(c) || !sp && !['MUS', 'CAN', 'ART', 'MOR', 'ATG', 'AAG', 'HVY', 'NAV', 'RCL'].includes(c))); w.y = 1700 + Math.floor(R() * 360); }
+    if (!sp && (all || sec === 'Receiver & action')) { if (R() < .5) w.m.t = pick(keys('t')); w.m.R = [.12 + R() * .4, .03 + R() * .08, .025 + R() * .04]; w.m.bh = pick(keys('bh')); w.m.grip = pick(keys('grip')); w.m.stk = pick(keys('stk')); }
+    if (!sp && (all || sec === 'Barrel & front end')) { w.m.B = [.1 + R() * .9, .004 + R() * .01]; w.m.mz = pick(keys('mz')); const h = pick(keys('hg')); w.m.hg = clone(V.hg.get(h).smp); w.m.bip = R() < .25 ? 1 : undefined; }
+    if (all || sec === 'Feed') { if (!sp) { const mg = pick(keys('mag')); w.m.mag = clone(V.mag.get(mg).smp); } w.cal = pick(Object.keys(G.CAL).filter(c => sp || (!G.CAL[c].ball && !G.CAL[c].bag))); w.mag = Math.max(1, Math.round(Math.pow(R(), 2) * 120) + 1); }
+    if (all || sec === 'Sights & finish') { if (!sp) w.m.sgt = pick(keys('sgt')); w.m.pl = pick(Array.from(V.pl.keys())); w.m.mt = pick(Array.from(V.mt.keys())); }
+    if (all || sec === 'Mechanics') { const acts = sp ? [w.act] : ['semi', 'auto', 'auto_ob', 'bolt', 'lever', 'pump']; w.act = pick(acts); w.modes = w.act === 'bolt' ? ['bolt'] : w.act === 'pump' ? ['pump'] : w.act === 'lever' ? ['lever'] : w.act === 'semi' ? ['semi'] : ['auto', 'semi', ...(R() < .4 ? ['burst3'] : [])]; w.rpm = Math.round(60 + R() * 1400); w.v = Math.round(250 + R() * 1100); w.dmg = Math.round(20 + R() * 160); w.acc = +(.5 + R() * 8).toFixed(1); w.rec = [+(.3 + R() * 3).toFixed(2), +(.1 + R() * 1).toFixed(2)]; w.rl = [+(1.2 + R() * 3).toFixed(1), +(1.6 + R() * 3.5).toFixed(1)]; w.wt = +(1 + R() * 8).toFixed(2); w.pellets = R() < .15 ? 2 + Math.floor(R() * 10) : undefined; }
+    if (all || sec === 'Special mechanics') { for (const k of ['spin', 'charge', 'homing', 'he', 'gyro', 'inc', 'intSup', 'duplex', 'caseless', 'hyper']) delete w[k]; if (R() < .15) w.spin = .2 + R() * .8; if (R() < .1) w.charge = .3 + R(); if (R() < .15) w.salvo = 2 + Math.floor(R() * 4); if (R() < .15) w.he = { r: 1 + R() * 4, dmg: 30 + R() * 120 }; if (R() < .12) w.homing = 1 + R() * 3; if (R() < .12) w.inc = true; if (R() < .1) w.intSup = true; if (R() < .1) w.caseless = true; }
+    if (all || sec === 'Extra parts') { w.m.x = (sp ? (w.m.x || []) : Array.from(V.x.keys()).filter(() => R() < .06)).concat(CW.XS.filter(() => R() < .25).map(x => x[0])); }
+    if (!CW.validate(normalize(clone(w)))) return w;
+  }
+  return d;
 };
 })();

@@ -118,6 +118,7 @@ class Player {
   makeWeapon(wp, L) {
     const S = G.resolveStats(wp, L);
     const rig = G.buildGun(wp, L);
+    if (rig.vmScale && rig.vmScale !== 1 && G.vmFit) G.vmFit(rig);
     if (rig.magPivot) rig.magPivot.rotation.z = G.ATT[L.aux] && G.ATT[L.aux].s.alt && G.ATT[L.aux].s.alt.k === 'mag' ? -PI / 2 : 0;
     rig.root.visible = false; this.vm.holder.add(rig.root);
     rig.root.traverse(o => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false; } });
@@ -469,6 +470,7 @@ class Player {
     this.wasSprint = this.sprinting; this.sprintOut = Math.max(0, (this.sprintOut || 0) - dt);
     let speed = [4.3, 2.3, .9][this.stance] * (this.sprinting ? 1.6 : 1) * lerp(1, .55, this.ads) * (S ? .82 + S.mob * .025 : 1) * (this.kitK || 1) * (this.km ? this.km.speed : 1);
     speed *= W.slowAt(this.pos);
+    if (this.W && this.W.wp.emplaced) { speed *= .12; this.sprinting = false; } // a carriage gun: you can only shuffle it round
     const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
     const wishX = (-sy * f + cy * r), wishZ = (-cy * f - sy * r);
     const len = Math.hypot(wishX, wishZ) || 1;
@@ -797,7 +799,7 @@ class Player {
   }
 }
 function L_HP(w) { return w.L.ammo === 'am_hp'; }
-function RWx(rig) { return rig.wp.m.R[2] * .5; }
+function RWx(rig) { return (rig.wp.m.R ? rig.wp.m.R[2] : .04) * .5; }
 const tC = V3(), Yup = V3(0, 1, 0);
 function orient(mesh, a, b) { tC.subVectors(b, a); const len = tC.length(); mesh.position.copy(a).addScaledVector(tC, .5); mesh.scale.set(1, len, 1); mesh.quaternion.setFromUnitVectors(Yup, tC.divideScalar(len || 1)); }
 G.Player = Player;

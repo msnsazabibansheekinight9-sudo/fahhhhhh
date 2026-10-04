@@ -140,7 +140,7 @@ G.buildGun = function (wp, L, opt = {}) {
   const rig = { root, wp, S, L, mats: MT, animated: {}, parts: [] };
   let cur = root;
   const add = (geo, mat, x = 0, y = 0, z = 0, p) => {
-    const o = new THREE.Mesh(geo, mat); o.position.set(x, y, z); o.castShadow = true; o.receiveShadow = !lod; (p || cur).add(o); return o;
+    const o = new THREE.Mesh(geo, mat); o.position.set(x, y, z); o.castShadow = true; o.receiveShadow = !lod; o.userData.sec = rig.sec; (p || cur).add(o); return o;
   };
   const grp = (x = 0, y = 0, z = 0, p) => { const g = new THREE.Group(); g.position.set(x, y, z); (p || cur).add(g); return g; };
   const X = m.x || [];
@@ -171,6 +171,7 @@ G.buildGun = function (wp, L, opt = {}) {
   const furn = woodStock ? MT.wood : MT.poly;
 
   // ===================================================== RECEIVER
+  rig.sec = 'receiver';
   if (['bolt', 'lever', 'semiw'].includes(t)) {
     // round receiver + action body
     add(gCyl(RW * .5, RW * .5, RL * .95, 20), MT.metal, 0, 0, (zr + zf) / 2);
@@ -282,6 +283,7 @@ G.buildGun = function (wp, L, opt = {}) {
   function pistolFrameMat() { return (m.grip === 'pst_poly') ? MT.poly : MT.metal; }
 
   // ===================================================== BARREL
+  rig.sec = 'barrel';
   if (!pistol && !rev) {
     const brlMat = MT.steel;
     const brlLen = blen;
@@ -296,6 +298,7 @@ G.buildGun = function (wp, L, opt = {}) {
   rig.muzzleZ = muzzleZ;
 
   // ===================================================== HANDGUARD
+  rig.sec = 'handguard';
   const hg = m.hg || ['none', 0];
   const hgT = hg[0], hgL = hg[1] || .2, hgR = hg[2];
   const hgZ = zf - hgL / 2; // center
@@ -428,23 +431,23 @@ G.buildGun = function (wp, L, opt = {}) {
 
   // ===================================================== STOCK
   cur = root;
-  buildStock();
+  rig.sec = 'stock'; buildStock();
   // ===================================================== GRIP & TRIGGER
-  buildGrip();
-  buildTrigger();
+  rig.sec = 'grip'; buildGrip();
+  rig.sec = 'trigger'; buildTrigger();
   // ===================================================== MAGAZINE
-  buildMag();
+  rig.sec = 'mag'; buildMag();
+  // ===================================================== ACTION
+  rig.sec = 'action'; buildAction();
   // ===================================================== SIGHTS
-  buildAction();
-  // ===================================================== SIGHTS
-  buildSights();
+  rig.sec = 'sights'; buildSights();
   // ===================================================== MUZZLE
-  buildMuzzle();
+  rig.sec = 'muzzle'; buildMuzzle();
   // ===================================================== EXTRAS
-  buildExtras();
-  buildExperimental();
+  rig.sec = 'extras'; buildExtras();
+  rig.sec = 'extras'; buildExperimental();
   // ===================================================== ATTACHMENTS
-  buildAttachments();
+  rig.sec = 'attach'; buildAttachments();
 
   // anchors
   rig.muzzle = new THREE.Object3D(); rig.muzzle.position.set(0, 0, rig.muzzleZ); root.add(rig.muzzle);
@@ -818,16 +821,17 @@ G.buildGun = function (wp, L, opt = {}) {
         if (box === 'drum') { drumBody(g, .065, .07, -.035, -.068, 0, MT.metal); }
         else if (box === 'pouch') { add(gRBox(.07, .12, .1, .02), MT.cloth, -.04, -.08, 0, g); }
         else { add(gRBox(.08, .12, .16, .006), MT.metal, -.045, -.085, 0, g); if (small) add(gBox(.05, .01, .02), MT.steel, -.045, -.02, 0, g); }
-        // belt: row of rounds into the feed tray
+        // belt: row of linked rounds climbing from the box into the feed tray; each round lies parallel
+        // to the bore with its bullet pointing down-range (toward the muzzle)
         rig.belt = new THREE.Group(); g.add(rig.belt);
-        const cs = G.CAL[wp.cal].cs;
+        const cs = G.CAL[wp.cal].cs, rr = cs[1], cl = cs[0], tip = cl * (cl > .05 ? .42 : .55);
         for (let i = 0; i < 7; i++) {
           const a = i / 6;
-          const q = new THREE.Group(); q.position.set(-.035 + a * .06, -.02 + a * .04 + Math.sin(a * PI) * .015, 0); rig.belt.add(q);
-          add(gCylX(cs[1], cs[1], cs[0] * .9, 8), MT.brass, 0, 0, 0, q).rotation.y = PI / 2;
-          add(gBox(.006, .008, .012), MT.steel, 0, cs[1], .01, q);
+          const q = new THREE.Group(); q.position.set(-.04 + a * (RW * .5 + .05), -.02 + a * .045 + Math.sin(a * PI) * .012, 0); rig.belt.add(q);
+          add(gCyl(rr, rr * .84, cl * .8, 8), MT.brass, 0, 0, cl * .1, q);
+          add(gCyl(rr * .8, rr * .12, tip, 8), MT.copper, 0, 0, cl * .1 - cl * .4 - tip / 2, q);
+          add(gBox(rr * 2.4, rr * 2.2, .006), MT.steel, 0, 0, cl * .3, q); // link
         }
-        rig.belt.rotation.y = PI / 2; rig.belt.position.set(0, 0, 0);
         break; }
       case 'p90': {
         pos = V3(0, top + .005, -.03);

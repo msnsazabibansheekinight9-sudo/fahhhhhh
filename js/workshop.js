@@ -96,7 +96,7 @@ function fieldHTML(f, d) {
 // ------------------------------------------------------------------ shared panels
 function statsHTML(wp, L, base) {
   const S = G.resolveStats(wp, L), b = UI.statBars(wp, S), b0 = base ? UI.statBars(base.wp, G.resolveStats(base.wp, base.L)) : b;
-  const blen = Math.round(wp.m.B[0] * S.blen * 1000);
+  const blen = Math.round((wp.m.B ? wp.m.B[0] : (wp.m.L || 0)) * S.blen * 1000);
   const spec = [['Rate of fire', S.modes.includes('bolt') ? `~${wp.rpm} rpm (aimed)` : `${Math.round(S.rpm)} rpm`], ['Capacity', `${S.mag} rds`], ['Cartridge', wp.cal], ['Muzzle velocity', `${Math.round(S.v)} m/s`], ['Weight', `${S.wt ? S.wt.toFixed(2) : wp.wt} kg`], ['Barrel', `${blen} mm`], ['Fire modes', S.modes.join(' / ')], ['Dispersion', `${S.acc.toFixed(1)} MOA`]];
   return `<dl class="spec">${spec.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl><div class="bars">${UI.barsHTML(b, b0, !!base)}</div>`;
 }
@@ -194,7 +194,8 @@ function tabMerge(root) {
   const L = $('#wsl');
   const ids = WS.mergeIds = WS.mergeIds.filter(id => G.WEAPON[id]);
   const eras = [['all', 'All']].concat(G.ERAS.map(e => [e.id, e.name]));
-  L.innerHTML = `<div class="wssel"><div class="lbl" style="margin:0">Selected — the first gives the receiver</div>${ids.length ? ids.map((id, i) => `<div><span class="wsbox on">${i + 1}</span><b>${esc(G.WEAPON[id].n)}</b>${i ? `<button data-up="${id}" title="Use this gun's receiver">Make base</button>` : ''}<button data-rm="${id}">✕</button></div>`).join('') : '<div class="muted">Tick two or more guns below.</div>'}</div>
+  if (WS.mergeOverride && WS.mergeOverride.ids.join() !== ids.join()) WS.mergeOverride = null;
+  L.innerHTML = `<div class="wsbtns"><button class="btn small primary" id="ws-rmerge" title="2 to 10 random guns, a random base, then random edits">Random merge</button><label class="wsc" style="padding:4px 6px"><input type="checkbox" id="ws-rheavy" ${WS.rheavy ? 'checked' : ''}> include cannon & artillery</label>${ids.length ? '<button class="btn small" id="ws-mclear">Clear</button>' : ''}</div><div class="wssel"><div class="lbl" style="margin:0">Selected — the first gives the receiver</div>${ids.length ? ids.map((id, i) => `<div><span class="wsbox on">${i + 1}</span><b>${esc(G.WEAPON[id].n)}</b>${i ? `<button data-up="${id}" title="Use this gun's receiver">Make base</button>` : ''}<button data-rm="${id}">✕</button></div>`).join('') : '<div class="muted">Tick two or more guns below.</div>'}</div>
     <div style="padding:8px 14px;border-bottom:1px solid var(--line)"><input class="wsq" id="wsq" placeholder="Search all ${G.WEAPONS.length} guns…" value="${esc(WS.q)}"><div class="eras" style="margin-top:6px">${eras.map(([id, n]) => `<button class="chip ${WS.era === id ? 'on' : ''}" data-mera="${id}">${esc(n)}</button>`).join('')}</div></div><div id="wsml"></div>`;
   const list = () => {
     const q = WS.q.trim().toLowerCase();
@@ -205,6 +206,9 @@ function tabMerge(root) {
   list();
   const q = $('#wsq'); q.oninput = () => { WS.q = q.value; list(); };
   L.querySelectorAll('[data-mera]').forEach(b => b.onclick = () => { WS.era = b.dataset.mera; tabMerge(root); });
+  $('#ws-rmerge').onclick = () => { const r = CW.randomMerge(Math.random, { heavy: WS.rheavy }); if (!r) return; WS.mergeIds = r.ids.slice(); WS.mergeOverride = r; WS.mergeName = ''; G.Audio.ui('attach'); tabMerge(root); };
+  $('#ws-rheavy').onchange = e => { WS.rheavy = e.target.checked; };
+  if ($('#ws-mclear')) $('#ws-mclear').onclick = () => { WS.mergeIds = []; WS.mergeOverride = null; tabMerge(root); };
   L.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { ids.splice(ids.indexOf(b.dataset.rm), 1); tabMerge(root); });
   L.querySelectorAll('[data-up]').forEach(b => b.onclick = () => { ids.splice(ids.indexOf(b.dataset.up), 1); ids.unshift(b.dataset.up); tabMerge(root); });
   if (ids.length < 2) {
@@ -213,7 +217,7 @@ function tabMerge(root) {
     $('#wsr').innerHTML = `<div class="wsempty">The merged gun keeps the <b>best</b> of each donor: the hardest-hitting cartridge, the fastest rate of fire, the biggest magazine, the tightest group, the quickest reload and the softest recoil — plus every special mechanic (bipods, explosive or seeker rounds, rotary barrels, integral suppressors…). Its body is built from the donors' parts: receiver from the first gun, barrel from the longest-reaching, stock from the softest-shooting, magazine from the biggest.</div>`;
     actions([]); return;
   }
-  const res = CW.merge(ids); if (!res) return;
+  const res = WS.mergeOverride || CW.merge(ids); if (!res) return;
   if (WS.mergeName) res.wp.n = WS.mergeName;
   head(`Merge of ${ids.length}`, res.wp.n, `${res.wp.cal} · ${res.wp.modes.join('/')} · ${res.wp.rpm} rpm · ${res.wp.mag} rds`);
   const err = showGun(res.wp, res.L); if (err) note('Model error: ' + esc(err));
@@ -236,7 +240,7 @@ function tabBuild(root) {
   if (!WS.draft) { const b = G.WEAPON[UI.sel.wp] && !G.WEAPON[UI.sel.wp].custom ? G.WEAPON[UI.sel.wp] : G.WEAPON.m4a1; WS.draft = clone(b); delete WS.draft.id; delete WS.draft.psy; delete WS.draft.proto; WS.draft.n = 'My ' + b.n.split(' ')[0]; WS.draft.co = 'Workshop'; WS.draft.donors = [b.id]; }
   const d = WS.draft; d.m.x = d.m.x || [];
   const L = $('#wsl');
-  L.innerHTML = `<div class="wsbtns"><button class="btn small primary" id="ws-chaos" title="Random parts, random calibre, random special mechanics">Chaos build</button>${d.id ? '<button class="btn small" id="ws-asnew">Start a new copy</button>' : ''}</div>
+  L.innerHTML = `<div class="wsbtns"><button class="btn small primary" id="ws-rand" title="Every section randomised: parts, mechanics, calibre, specials, extras">Randomize everything</button><button class="btn small" id="ws-chaos" title="A random real gun with random parts, calibre and special mechanics">Chaos build</button>${d.id ? '<button class="btn small" id="ws-asnew">Start a new copy</button>' : ''}</div>
     <div style="padding:8px 14px;border-bottom:1px solid var(--line)"><div class="lbl">Start from any gun (keeps nothing of your current draft)</div><input class="wsq" id="wsq" placeholder="Search ${G.WEAPONS.length} guns…" value="${esc(WS.q)}"></div><div id="wstl"></div>`;
   const list = () => {
     const q = WS.q.trim().toLowerCase();
@@ -246,14 +250,16 @@ function tabBuild(root) {
   };
   list();
   const q = $('#wsq'); q.oninput = () => { WS.q = q.value; list(); };
+  $('#ws-rand').onclick = () => { const keep = d.id; WS.draft = CW.randomize(d, 'all'); if (keep) WS.draft.id = keep; G.Audio.ui('attach'); tabBuild(root); };
   $('#ws-chaos').onclick = () => { const keep = d.id; WS.draft = CW.random(); if (keep) WS.draft.id = keep; G.Audio.ui('attach'); tabBuild(root); };
   if ($('#ws-asnew')) $('#ws-asnew').onclick = () => { delete d.id; d.n += ' (copy)'; tabBuild(root); };
   // editor form
   const R = $('#wsr'), sc = R.scrollTop;
   const open = WS.openSec = WS.openSec || { 'Identity': 1, 'Receiver & action': 1, 'Mechanics': 1 };
-  R.innerHTML = FIELDS.map(([sec, fs]) => `<details class="wsd" data-sec="${esc(sec)}" ${open[sec] ? 'open' : ''}><summary>${sec}</summary>${fs.map(f => fieldHTML(f, d)).join('')}</details>`).join('') + `<div id="wsst" style="padding-bottom:20px"></div>`;
+  R.innerHTML = FIELDS.map(([sec, fs]) => `<details class="wsd" data-sec="${esc(sec)}" ${open[sec] ? 'open' : ''}><summary>${sec} <button class="btn small" data-dice="${esc(sec)}" title="Randomise this section" style="float:right;padding:1px 7px;margin-top:-3px;font-size:12px">🎲</button></summary>${fs.map(f => fieldHTML(f, d)).join('')}</details>`).join('') + `<div id="wsst" style="padding-bottom:20px"></div>`;
   R.scrollTop = sc;
   R.querySelectorAll('details').forEach(el => el.addEventListener('toggle', () => { open[el.dataset.sec] = el.open; }));
+  R.querySelectorAll('[data-dice]').forEach(b => b.onclick = e => { e.preventDefault(); e.stopPropagation(); const keep = d.id; WS.draft = CW.randomize(d, b.dataset.dice); if (keep) WS.draft.id = keep; G.Audio.ui('attach'); tabBuild(root); });
   const onIn = e => {
     const t = e.target;
     if (t.dataset.x) { const X = d.m.x, i = X.indexOf(t.dataset.x); if (t.checked && i < 0) X.push(t.dataset.x); if (!t.checked && i >= 0) X.splice(i, 1); return schedule(); }

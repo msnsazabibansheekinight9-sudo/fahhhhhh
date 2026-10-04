@@ -73,17 +73,19 @@ function setup(wp) {
   const g = props();
   const ty = box.min.y - .012;
   // workbench top
-  const top = new THREE.Mesh(new THREE.BoxGeometry(Math.max(1.4, size.x * 2.2), .04, Math.max(.8, size.x * .9)), pmat('#5a4630', .7));
+  const big = !!wp.emplaced || size.x > 2.2;
+  const top = new THREE.Mesh(new THREE.BoxGeometry(Math.max(1.4, size.x * 2.2), .04, Math.max(.8, size.x * .9)), pmat(big ? '#59613f' : '#5a4630', big ? .95 : .7));
   top.position.set(0, ty - .02, .12); top.receiveShadow = true; g.add(top);
-  const mat = new THREE.Mesh(new THREE.BoxGeometry(Math.max(.9, size.x * 1.3), .004, Math.max(.36, size.x * .45)), pmat('#1d2a22', .95));
+  const mat = new THREE.Mesh(new THREE.BoxGeometry(Math.max(.9, size.x * 1.3), .004, Math.max(.36, size.x * .45)), pmat(big ? '#4d553a' : '#1d2a22', .95));
   mat.position.set(0, ty + .002, .06); mat.receiveShadow = true; g.add(mat);
   // ammo box with the gun's cartridges
   const cal = G.CAL[wp.cal] || {}, shell = !!cal.shell;
   const ab = new THREE.Group(); ab.position.set(Math.max(.1, size.x * .32), ty + .004, Math.max(.1, size.x * .22)); g.add(ab);
-  const bw = Math.max(.055, size.x * .14);
+  const bw = big ? Math.max(.4, Math.min(2.5, size.x * .08)) : Math.max(.055, size.x * .14);
   const can = new THREE.Mesh(new THREE.BoxGeometry(bw, bw * .55, bw * .6), pmat(shell ? '#7a2a20' : '#3e4a2c', .6, .3)); can.position.y = bw * .275; can.castShadow = true; ab.add(can);
   const lid = new THREE.Mesh(new THREE.BoxGeometry(bw * 1.02, .006, bw * .62), pmat('#2c3420', .5, .4)); lid.position.set(0, bw * .55 + .03, -bw * .32); lid.rotation.x = -1.2; ab.add(lid);
-  for (let i = 0; i < 5; i++) for (let k = 0; k < 3; k++) { const r = G.makeRound(wp.cal); r.rotation.x = -PI / 2; r.position.set((i - 2) * bw * .17, bw * .55 - .004, (k - 1) * bw * .17); ab.add(r); }
+  { const c0 = G.CAL[wp.cal] || { cs: [.03, .005] }, rl = c0.cs[0], fits = rl < bw * .5 && !c0.ball;
+    for (let i = 0; i < 5; i++) for (let k = 0; k < 3; k++) { if (big && k) continue; const r = G.makeRound(wp.cal); if (fits) { r.rotation.x = -PI / 2; r.position.set((i - 2) * bw * .17, bw * .55 - .004, (k - 1) * bw * .17); } else { r.position.set((i - 2) * bw * .2, bw * .55 + c0.cs[1], (k - 1) * bw * .17); r.scale.setScalar(Math.min(1, bw * .9 / Math.max(rl, c0.cs[1] * 2))); } ab.add(r); } }
   const label = document.createElement('canvas'); label.width = 256; label.height = 64; const lx = label.getContext('2d'); lx.fillStyle = '#e8dcb0'; lx.fillRect(0, 0, 256, 64); lx.fillStyle = '#222'; lx.font = 'bold 26px monospace'; lx.textAlign = 'center'; lx.fillText(wp.cal.slice(0, 16), 128, 42);
   const lab = new THREE.Mesh(new THREE.PlaneGeometry(bw * .8, bw * .2), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(label) })); lab.position.set(0, bw * .3, bw * .301); ab.add(lab);
   ab.userData.part = 'box';
@@ -105,6 +107,9 @@ function setup(wp) {
     cyl: rev ? new Array(Math.max(1, Math.round(S.mag))).fill(0) : null, cylIdx: 0, cylOpen: false, cocked: false,
     drag: null, anim: null, tweens: [], cases: [], fireHeld: false, fireT: 0, burstLeft: 0, recoil: 0, flashT: 0, log: [], hover: null,
     rootPos: root.position.clone(), rootRot: root.rotation.clone(), ammo: ab, flash: fl, matTop: ty, hold: CYCLE[type] ? true : false, roundsBox: 0 };
+  B.big = big;
+  B.kind = rig.special === 'break' ? 'break' : rig.boltType === 'musket' ? 'musket' : rig.special === 'falling' ? 'falling' : rig.boltType === 'cannon' ? 'cannon' : rig.boltType === 'chamber' || rig.boltType === 'puckle' ? 'chamber' : rig.special === 'art' ? (rig.boltType === 'mortar' ? 'mortar' : 'breech') : rig.boltType === 'breech' ? 'breech' : rig.boltType === 'hwacha' ? 'hwacha' : rig.boltType === 'gatling' ? 'gatling' : wp.reloadKind === 'caprev' ? 'caprev' : 'std';
+  B.props = [];
   if (wp.id === 'garand' || UI.loadoutFor(wp).mag === 'garand_ping') B.mt = 'enbloc';
   B.tube = B.mt === 'tube' || B.mt === 'tube2' || !!wp.tubeLoad;
   B.selfLoad = !['bolt', 'pump', 'lever'].includes(wp.act) && !(S.modes.length && S.modes.every(m => CYCLE[m]));
@@ -128,7 +133,9 @@ function setup(wp) {
   if (rig.hammer) rig.hammer.userData.part = 'hammer';
   if (feed === 'box' && rig.mag) magToBench(true);
   frame();
-  say(`${wp.n} on the bench — unloaded, safety on.`);
+  say(`${wp.n} on the bench — unloaded${B.kind === 'std' ? ', safety on' : ''}.`);
+  if (B.kind !== 'std') B.safety = false;
+  if (BN.onSetup) BN.onSetup(B, api);
   panel(); head();
 }
 function frame() { if (!B) return; SR.yaw = .32; SR.pitch = .42; SR.dist = SR.fit * UI.stageFit() * 1.08; SR.auto = false; }
@@ -196,6 +203,7 @@ function release() { if (!B.locked) return; B.locked = false; drive(0, .09, () =
 
 // ------------------------------------------------------------------ firing
 function pullTrigger() {
+  { const K = BN.kinds && BN.kinds[B.kind]; if (K && K.trigger) { if (B.rig.trigger) B.rig.trigger.rotation.x = .35; const r = K.trigger(B, api); panel(); return r; } }
   const S = B.S, mode = S.modes[B.mode] || 'semi';
   if (B.rig.trigger) { B.rig.trigger.rotation.x = .35; }
   if (B.safety) { A().mech('dry'); say('Safety is on.'); panel(); return false; }
@@ -240,6 +248,7 @@ function eject(live) {
 
 // ------------------------------------------------------------------ loading from the ammo box
 function loadFromBox(n) {
+  { const K = BN.kinds && BN.kinds[B.kind]; if (K && K.box) { const r = K.box(B, api, n); panel(); return r; } }
   const S = B.S;
   let done = 0;
   for (let i = 0; i < n; i++) {
@@ -288,10 +297,11 @@ function hit(e) {
   const c = G.E.renderer.domElement, rc = c.getBoundingClientRect();
   ndc.set(((e.clientX - rc.left) / rc.width) * 2 - 1, -((e.clientY - rc.top) / rc.height) * 2 + 1);
   ray.setFromCamera(ndc, SR.cam);
-  const objs = [B.root, B.ammo]; if (!B.magIn && B.rig.mag && B.feed === 'box') objs.push(B.rig.mag);
-  const hs = ray.intersectObjects(objs, true);
-  for (const h of hs) { let o = h.object; while (o) { if (o.userData.part) return { part: o.userData.part, obj: o, point: h.point }; if (o === B.root) break; o = o.parent; } }
-  return hs.length && hs[0].object ? { part: null } : null;
+  const objs = [B.root, B.ammo, ...(B.props || [])]; if (!B.magIn && B.rig.mag && B.feed === 'box') objs.push(B.rig.mag);
+  if (BN.extraPick) objs.push(...BN.extraPick());
+  const hs = ray.intersectObjects(objs, true).filter(h => h.object.visible !== false && (!h.object.material || h.object.material.visible !== false || h.object.userData.proxy));
+  for (const h of hs) { let o = h.object; while (o) { if (o.userData.part) return { part: o.userData.part, obj: o, point: h.point, mesh: h.object }; if (o === B.root) break; o = o.parent; } }
+  return hs.length && hs[0].object ? { part: null, mesh: hs[0].object, point: hs[0].point } : null;
 }
 function screenOf(v) { const p = v.clone().project(SR.cam); const c = G.E.renderer.domElement.getBoundingClientRect(); return new THREE.Vector2((p.x + 1) / 2 * c.width, (1 - p.y) / 2 * c.height); }
 function dragAxis(part) { // pixels per unit of travel
@@ -309,7 +319,9 @@ const LABEL = { handle: () => ({ bolt: 'Bolt handle — drag to lift and pull ba
   cyl: () => B.cylOpen ? 'Cylinder — click to close' : 'Cylinder — click to swing out', cover: () => B.coverOpen ? 'Feed cover — click to close' : 'Feed cover — click to open', hammer: () => B.cocked ? 'Hammer (cocked) — click to lower' : 'Hammer — click to cock' };
 function onDown(e) {
   if (UI.screen !== 'bench' || !B || e.target !== G.E.renderer.domElement || e.button !== 0) return;
-  const h = hit(e); if (!h || !h.part) return;
+  const h = hit(e);
+  if (BN.downHook && BN.downHook(e, h, B)) { e.stopPropagation(); e.preventDefault(); return; }
+  if (!h || !h.part) return;
   e.stopPropagation(); e.preventDefault(); G.Audio.init();
   const part = h.part;
   B.press = { part, x: e.clientX, y: e.clientY, moved: 0, t: performance.now() };
@@ -320,6 +332,7 @@ function onDown(e) {
 }
 function onMove(e) {
   if (UI.screen !== 'bench' || !B) return;
+  if (BN.moveHook && BN.moveHook(e, B)) return;
   const tip = $('#btip');
   if (B.press) B.press.moved = Math.max(B.press.moved, Math.hypot(e.clientX - B.press.x, e.clientY - B.press.y));
   if (B.drag) {
@@ -338,11 +351,12 @@ function onMove(e) {
   }
   if (e.target !== G.E.renderer.domElement) { if (tip) tip.style.display = 'none'; return; }
   const h = hit(e); const c = G.E.renderer.domElement;
-  if (h && h.part) { c.style.cursor = h.part === 'handle' || (h.part === 'mag' && B.magIn) ? 'grab' : 'pointer'; if (tip) { tip.textContent = LABEL[h.part](); tip.style.display = 'block'; tip.style.left = (e.clientX + 14) + 'px'; tip.style.top = (e.clientY + 12) + 'px'; } }
+  if (h && h.part) { c.style.cursor = h.part === 'handle' || (h.part === 'mag' && B.magIn) ? 'grab' : 'pointer'; if (tip) { tip.textContent = LABEL[h.part] ? LABEL[h.part]() : ((BN.labelFor && BN.labelFor(h.part, B)) || h.part); tip.style.display = 'block'; tip.style.left = (e.clientX + 14) + 'px'; tip.style.top = (e.clientY + 12) + 'px'; } }
   else { c.style.cursor = ''; if (tip) tip.style.display = 'none'; }
 }
 function onUp(e) {
   if (UI.screen !== 'bench' || !B) return;
+  if (BN.upHook && BN.upHook(e, B)) return;
   const P = B.press; B.press = null; B.fireHeld = false; B.boxHeld = false;
   if (B.rig.trigger) B.rig.trigger.rotation.x = 0;
   const D = B.drag; B.drag = null;
@@ -366,6 +380,7 @@ function onUp(e) {
     panel(); return;
   }
   if (!P || !click) return;
+  { const K = BN.kinds && BN.kinds[B.kind]; if (K && K.click && K.click(P.part, B, api)) { panel(); return; } }
   if (P.part === 'mag' && !B.magIn) { magToGun(); return; }
   if (P.part === 'cyl') { toggleCyl(); return; }
   if (P.part === 'cover') { B.coverOpen = !B.coverOpen; A().mech('cover'); say(B.coverOpen ? 'Feed cover open.' : 'Feed cover closed.'); panel(); return; }
@@ -393,6 +408,7 @@ const r0 = SR.render;
 SR.render = function (dt) { if (UI.screen === 'bench' && B) tick(dt); return r0.call(SR, dt); };
 const track = (a, b, t) => a + (b - a) * t;
 function tick(dt) {
+  if (BN.tickHook) BN.tickHook(dt, B);
   // tweens (magazine moves)
   for (const t of B.tweens.slice()) { t.t += dt / t.dur; const k = Math.min(1, t.t), e = k * k * (3 - 2 * k); t.o.position.lerpVectors(t.p0, t.p1, e); t.o.quaternion.copy(t.q0).slerp(t.q1, e); if (k >= 1) { B.tweens.splice(B.tweens.indexOf(t), 1); if (t.done) t.done(); } }
   // driven action
@@ -430,6 +446,7 @@ function tick(dt) {
 
 // ------------------------------------------------------------------ side panel
 function nextStep() {
+  { const K = BN.kinds && BN.kinds[B.kind]; if (K && K.next) return K.next(B); }
   const f = B.feed;
   if (B.chamber === 1 && B.open < .05 && !B.locked && (!B.rev)) return B.safety ? 'Loaded and ready. Take the safety off (F or the button), then click the trigger.' : 'Loaded. Click the trigger to fire — hold it in Auto.';
   if (B.rev) {
@@ -460,13 +477,15 @@ function nextStep() {
 function panel() {
   if (!B || UI.screen !== 'bench') return;
   const el = $('#bp'); if (!el) return;
+  if (BN.tab && BN.tab !== 'operate' && BN.panelHook) { BN.panelHook(el, B, api); return; }
   const md = B.S.modes[B.mode] || 'semi';
   const ch = B.rev ? `${B.cyl.filter(x => x === 1).length} live / ${B.cyl.filter(x => x === 2).length} spent of ${B.cyl.length}` : ['Empty', 'Live round', 'Spent case'][B.chamber];
   const feed = B.feed === 'box' ? (B.magIn ? `In the gun — ${B.rounds}/${B.cap}` : `On the bench — ${B.rounds}/${B.cap}`) : B.feed === 'belt' ? `${B.rounds}/${B.cap} on the belt${B.rig.cover ? (B.coverOpen ? ' · cover open' : ' · cover closed') : ''}` : B.feed === 'cyl' ? (B.cylOpen ? 'Cylinder open' : 'Cylinder closed') : `${B.rounds}/${B.cap} in the ${B.mt === 'tube' || B.mt === 'tube2' ? 'tube' : B.mt === 'enbloc' ? 'clip' : 'magazine'}`;
   const act = B.locked ? 'Locked open' : B.open > .9 ? 'Open' : B.open > .05 ? 'Part open' : 'Closed';
-  el.innerHTML = `<div class="wsok" style="border-color:var(--brass);color:var(--brass2)"><b>Next:</b> ${esc(nextStep())}</div>
-    <dl class="spec"><div><dt>Chamber</dt><dd>${esc(ch)}</dd></div><div><dt>Feed</dt><dd>${esc(feed)}</dd></div><div><dt>Action</dt><dd>${act}</dd></div><div><dt>Safety</dt><dd>${B.safety ? 'ON' : 'off'}</dd></div><div><dt>Selector</dt><dd>${esc(MODE_N[md] || md)}</dd></div><div><dt>Shots fired</dt><dd>${B.shots || 0}</dd></div></dl>
-    <div class="wsbtns"><button class="btn small ${B.safety ? 'primary' : ''}" id="bs-saf">Safety ${B.safety ? 'ON' : 'off'} (F)</button>${B.S.modes.length > 1 ? `<button class="btn small" id="bs-mode">Selector: ${esc(MODE_N[md] || md)} (B)</button>` : ''}${B.locked ? '<button class="btn small primary" id="bs-rel">Release bolt</button>' : ''}${B.lockback && !B.locked && B.open < .05 ? '<button class="btn small" id="bs-lock" title="Pull back and lock the action open">Lock open</button>' : ''}${!B.handle && !B.rev ? '<button class="btn small" id="bs-cyc">Cycle action</button>' : ''}<button class="btn small" id="bs-fire">Fire</button><button class="btn small" id="bs-clear">Unload all</button></div>
+  const K = BN.kinds && BN.kinds[B.kind], rows = K && K.status ? K.status(B) : [['Chamber', ch], ['Feed', feed], ['Action', act]];
+  el.innerHTML = (BN.tabsHTML ? BN.tabsHTML(B) : '') + `<div class="wsok" style="border-color:var(--brass);color:var(--brass2)"><b>Next:</b> ${esc(nextStep())}</div>
+    <dl class="spec">${rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}${B.kind === 'std' ? `<div><dt>Safety</dt><dd>${B.safety ? 'ON' : 'off'}</dd></div><div><dt>Selector</dt><dd>${esc(MODE_N[md] || md)}</dd></div>` : ''}<div><dt>Shots fired</dt><dd>${B.shots || 0}</dd></div></dl>
+    <div class="wsbtns"><button class="btn small ${B.safety ? 'primary' : ''}" id="bs-saf" ${B.kind !== 'std' ? 'hidden' : ''}>Safety ${B.safety ? 'ON' : 'off'} (F)</button>${B.S.modes.length > 1 ? `<button class="btn small" id="bs-mode">Selector: ${esc(MODE_N[md] || md)} (B)</button>` : ''}${B.locked ? '<button class="btn small primary" id="bs-rel">Release bolt</button>' : ''}${B.lockback && !B.locked && B.open < .05 ? '<button class="btn small" id="bs-lock" title="Pull back and lock the action open">Lock open</button>' : ''}${!B.handle && !B.rev && B.kind === 'std' ? '<button class="btn small" id="bs-cyc">Cycle action</button>' : ''}<button class="btn small" id="bs-fire">Fire</button><button class="btn small" id="bs-clear">Unload all</button></div>
     <div class="lbl" style="padding:8px 16px 0">What happened</div><div style="padding:4px 16px 10px;font-size:13px;line-height:1.5">${B.log.map((l, i) => `<div style="opacity:${1 - i * .12}">${esc(l)}</div>`).join('')}</div>
     <div class="lbl" style="padding:8px 16px 0">How to handle it</div><ul style="margin:4px 0 16px;padding:0 16px 0 32px;font-size:13px;line-height:1.55;color:var(--muted)">
       ${B.feed === 'box' ? '<li><b>Magazine:</b> drag it out of the gun; click it on the bench to put it back.</li>' : ''}
@@ -475,6 +494,8 @@ function panel() {
       ${B.rev ? '<li><b>Cylinder:</b> click to swing it out (empties fall out) or close it.</li>' : ''}${B.rig.cover ? '<li><b>Feed cover:</b> click to open or close.</li>' : ''}${B.rig.hammer ? '<li><b>Hammer:</b> click to cock or lower it.</li>' : ''}
       <li><b>Trigger:</b> click to fire, hold for full auto.</li><li>Drag empty space to turn the gun · wheel to zoom.</li></ul>`;
   const q = s => el.querySelector(s);
+  if (BN.tabsBind) BN.tabsBind(el, B);
+  if (K && K.howto) { const ul = el.querySelector('ul'); if (ul) ul.innerHTML = K.howto(B).map(t => `<li>${t}</li>`).join(''); }
   q('#bs-saf').onclick = toggleSafety;
   if (q('#bs-mode')) q('#bs-mode').onclick = nextMode;
   if (q('#bs-rel')) q('#bs-rel').onclick = release;
@@ -483,6 +504,8 @@ function panel() {
   q('#bs-fire').onclick = () => { pullTrigger(); setTimeout(() => { if (B && B.rig.trigger) B.rig.trigger.rotation.x = 0; }, 120); };
   q('#bs-clear').onclick = () => { if (B.chamber) { eject(B.chamber === 1); B.chamber = 0; } if (B.feed === 'box' && B.magIn) magToBench(false); B.rounds = 0; if (B.cyl) B.cyl.fill(0); B.locked = false; drive(0, .1); say('Gun cleared and unloaded.'); panel(); };
 }
+const api = { say, panel: () => panel(), shoot: () => shoot(), eject: l => eject(l), flyRound: () => flyRound(), tween, setAction: p => setAction(p), drive: (to, d, f) => drive(to, d, f), A, V3, PI, invis, pmat, SR, head: () => head() };
+BN.api = api;
 BN._state = () => B; // for tests
 BN._tick = dt => { if (B) tick(dt); };
 BN._api = { setup, loadFromBox, pullTrigger, rack, release, magToGun, magToBench, toggleCyl, toggleSafety, nextMode, setAction, actionOpened, actionClosed };

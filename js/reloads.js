@@ -89,7 +89,19 @@ function makeItem(kind, w, n) {
   } else if (kind === 'cell') { // psycho-arsenal power cell
     g = new THREE.Group(); const b = new THREE.Mesh(G.geo.gRBox(.035, .07, .05, .006), darkSteel()); b.position.y = -.035; g.add(b);
     const glow = new THREE.Mesh(G.geo.gBox(.037, .012, .03), new THREE.MeshBasicMaterial({ color: '#36d6ff' })); glow.position.y = -.05; g.add(glow);
-  } else g = new THREE.Group();
+  } else if (kind === 'cartridge') { // paper cartridge: powder and ball twisted up in paper
+    g = new THREE.Group(); const pm = G.paperMat || (G.paperMat = new THREE.MeshStandardMaterial({ color: '#d9d0b8', roughness: 1 }));
+    const b = new THREE.Mesh(G.geo.gCyl(.0075, .0075, .06, 8), pm); g.add(b); const t = new THREE.Mesh(G.geo.gCyl(.004, .0075, .012, 8), pm); t.position.z = .036; g.add(t);
+  } else if (kind === 'cap') { g = new THREE.Group(); g.add(new THREE.Mesh(G.geo.gCylY(.0028, .0028, .004, 8), G.copperMat || new THREE.MeshStandardMaterial({ color: '#b5653a', metalness: 1, roughness: .3 }))); }
+  else if (kind === 'flask') { g = new THREE.Group(); const hm = new THREE.MeshStandardMaterial({ color: '#c9b48a', roughness: .5 }); const h = new THREE.Mesh(G.geo.gCyl(.025, .006, .16, 10), hm); g.add(h); const sp = new THREE.Mesh(G.geo.gCyl(.004, .004, .03, 6), G.brassMat || hm); sp.position.z = -.09; g.add(sp); }
+  else if (kind === 'sponge' || kind === 'rammer' || kind === 'worm') { // cannon tools: long staves with a head the size of the bore
+    const bore = (w.wp.m.cal || .1), L = (w.wp.m.L || 1.5) * 1.15; g = new THREE.Group();
+    const st = new THREE.Mesh(G.geo.gCyl(bore * .12, bore * .12, L, 8), new THREE.MeshStandardMaterial({ color: '#7a5a34', roughness: .8 })); st.position.z = L / 2; g.add(st);
+    const hd = new THREE.Mesh(kind === 'sponge' ? G.geo.gCyl(bore * .5, bore * .5, bore * 1.4, 12) : kind === 'worm' ? G.geo.gTor(bore * .3, bore * .05) : G.geo.gCyl(bore * .48, bore * .48, bore * .5, 12), new THREE.MeshStandardMaterial({ color: kind === 'sponge' ? '#3a3a30' : '#6a5030', roughness: 1 })); g.add(hd);
+  } else if (kind === 'bag') { const bore = w.wp.m.cal || .1; g = new THREE.Group(); g.add(new THREE.Mesh(G.geo.gCyl(bore * .47, bore * .47, bore * 1.6, 12), new THREE.MeshStandardMaterial({ color: '#c8b88a', roughness: 1 }))); }
+  else if (kind === 'shot') { g = G.makeRound(cal); }
+  else if (kind === 'part' && n && n.isObject3D) { g = n.clone(true); g.position.set(0, 0, 0); g.rotation.set(0, 0, 0); g.scale.set(1, 1, 1); }
+  else g = new THREE.Group();
   g.traverse(o => { o.frustumCulled = false; if (o.isMesh) o.castShadow = false; });
   return g;
 }
@@ -105,6 +117,7 @@ function classify(w) {
   const wp = w.wp, rig = w.rig, m = wp.m, t = m.t, bh = m.bh || 'none', mt = rig.magType || (m.mag || [])[0] || 'int', id = wp.id;
   const ord = G.ERA[wp.home || wp.e] ? G.ERA[wp.home || wp.e].ord : 4;
   const fixed = rig.magFixed || !rig.mag;
+  if (wp.reloadKind) return wp.reloadKind === 'gatling' ? 'mag' : wp.reloadKind;
   if (wp.enbloc || id === 'garand' || id === 'm1c') return 'garand';
   if (rig.boltType === 'rev' || mt === 'cyl' || t === 'rev') return 'rev';
   if (MANNLICHER.includes(id)) return 'mannlicher';
@@ -143,7 +156,7 @@ function magStyle(w) {
 // ------------------------------------------------------------------ the reload
 G.Player.prototype.reloadAnim = function (w, empty) {
   const P = this, rig = w.rig, wp = w.wp, S = w.S, m = wp.m;
-  const RW = m.R[2], RH = m.R[1], RL = m.R[0], zr = rig.zr, zf = rig.zf, top = rig.top, bot = rig.bot;
+  const R0 = m.R || [.2, .05, .04], RW = R0[2], RH = R0[1], RL = R0[0], zr = rig.zr, zf = rig.zf, top = rig.top, bot = rig.bot;
   const ord = G.ERA[wp.home || wp.e] ? G.ERA[wp.home || wp.e].ord : 4;
   const h = hash(wp.id), h2 = hash(wp.id + 'b');
   const need = S.mag - w.mag;
@@ -586,6 +599,210 @@ G.Player.prototype.reloadAnim = function (w, empty) {
     toPose(.22, POSE.rest, { lw: 0 });
   };
 
+  // ===== muzzle-loaders: the full drill with the gun's own ramrod
+  const rodL = rig.rodLen || .9, mzZ = rig.muzzleZ || -1, boreY = rig.muzzleY || .005;
+  const rodDraw = (d) => { // draw the rammer out of its pipes, turn it and enter the muzzle
+    q.go(d * .2, { lrod: 1 }); q.at(snd('slide'));
+    q.go(d * .3, { rdz: -rodL * .98 });
+    q.go(d * .25, { rdy: .06, rdz: -rodL - .12, rdf: 1 });
+    q.go(d * .25, { rdy: boreY, rdz: mzZ - rodL * .97 - .02 });
+  };
+  const ram = (n, d) => { const deep = mzZ - rodL * .97 + Math.abs(mzZ) - .06; for (let i = 0; i < n; i++) { q.go(d * .55, { rdz: deep }); q.at(snd('boltfwd')); q.go(d * .45, { rdz: deep - .12 }); } q.go(d * .3, { rdz: deep }); };
+  const rodReturn = (d) => { q.go(d * .3, { rdz: mzZ - rodL * .97 - .05 }); q.go(d * .3, { rdy: .06, rdz: -rodL - .12, rdf: 0 }); q.go(d * .25, { rdy: -.018, rdz: -rodL * .98 }); q.go(d * .25, { rdz: 0 }); q.at(snd('slide')); q.go(.1, { lrod: 0 }); };
+  const muzzleLoad = () => {
+    const lockK = m.lock || (wp.c === 'PST' ? 'flint' : 'flint'), pst = wp.c === 'PST';
+    const MOUTH = V3(-.06, .12, .3), PAN = rig.panPos ? rig.panPos.clone() : V3(.02, .01, -.02);
+    // stand the gun on its butt: muzzle just under the chin so you look down into it
+    const ra = pst ? 1.0 : 1.4, D = Math.abs(mzZ) + .4, yUp = D * Math.sin(ra) - .13 * Math.cos(ra);
+    const UPR = { px: -.1, py: -yUp - .06, pz: -.05, rx: ra, ry: .1, rz: .1 };
+    toPose(.3, POSE.strip, { lw: 1, ...vec(hg) });
+    // half-cock; open the pan (or blow on the match / wind the wheel / take a cap)
+    q.at(snd('boltup')); q.go(.12, { hm: .35 });
+    if (lockK === 'flint' || lockK === 'match' || lockK === 'wheel') { handTo(.18, PAN.clone().add(V3(.02, .02, 0))); q.go(.1, { fz: 1 }); q.at(snd('cover')); }
+    if (lockK === 'wheel') { q.go(.35, { whl: 3 }); q.at(snd('mode')); }
+    // tear the cartridge with the teeth, prime the pan
+    fetch(wp.act === 'muzzle' && (G.CAL[wp.cal] || {}).paper ? 'cartridge' : 'cartridge', 1, V3(0, 0, .02));
+    q.go(.28, { ...vec(MOUTH.clone().sub(V3(0, 0, .02)), 'i'), irx: -.8 }); q.at(snd('cover'));
+    if (lockK !== 'cap') { q.go(.25, { ...vec(PAN.clone().add(V3(.015, .03, 0)), 'i'), irx: .9 }); q.wait(.12); q.go(.1, { fz: 0 }); q.at(snd('cover')); }
+    // stand the gun up and charge the barrel: powder, ball and paper down the muzzle
+    toPose(.35, UPR);
+    q.go(.3, { ...vec(V3(0, boreY + .03, mzZ - .03), 'i'), irx: 1.5 }); q.wait(.25); q.at(snd('belt'));
+    q.go(.12, vec(V3(0, boreY, mzZ + .02), 'i')); q.at(() => { if (C.item) C.item.visible = false; }); q.set({ iv: 0, lf: 0, ...vec(V3(0, boreY, mzZ - .02).add(V3(0, 0, .02))) });
+    // the ramrod
+    if (rig.rod) { rodDraw(1.1); ram(m.rifled ? 3 : 2, .45); q.at(() => fill()); rodReturn(.9); } else { q.wait(.4); q.at(() => fill()); }
+    // caps go on last, at full cock
+    toPose(.3, POSE.strip);
+    if (lockK === 'cap') { fetch('cap', 1, V3(0, .006, 0)); q.go(.25, vec(PAN.clone().add(V3(0, .006, 0)), 'i')); q.at(() => { if (C.item) C.item.visible = false; }); q.at(snd('magin')); q.set({ iv: 0, lf: 0, ...vec(PAN.clone().add(V3(0, .012, 0))) }); }
+    handTo(.15, PAN.clone().add(V3(.02, .04, .04))); q.go(.12, { hm: 1 }); q.at(snd('boltback')); q.go(.08, { hm: 0 });
+    toPose(.3, POSE.rest, { lw: 0 });
+  };
+  // ===== cannon drill: worm and sponge, cartridge, shot, ram, prick and prime the vent
+  const cannonLoad = () => {
+    const bore = m.cal || .1, L = m.L || 1.5, mz = rig.muzzleZ != null ? rig.muzzleZ / (rig.vmScale || 1) : -L;
+    const M = V3(0, 0, -L), T = { px: -.04, py: .06, pz: -.05, rx: .12, ry: .45, rz: .05 };
+    toPose(.4, T, { lw: 1 });
+    const tool = (k, d, twist) => { q.at(setItem(k)); q.set({ ...vec(M.clone().add(V3(bore * 3, 0, -L * .2)), 'i'), irx: 0, iry: PI, irz: 0, iv: 1, lf: 0 }); q.go(d * .3, vec(M.clone().add(V3(0, 0, -bore * .5)), 'i')); q.go(d * .3, { iz: M.z + L * .85 }); if (twist) { q.go(d * .1, { irz: 3 }); q.at(snd('cover')); } q.go(d * .3, { iz: M.z - bore * .5, irz: 0 }); q.at(() => { if (C.item) C.item.visible = false; }); q.set({ iv: 0 }); };
+    tool('worm', 1.2, true); tool('sponge', 1.3, true);
+    const load = (k) => { q.at(setItem(k)); q.set({ ...vec(M.clone().add(V3(bore * 4, -bore * 2, -.3)), 'i'), irx: 0, iry: 0, irz: 0, iv: 1, lf: 0 }); q.go(.5, vec(M.clone().add(V3(0, 0, -bore)), 'i')); q.go(.15, vec(M.clone().add(V3(0, 0, bore * .5)), 'i')); q.at(snd('magin')); q.set({ iv: 0, lf: 0 }); };
+    if (!(G.CAL[wp.cal] || {}).stone || true) load('bag');
+    load('shot');
+    q.at(setItem('rammer')); q.set({ ...vec(M.clone().add(V3(bore * 3, 0, -L * .2)), 'i'), irx: 0, iry: PI, irz: 0, iv: 1, lf: 0 });
+    q.go(.4, vec(M.clone().add(V3(0, 0, -bore * .5)), 'i')); q.go(.5, { iz: M.z + L * .85 }); q.at(snd('boltfwd')); q.go(.2, { iz: M.z + L * .7 }); q.go(.2, { iz: M.z + L * .85 }); q.at(snd('boltfwd')); q.at(() => fill());
+    q.go(.4, { iz: M.z - bore * .5 }); q.at(() => { if (C.item) C.item.visible = false; }); q.set({ iv: 0, lf: 0 });
+    // prick the cartridge through the vent and prime it
+    const V = rig.ventPos ? rig.ventPos.clone() : V3(0, bore, 0);
+    handTo(.4, V.clone().add(V3(0, .05, 0))); q.go(.12, { ly: V.y + .01 }); q.at(snd('mode')); q.go(.12, { ly: V.y + .05 });
+    q.at(snd('belt')); q.wait(.2);
+    toPose(.35, POSE.rest, { lw: 0 });
+  };
+  // ===== breech-loading artillery: open the breech, eject the case, load shell (and bags), ram, close
+  const breechLoad = () => {
+    const bore = m.cal || .1, s0 = rig.vmScale || 1;
+    const B = V3(0, 0, bore * .3), crate = V3(-bore * 6 - .2, -bore * 4, bore * 4);
+    const T = { px: -.03, py: .05, pz: .02, rx: .1, ry: .35, rz: .05 };
+    const cased = !(G.CAL[wp.cal] || {}).bag;
+    toPose(.3, T, { lw: 1 });
+    if (rig.breech) { handTo(.25, B.clone().add(V3(bore * 1.6, bore * .6, 0))); q.go(.3, rig.breechSlide ? { brx: bore * 2.6 } : { brr: 1.2 }); q.at(snd('boltback')); if (cased) q.at(() => P.ejectCasing()); }
+    else if (m.kind === 'recoilless') { handTo(.25, V3(bore, 0, bore * 2)); q.go(.3, { brr: 1.4 }); q.at(snd('boltback')); }
+    // the shell from the ammunition crate (fixed rounds carry their own case)
+    q.at(setItem('shot')); GI(V3(bore * .5, 0, 0)); q.set({ ...vec(crate, 'i'), irx: 0, iry: 0, irz: 0, iv: 1, lf: 1 });
+    q.go(.55, vec(B.clone().add(V3(0, bore * .2, bore * 6)), 'i'));
+    q.go(.3, vec(B.clone().add(V3(0, 0, -bore * 1.5)), 'i')); q.at(snd('magin'));
+    q.at(() => { if (C.item) C.item.visible = false; fill(1); }); q.set({ iv: 0, lf: 0, ...vec(B.clone().add(V3(bore * .5, 0, -bore * 1.5))) });
+    if (!cased) { q.at(setItem('bag')); GI(V3(bore * .5, 0, 0)); q.set({ ...vec(crate, 'i'), irx: 0, iry: 0, irz: 0, iv: 1, lf: 1 }); q.go(.45, vec(B.clone().add(V3(0, 0, bore * 3)), 'i')); q.go(.2, vec(B.clone().add(V3(0, 0, -bore)), 'i')); q.at(snd('belt')); q.at(() => { if (C.item) C.item.visible = false; }); q.set({ iv: 0, lf: 0 }); }
+    if (rig.breech || m.kind === 'recoilless') { handTo(.2, B.clone().add(V3(bore * 1.6, bore * .6, 0))); q.go(.18, { brx: 0, brr: 0 }); q.at(snd('boltfwd')); }
+    q.at(() => fill());
+    toPose(.3, POSE.rest, { lw: 0 });
+  };
+  // ===== mortars: hang the bomb over the muzzle, let go, duck
+  const mortarLoad = () => {
+    const bore = m.cal || .08, mzP = V3(0, rig.muzzleY / (rig.vmScale || 1), rig.muzzleZ / (rig.vmScale || 1));
+    const T = { px: -.02, py: -.02, pz: -.04, rx: -.15, ry: .2, rz: .05 };
+    toPose(.3, T, { lw: 1 });
+    fetch('shot', 1, V3(0, -bore * .2, bore * 2.2));
+    q.go(.5, { ...vec(mzP.clone().add(V3(0, bore * 3.5, 0)), 'i'), irx: -1.5 });
+    q.go(.15, vec(mzP.clone().add(V3(0, bore * 1.2, 0)), 'i')); q.at(snd('belt'));
+    q.go(.12, vec(mzP.clone().add(V3(0, -bore * .5, bore * .4)), 'i')); q.at(() => { if (C.item) C.item.visible = false; fill(); }); q.set({ iv: 0, lf: 0, ...vec(mzP.clone().add(V3(0, bore * 1.5, 0))) });
+    handTo(.25, mzP.clone().add(V3(-bore * 4, -bore * 2, bore * 6))); toPose(.2, { px: -.02, py: -.08, pz: .02, rx: -.3, ry: .25, rz: .05 }); q.wait(.15);
+    toPose(.3, POSE.rest, { lw: 0 });
+  };
+  // ===== break-actions: top lever, barrels drop, ejectors kick the shells out, two in, snap shut
+  const breakLoad = () => {
+    const nb = Math.max(1, Math.round(S.mag)), pst = wp.c === 'PST';
+    const brA = rig.brkOpen || -.6, breechF = V3(0, .03, -.05);
+    toPose(.22, pst ? POSE.pistol : { px: -.03, py: .07, pz: .03, rx: .25, ry: .15, rz: -.25 }, { lw: 1 });
+    q.at(snd('boltup')); q.go(.1, { tlv: .6 });
+    q.go(.16, { brk: 1 }); q.at(snd('cover'));
+    q.at(() => { const n = Math.min(nb, S.mag - w.mag + (empty ? 0 : 0)); for (let i = 0; i < Math.max(1, nb - w.mag); i++) setTimeout(() => P.ejectCasing(), i * 30); w.reserve += w.mag; w.mag = 0; P.hudDirty = true; });
+    q.go(.06, { tlv: 0 });
+    for (let i = 0; i < nb; i += 2) {
+      const k = Math.min(2, nb - i);
+      fetch('loose', k, V3(0, .006, .03), { irx: 0 }, .22);
+      const bp = breechF.clone().add(V3(0, Math.sin(-brA) * .02, .06));
+      q.go(.28, vec(bp.clone().add(V3(0, .03, .02)), 'i')); q.go(.08, vec(bp, 'i'));
+      q.at(() => { if (C.item) C.item.visible = false; fill(k); }); q.at(snd('shell')); q.set({ iv: 0, lf: 0, ...vec(bp.clone().add(V3(0, .006, .03))) });
+    }
+    q.go(.12, { brk: 0, ...vec(hg) }); q.at(snd('boltfwd'));
+    toPose(.22, POSE.rest, { lw: 0 });
+  };
+  // ===== single-shot breechloaders: open the block, extract, cartridge in, close (prime the pan on flintlock breechloaders)
+  const fallingLoad = () => {
+    const fk = rig.fkind || 'martini', flint = !!wp.lock;
+    const BR = V3(0, .02, -.01);
+    toPose(.22, POSE.strip, { lw: 1 });
+    if (rig.hammer && (fk === 'trapdoor' || fk === 'rolling' || fk === 'sharps' || flint)) { handTo(.15, V3(.012, .04, .05)); q.go(.1, { hm: .4 }); q.at(snd('boltup')); }
+    if (fk === 'martini' || fk === 'sharps') { handTo(.15, V3(0, -.06, .08)); q.go(.14, { flv: 1, brr: fk === 'martini' ? .5 : 0, bry: fk === 'sharps' ? -.03 : 0 }); }
+    else if (fk === 'trapdoor') { handTo(.15, V3(0, .04, .02)); q.go(.14, { brr: -1.6 }); }
+    else if (fk === 'snider') { handTo(.15, V3(.02, .02, .02)); q.go(.14, { bryaw: 1.6 }); }
+    else if (fk === 'rolling') { q.go(.14, { brr: .9 }); }
+    else if (fk === 'screw') { handTo(.15, V3(0, -.05, .04)); q.go(.3, { bry: -.04 }); }
+    else if (fk === 'tipup') { handTo(.15, V3(0, .03, .03)); q.go(.14, { brr: -.5 }); }
+    q.at(snd('boltback')); if (!flint) q.at(() => P.ejectCasing());
+    fetch(flint ? 'shot' : 'round', 1, V3(0, .008, .02));
+    q.go(.28, vec(BR.clone().add(V3(0, .03, .02)), 'i')); q.go(.1, vec(BR.clone().add(V3(0, 0, -.03)), 'i'));
+    q.at(() => { if (C.item) C.item.visible = false; fill(1); }); q.at(snd('magin')); q.set({ iv: 0, lf: 0, ...vec(BR.clone().add(V3(0, .01, 0))) });
+    if (flint) { fetch('cartridge', 1, V3(0, 0, .02)); q.go(.2, vec(BR.clone().add(V3(0, .04, 0)), 'i')); q.wait(.12); q.at(() => { if (C.item) C.item.visible = false; }); q.set({ iv: 0, lf: 0 }); }
+    q.go(.14, { flv: 0, brr: 0, bry: 0, bryaw: 0 }); q.at(snd('boltfwd'));
+    if (rig.hammer) { q.go(.1, { hm: 1 }); q.at(snd('boltup')); q.go(.06, { hm: 0 }); }
+    toPose(.22, POSE.rest, { lw: 0 });
+  };
+  // ===== cap-and-ball revolvers: powder, ball and lever-ram each chamber, then a cap on every nipple
+  const capRev = () => {
+    const n = Math.max(1, Math.round(S.mag)), cylP = rig.cyl ? rig.cyl.position.clone() : V3(0, RH * .1, -.022);
+    const FRONT = cylP.clone().add(V3(0, .006, -.03)), BACK = cylP.clone().add(V3(0, .006, .028));
+    toPose(.3, POSE.revOpen, { lw: 1 }); q.at(snd('boltup')); q.go(.1, { hm: .3 });
+    const k = Math.min(n, Math.max(1, S.mag - w.mag));
+    for (let i = 0; i < k; i++) {
+      q.go(.08, { cyr: (i + 1) * 2 * PI / n }); q.at(snd('mode'));
+      fetch('flask', 1, V3(0, 0, .06), { irx: .6 }, .15); q.go(.15, vec(FRONT.clone().add(V3(0, .04, -.05)), 'i')); q.wait(.08); q.at(snd('belt'));
+      q.at(setItem('round')); q.set({ ...vec(FRONT.clone().add(V3(0, .03, -.02)), 'i'), irx: 0, iv: 1 }); GI(V3(0, .01, .01)); q.go(.12, vec(FRONT, 'i'));
+      q.at(() => { if (C.item) C.item.visible = false; fill(1); }); q.set({ iv: 0, lf: 0, ...vec(FRONT.clone().add(V3(0, -.03, .02))) }); q.go(.1, { ly: FRONT.y - .05 }); q.at(snd('boltfwd')); // loading lever
+    }
+    for (let i = 0; i < k; i++) { fetch('cap', 1, V3(0, .004, 0), {}, .12); q.go(.1, vec(BACK.clone().add(V3(0, .006, 0)), 'i')); q.at(() => { if (C.item) C.item.visible = false; }); q.at(snd('magin')); q.set({ iv: 0, lf: 0 }); q.go(.05, { cyr: (k + i + 1) * 2 * PI / n }); }
+    toPose(.3, POSE.rest, { lw: 0, hm: 0 });
+  };
+  // ===== swap a pre-loaded chamber (swivel gun) or cylinder (Puckle gun)
+  const chamberSwap = () => {
+    const part = rig.breech || rig.drum; if (!part) return cell();
+    const home0 = part.position.clone(), up = V3(0, .2, .15);
+    toPose(.3, POSE.side, { lw: 1 });
+    handTo(.2, home0.clone().add(V3(0, .05, 0))); q.at(snd('cover'));
+    q.go(.3, { ...vec(up, 'br') }); q.at(snd('magout'));
+    q.go(.25, { ...vec(up.clone().add(V3(-.3, -.3, .2)), 'br') }); q.set({ brv: 0 });
+    q.at(setItem('part', part)); GI(V3(0, .05, 0)); q.set({ ...vec(home0.clone().add(V3(-.3, -.1, .35)), 'i'), irx: 0, iry: 0, irz: 0, iv: 1, lf: 1 });
+    q.go(.4, vec(home0.clone().add(up), 'i')); q.go(.25, vec(home0, 'i')); q.at(snd('magin'));
+    q.at(() => { if (C.item) C.item.visible = false; fill(); }); q.set({ iv: 0, lf: 0, brv: 1, brx: 0, bry: 0, brz: 0, ...vec(home0.clone().add(V3(0, .05, 0))) });
+    q.go(.1, { ly: home0.y + .02 }); q.at(snd('boltfwd')); q.go(.1, { ly: home0.y + .06 }); q.at(snd('boltfwd')); // wedge hammered home
+    toPose(.3, POSE.rest, { lw: 0 });
+  };
+  // ===== Armstrong screw breech
+  const screwBreech = () => {
+    const bore = m.cal || .076, B = rig.breech ? rig.breech.position.clone() : V3(0, 0, .1);
+    toPose(.3, { px: -.03, py: .05, pz: .02, rx: .1, ry: .35, rz: .05 }, { lw: 1 });
+    handTo(.2, B.clone().add(V3(bore, 0, .03))); q.go(.4, { brr2: 6, brz: .06 }); q.at(snd('boltback'));
+    q.at(setItem('shot')); GI(V3(bore * .5, 0, 0)); q.set({ ...vec(B.clone().add(V3(-.3, -.2, .3)), 'i'), irx: 0, iry: 0, irz: 0, iv: 1, lf: 1 });
+    q.go(.45, vec(B.clone().add(V3(0, 0, .1)), 'i')); q.go(.2, vec(B.clone().add(V3(0, 0, -.15)), 'i')); q.at(snd('magin')); q.at(() => { if (C.item) C.item.visible = false; fill(); }); q.set({ iv: 0, lf: 0 });
+    handTo(.2, B.clone().add(V3(bore, 0, .03))); q.go(.4, { brr2: 0, brz: 0 }); q.at(snd('boltfwd'));
+    toPose(.3, POSE.rest, { lw: 0 });
+  };
+  // ===== ammunition clips into an automatic cannon's feed guides (Bofors, Flak, naval mounts)
+  const clipFeed = () => {
+    const bore = m.cal || .04, per = Math.min(10, Math.max(1, wp.id === 'bofors40' ? 4 : Math.round(S.mag / 4))), n = Math.min(4, Math.ceil(need / per));
+    const G0 = V3(0, bore * 4, bore * 2);
+    toPose(.3, { px: -.03, py: .05, pz: .02, rx: .05, ry: .3, rz: .1 }, { lw: 1 });
+    for (let i = 0; i < n; i++) {
+      q.go(.2, { ...vec(G0.clone().add(V3(-bore * 6, -bore * 4, bore * 4))), lf: 0 });
+      q.at(setItem('clip', Math.min(per, 6))); GI(V3(0, bore * 3, 0)); q.set({ ...vec(G0.clone().add(V3(-bore * 6, -bore * 7, bore * 4)), 'i'), irx: 0, iry: 0, irz: 0, iv: 1, irn: 99, lf: 1 });
+      q.go(.4, vec(G0.clone().add(V3(0, bore * 2, 0)), 'i')); q.go(.15, vec(G0, 'i')); q.at(snd('magin'));
+      q.at(() => { if (C.item) C.item.visible = false; fill(i === n - 1 ? undefined : per); }); q.set({ iv: 0, lf: 0, ...vec(G0.clone().add(V3(0, bore * 3, 0))) });
+    }
+    toPose(.3, POSE.rest, { lw: 0 });
+  };
+  // ===== Hwacha / Congreve: arrows into the rack, fuses lit later
+  const arrows = () => {
+    const n = Math.min(4, Math.max(1, Math.ceil(need / 25)));
+    toPose(.3, POSE.side, { lw: 1 });
+    for (let i = 0; i < n; i++) { fetch('loose', 5, V3(0, .02, .4), { irx: .35 }, .3); q.go(.45, vec(V3(-.2 + i * .12, .1, -.1), 'i')); q.go(.2, vec(V3(-.2 + i * .12, .05, -.4), 'i')); q.at(snd('belt')); q.at(() => { if (C.item) C.item.visible = false; fill(i === n - 1 ? undefined : 25); }); q.set({ iv: 0, lf: 0 }); }
+    toPose(.3, POSE.rest, { lw: 0 });
+  };
+  // ===== Girandoni air rifle: balls poured into the side magazine, a fresh reservoir screwed on
+  const airLoad = () => {
+    toPose(.3, POSE.port, { lw: 1 });
+    const port = V3(.02, .01, -.08);
+    fetch('loose', 6, V3(0, .01, .02), { iry: PI / 2 }, .2); q.go(.35, vec(port.clone().add(V3(.02, .04, 0)), 'i')); q.go(.3, { iy: port.y }); q.at(snd('belt')); q.at(() => { if (C.item) C.item.visible = false; fill(); }); q.set({ iv: 0, lf: 0 });
+    fetch('cell', 1, V3(0, -.02, 0), {}, .2); q.go(.35, vec(V3(0, -.04, .42), 'i')); q.go(.3, { irz: 4 }); q.at(snd('magin')); q.at(() => { if (C.item) C.item.visible = false; }); q.set({ iv: 0, lf: 0 });
+    toPose(.3, POSE.rest, { lw: 0 });
+  };
+  // ===== Spencer: pull the magazine tube out of the butt, drop in seven, push it home
+  const buttLoad = () => {
+    const BT = rig.stockEnd ? rig.stockEnd.clone() : V3(0, -.04, .42);
+    toPose(.3, { px: -.03, py: .1, pz: .06, rx: -.3, ry: .25, rz: -.3 }, { lw: 1 });
+    handTo(.2, BT.clone().add(V3(0, -.02, .02))); q.go(.2, { lz: BT.z + .12 }); q.at(snd('magout'));
+    fetch('loose', 7, V3(0, .01, .02), { irx: 1.4 }, .2); q.go(.35, vec(BT.clone().add(V3(0, 0, .05)), 'i')); q.go(.2, { iz: BT.z - .05 }); q.at(snd('belt')); q.at(() => { if (C.item) C.item.visible = false; fill(); }); q.set({ iv: 0, lf: 0 });
+    handTo(.2, BT.clone().add(V3(0, -.02, .12))); q.go(.2, { lz: BT.z + .01 }); q.at(snd('magin'));
+    toPose(.3, POSE.rest, { lw: 0 });
+  };
+
   // ----- pick and build
   let fixedDur = false;
   if (kind === 'mag') magReload();
@@ -595,6 +812,19 @@ G.Player.prototype.reloadAnim = function (w, empty) {
   else if (kind === 'garand') garand();
   else if (kind === 'tube' || kind === 'single') { if (!singles()) return { dur: .1, fn: () => {}, ev: [], end: null }; fixedDur = true; }
   else if (kind === 'rev') revolver();
+  else if (kind === 'muzzle') muzzleLoad();
+  else if (kind === 'cannon') cannonLoad();
+  else if (kind === 'breech') breechLoad();
+  else if (kind === 'mortar') mortarLoad();
+  else if (kind === 'break') breakLoad();
+  else if (kind === 'falling') fallingLoad();
+  else if (kind === 'caprev') capRev();
+  else if (kind === 'chamber') chamberSwap();
+  else if (kind === 'screwbreech') screwBreech();
+  else if (kind === 'clip') clipFeed();
+  else if (kind === 'hwacha') arrows();
+  else if (kind === 'air') airLoad();
+  else if (kind === 'butt') buttLoad();
   else if (kind === 'belt') belt();
   else if (kind === 'pan') pan();
   else if (kind === 'p90') p90();
@@ -635,6 +865,20 @@ G.Player.prototype.reloadAnim = function (w, empty) {
     if (rig.slide && has('sl')) { rig.slide.position.z = (c.sl || 0) * (rig.slideStroke || .02); if (rig.toggleR) { const th = Math.acos(Math.max(-1, 1 - rig.slide.position.z / .064)); rig.toggleR.rotation.x = th; rig.toggleF.rotation.x = -2 * th; } }
     if (rig.cover && has('cov')) rig.cover.rotation.x = -1.3 * (c.cov || 0);
     if (cyl && (has('cy') || has('cyr') || has('brk'))) { cyl.position.x = -.045 * (c.cy || 0); cyl.position.y = (cyl.userData.y0 ?? (cyl.userData.y0 = cyl.position.y)) - (c.brk || 0) * .012; cyl.rotation.z = (c.cyr || 0); cyl.rotation.x = -(c.brk || 0) * .5; }
+    if (rig.rod && (has('rdz') || has('rdf'))) { rig.rod.position.set(0, c.rdy ?? -.018, c.rdz || 0); rig.rod.rotation.y = PI * (c.rdf || 0); }
+    if (rig.hammer && has('hm')) rig.hammer.rotation.x = -(c.hm || 0) * .9;
+    if (rig.frizzen && has('fz')) rig.frizzen.rotation.x = -(c.fz || 0) * 1.1;
+    if (rig.wheel && has('whl')) rig.wheel.rotation.x = (c.whl || 0) * 2 * PI;
+    if (rig.brk && has('brk')) rig.brk.rotation.x = (rig.brkOpen || -.6) * (c.brk || 0);
+    if (rig.toplever && has('tlv')) rig.toplever.rotation.y = c.tlv || 0;
+    if (rig.flever && has('flv')) rig.flever.rotation.x = (c.flv || 0) * .9;
+    const BRK = rig.breech || rig.drum;
+    if (BRK && (has('brx') || has('bry') || has('brz') || has('brr') || has('brr2') || has('bryaw') || has('brv'))) {
+      const h0 = BRK.userData.home || (BRK.userData.home = { p: BRK.position.clone(), r: BRK.rotation.clone() });
+      BRK.position.set(h0.p.x + (c.brx || 0), h0.p.y + (c.bry || 0), h0.p.z + (c.brz || 0));
+      BRK.rotation.set(h0.r.x + (c.brr || 0), h0.r.y + (c.bryaw || 0), h0.r.z + (c.brr2 || 0));
+      BRK.visible = (c.brv ?? 1) > .5;
+    }
     if (rig.lever && has('lev')) { rig.lever.rotation.x = (c.lev || 0) * .9; if (rig.bolt) rig.bolt.position.z = (c.lev || 0) * (rig.boltStroke || .05); }
     if (rig.pump && has('pmp')) { rig.pump.position.z = (c.pmp || 0) * .085; if (rig.bolt) rig.bolt.position.z = (c.pmp || 0) * .07; }
     if (rig.bolt && has('crk')) rig.bolt.rotation.x = (c.crk || 0) * 2 * PI;
@@ -643,6 +887,7 @@ G.Player.prototype.reloadAnim = function (w, empty) {
     if (c.lm > 0 && mag) p.lerp(mag.position.clone().add((C.grabM || V3(0, -.07, 0)).clone().applyEuler(new THREE.Euler(c.mrx || 0, c.mry || 0, c.mrz || 0))), Math.min(1, c.lm));
     if (c.lf > 0 && it) p.lerp(it.position.clone().add(C.grabI || V3(0, -.05, 0)), Math.min(1, c.lf));
     if (c.lk > 0) p.lerp(handlePos(c), Math.min(1, c.lk));
+    if (c.lrod > 0 && rig.rod) p.lerp(V3(0, (c.rdy ?? -.018) + .012, (c.rdz || 0) + ((c.rdf || 0) > .5 ? -.04 : -.02 - rodL * .02)), Math.min(1, c.lrod));
     if (c.lcy > 0 && C.cylPos) p.lerp(C.cylPos(c).add(V3(-.025, -.01, 0)), Math.min(1, c.lcy));
     P.lhOverride = { w: Math.min(1, c.lw || 0), p: p.clone(), rot: 0 };
   };
@@ -657,6 +902,9 @@ G.Player.prototype.reloadAnim = function (w, empty) {
     if (rig.bolt && has('crk')) rig.bolt.rotation.x = 0;
     if (rig.bolt && rig.boltType === 'reciprocate') rig.bolt.position.z = 0;
     if (rig.slide) rig.slide.position.z = 0;
+    if (rig.rod) { rig.rod.position.set(0, -.018, 0); rig.rod.rotation.y = 0; }
+    if (rig.hammer && (has('hm'))) rig.hammer.rotation.x = 0; if (rig.frizzen) rig.frizzen.rotation.x = 0; if (rig.brk) rig.brk.rotation.x = 0; if (rig.toplever) rig.toplever.rotation.y = 0; if (rig.flever) rig.flever.rotation.x = 0;
+    { const BRK = rig.breech || rig.drum; if (BRK && BRK.userData.home) { BRK.position.copy(BRK.userData.home.p); BRK.rotation.copy(BRK.userData.home.r); BRK.visible = true; } }
     if (cyl) { cyl.position.x = 0; cyl.rotation.x = 0; if (cyl.userData.y0 !== undefined) cyl.position.y = cyl.userData.y0; }
     w.slideLock = false;
     if (end0) end0();
