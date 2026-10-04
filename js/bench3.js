@@ -1441,5 +1441,5 @@ const show0 = UI.show;
 UI.show = function (name) { if (name !== 'bench') { BN.cyc2 = null; selKey = null; BN.api.SR.benchTgt = null; BN.api.SR.dist0 = null; } return show0.call(UI, name); };
 const os0 = BN.onSetup;
 BN.onSetup = (B, api) => { BN.cyc2 = null; selKey = null; if (BN.api.SR.benchTgt) { BN.api.SR.benchTgt = null; BN.api.SR.dist0 = null; } return os0(B, api); };
-BN.v2 = { msOfT: (B, t) => msAt(cycleInfo(B).map, t), closeUp, build2, kin, kinManual, FAM, PH, msMap, startCycle, stopCycle, animate, malP, setMal, PI_ };
+BN.v2 = { select: (B, key) => { selKey = key; highlightSel(B); }, msOfT: (B, t) => msAt(cycleInfo(B).map, t), closeUp, build2, kin, kinManual, FAM, PH, msMap, startCycle, stopCycle, animate, malP, setMal, PI_ };
 })();
