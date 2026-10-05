@@ -217,16 +217,31 @@ G.periodOf = y => y < 1700 ? 'Before 1700' : y < 1800 ? '1700s' : y < 1850 ? '18
 G.armoryTypes = () => G.TYPE_ORDER.map(id => { const ws = G.WEAPONS.filter(w => G.typeOf(w) === id); const ys = ws.map(w => w.y || 0); return { id, name: G.TYPE_NAMES[id] || G.CLASS_NAMES[id] || id, n: ws.length, y0: Math.min(...ys), y1: Math.max(...ys) }; }).filter(t => t.n || t.id === 'CUSTOM');
 function renderArmory(root) {
   G.Game.mode = 'menu';
-  // the armory is split by weapon type; each type runs from its oldest gun down to its newest
-  const TYPES = G.armoryTypes();
-  { const w0 = G.WEAPON[UI.sel.wp]; if (w0 && G.typeOf(w0) !== UI.sel.type) UI.sel.type = G.typeOf(w0); }
-  if (!TYPES.some(t => t.id === UI.sel.type && t.n)) UI.sel.type = 'AR';
-  const type = UI.sel.type, inType = G.WEAPONS.filter(w => G.typeOf(w) === type).sort((a, b) => type === 'PSY' && a.psy !== b.psy ? (a.psy === 'overkill') - (b.psy === 'overkill') : G.byAge(a, b));
-  let wp = G.WEAPON[UI.sel.wp];
-  if (!wp || G.typeOf(wp) !== type) { wp = inType[0]; UI.sel.wp = wp.id; }
+  // the armory is classified the way the player chose (type, era, country, calibre, action, decade, their own groups…)
+  const CL = G.Classify;
+  const by = CL.SCHEME[UI.sel.by] ? UI.sel.by : 'type', order = CL.ORDERS.some(o => o[0] === UI.sel.order) ? UI.sel.order : 'old';
+  UI.sel.by = by; UI.sel.order = order; UI.sel.cats = UI.sel.cats || {};
+  const cats = CL.categories(by).filter(c => c.ws.length || by === 'mine');
+  const wp0 = G.WEAPON[UI.sel.wp];
+  let cat = UI.sel.cats[by];
+  if (wp0 && !CL.SCHEME[by].cats(wp0).includes(cat)) { const k = CL.catOf(by, wp0, cat); if (k !== undefined) cat = k; }
+  if (!cats.some(c => c.key === cat)) cat = (cats.find(c => c.ws.length) || cats[0] || {}).key;
+  UI.sel.cats[by] = cat;
+  const rows = cat !== undefined ? CL.list(by, cat, order) : [];
+  let wp = wp0;
+  // in My groups a gun that is in no group stays on show, so it can be added to one
+  if (!wp || (!rows.some(r => r.w === wp) && !(by === 'mine' && wp))) wp = rows.length ? rows[0].w : (wp || G.WEAPON.m4a1 || G.WEAPONS[0]);
+  UI.sel.wp = wp.id;
+  const myGroups = CL.groupsOf(wp.id), allGroups = Object.keys(CL.groups);
   const L = UI.loadoutFor(wp);
   root.innerHTML = `<section class="screen" id="armory">
-    <div class="col left"><div class="colhead"><div class="eyebrow">Weapon type</div><div class="eras">${TYPES.map(t => `<button class="chip ${t.id === type ? 'on' : ''}" data-type="${t.id}" title="${t.n ? `${t.n} weapons, ${t.y0}–${t.y1}` : 'Design your own'}">${esc(t.name)}</button>`).join('')}</div><div class="muted" style="font:12px var(--f-mono)">${inType.length} weapons${inType.length ? ` · ${inType[0].y} – ${inType[inType.length - 1].y}` : ''} · oldest first</div>
+    <div class="col left"><div class="colhead"><div class="eyebrow">Classify by</div>
+      <div style="display:flex;gap:6px;margin:4px 0 8px;flex-wrap:wrap"><select id="clby" title="How to group the armory" style="padding:5px 8px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:3px;font:12px var(--f-ui)">${CL.SCHEMES.map(x => `<option value="${x.id}" ${x.id === by ? 'selected' : ''}>${esc(x.n)}</option>`).join('')}</select><select id="clord" title="Order inside each group" style="padding:5px 8px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:3px;font:12px var(--f-ui)">${CL.ORDERS.map(([k, n]) => `<option value="${k}" ${k === order ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+      ${by === 'all' ? '' : cats.length > 26 ? `<select id="clcat" style="width:100%;padding:6px 8px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:3px;font:13px var(--f-ui)">${cats.map(c => `<option value="${esc(c.key)}" ${c.key === cat ? 'selected' : ''}>${esc(c.name)} (${c.ws.length})</option>`).join('')}</select>` : `<div class="eras">${cats.map(c => `<button class="chip ${c.key === cat ? 'on' : ''}" data-cat="${esc(c.key)}" title="${c.ws.length} weapons">${esc(c.name)}${by === 'mine' ? ` · ${c.ws.length}` : ''}</button>`).join('')}</div>`}
+      <div class="muted" style="font:12px var(--f-mono);margin-top:4px">${by === 'mine' && !cats.length ? 'No groups yet — add a gun to one below' : `${rows.length} weapons${rows.length && order !== 'az' && order !== 'used' ? ` · ${Math.min(...rows.map(r => r.w.y))} – ${Math.max(...rows.map(r => r.w.y))}` : ''} · ${(CL.ORDERS.find(o => o[0] === order) || [])[1].toLowerCase()}`}</div>
+      ${UI.mergeSel ? '' : `<div class="muted" style="font:12px var(--f-ui);margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;align-items:center"><span>${esc(wp.n)} is in:</span>${myGroups.length ? myGroups.map(g => `<button class="chip on" data-ungrp="${esc(g)}" title="Take it out of ${esc(g)}">${esc(g)} ✕</button>`).join('') : '<span>no groups</span>'}<select id="addgrp" style="padding:5px 8px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:3px;font:12px var(--f-ui)"><option value="">Add to group…</option>${allGroups.filter(g => !myGroups.includes(g)).map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join('')}<option value="__new">New group…</option></select></div>
+      <div id="grpform" style="display:none;gap:4px;margin-top:4px"><input id="grpname" maxlength="40" placeholder="Group name" style="flex:1;padding:5px 8px;background:#111;color:#eee;border:1px solid var(--line);border-radius:3px"><button class="btn small primary" id="grpok">OK</button><button class="btn small" id="grpno">Cancel</button></div>
+      ${by === 'mine' && cat !== undefined ? `<div style="display:flex;gap:6px;margin-top:6px"><button class="btn small" id="grpren">Rename “${esc(cat)}”</button><button class="btn small" id="grpdel">Delete group</button></div>` : ''}`}
       <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">${UI.mergeSel ? `<button class="btn small primary" id="domerge" ${UI.mergeSel.length < 2 ? 'disabled' : ''}>Merge ${UI.mergeSel.length} guns →</button><button class="btn small" id="mergeoff">Cancel</button>` : `<button class="btn small" id="mergeon" title="Tick two or more guns from any era and fuse their best features into a new weapon">Merge mode</button><button class="btn small" id="toworkshop">Workshop</button>`}</div>
       ${UI.mergeSel ? `<div class="muted" style="font:12px var(--f-mono);margin-top:6px">Tick guns from any era. The first one ticked gives the receiver.${UI.mergeSel.length ? '<br>' + UI.mergeSel.map((id, i) => `${i + 1}. ${esc((G.WEAPON[id] || {}).n || id)}`).join('<br>') : ''}</div>` : ''}</div>
       <div class="scroll" id="wlist"></div></div>
@@ -235,13 +250,28 @@ function renderArmory(root) {
     <div class="col right"><div class="scroll" id="specs"></div></div>
   </section>`;
   const list = $('#wlist');
-  const item = w => `<button class="witem ${w.id === wp.id ? 'on' : ''}" data-wp="${w.id}"><b>${UI.mergeSel ? `<span style="display:inline-block;width:15px;height:15px;margin-right:7px;vertical-align:-2px;border:1px solid var(--brass);border-radius:2px;background:${UI.mergeSel.includes(w.id) ? 'var(--brass)' : 'transparent'};color:#16140c;font:700 11px/15px var(--f-mono);text-align:center">${UI.mergeSel.includes(w.id) ? UI.mergeSel.indexOf(w.id) + 1 : ''}</span>` : ''}${esc(w.n)}</b><em>${w.y}</em><span>${w.proto ? 'Prototype · ' : ''}${type === 'PSY' || type === 'CUSTOM' ? G.CLASS_NAMES[w.c] + ' · ' : ''}${esc(w.co)} · ${esc(w.cal)}</span></button>`;
-  // period dividers down the list (Psycho Arsenal splits by tier instead)
+  const item = w => `<button class="witem ${w.id === wp.id ? 'on' : ''}" data-wp="${w.id}"><b>${UI.mergeSel ? `<span style="display:inline-block;width:15px;height:15px;margin-right:7px;vertical-align:-2px;border:1px solid var(--brass);border-radius:2px;background:${UI.mergeSel.includes(w.id) ? 'var(--brass)' : 'transparent'};color:#16140c;font:700 11px/15px var(--f-mono);text-align:center">${UI.mergeSel.includes(w.id) ? UI.mergeSel.indexOf(w.id) + 1 : ''}</span>` : ''}${esc(w.n)}</b><em>${w.y}</em><span>${w.proto ? 'Prototype · ' : ''}${by !== 'type' || cat === 'PSY' || cat === 'CUSTOM' ? G.CLASS_NAMES[w.c] + ' · ' : ''}${esc(w.co)} · ${esc(w.cal)}</span></button>`;
+  // dividers down the list: periods, types, initials or used / not used, depending on the order
   let html = '', last = null;
-  for (const w of inType) { const k = type === 'PSY' ? G.PSY_TIERS[w.psy] || 'Psycho Arsenal' : type === 'CUSTOM' ? 'Your designs' : G.periodOf(w.y); if (k !== last) { html += `<div class="wgroup">${esc(k)}</div>`; last = k; } html += item(w); }
-  list.innerHTML = html;
+  for (const r of rows) { if (r.div !== last) { html += `<div class="wgroup">${esc(r.div)}</div>`; last = r.div; } html += item(r.w); }
+  list.innerHTML = html || `<div class="wsempty" style="padding:14px">${by === 'mine' ? 'This group is empty. Pick any gun (classify by type, say), then use “Add to group…”.' : 'Nothing here.'}</div>`;
   list.querySelectorAll('[data-wp]').forEach(b => b.onclick = () => { const id = b.dataset.wp; if (UI.mergeSel) { const i = UI.mergeSel.indexOf(id); if (i >= 0) UI.mergeSel.splice(i, 1); else UI.mergeSel.push(id); } UI.sel.wp = id; store.set('sel', UI.sel); G.Audio.ui(); const sc = list.scrollTop; renderArmory(root); $('#wlist').scrollTop = sc; });
-  root.querySelectorAll('[data-type]').forEach(b => b.onclick = () => { const t = b.dataset.type; if (!G.WEAPONS.some(w => G.typeOf(w) === t)) { G.Audio.ui(); UI.show('workshop'); return; } UI.sel.type = t; UI.sel.wp = null; store.set('sel', UI.sel); G.Audio.ui(); renderArmory(root); $('#wlist').scrollTop = 0; });
+  const save = () => { store.set('sel', UI.sel); G.Audio.ui(); };
+  const rer = top => { renderArmory(root); if (top) $('#wlist').scrollTop = 0; };
+  { const q = id => root.querySelector(id);
+    q('#clby').onchange = e => { UI.sel.by = e.target.value; save(); rer(); };
+    q('#clord').onchange = e => { UI.sel.order = e.target.value; save(); rer(true); };
+    if (q('#clcat')) q('#clcat').onchange = e => { UI.sel.cats[by] = e.target.value; UI.sel.wp = null; save(); rer(true); };
+    root.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { UI.sel.cats[by] = b.dataset.cat; UI.sel.wp = null; save(); rer(true); });
+    root.querySelectorAll('[data-ungrp]').forEach(b => b.onclick = () => { CL.removeFrom(b.dataset.ungrp, wp.id); save(); rer(); });
+    let mode = null; const form = q('#grpform'), nm = q('#grpname');
+    const ask = (m, v) => { mode = m; form.style.display = 'flex'; nm.value = v || ''; nm.focus(); };
+    if (q('#addgrp')) q('#addgrp').onchange = e => { const v = e.target.value; e.target.value = ''; if (!v) return; if (v === '__new') return ask('new'); CL.addTo(v, wp.id); save(); rer(); };
+    if (q('#grpren')) q('#grpren').onclick = () => ask('ren', cat);
+    if (q('#grpdel')) q('#grpdel').onclick = () => { if (q('#grpdel').dataset.sure) { CL.deleteGroup(cat); save(); rer(true); } else { q('#grpdel').dataset.sure = 1; q('#grpdel').textContent = 'Click again to delete'; } };
+    const ok = () => { const v = nm.value.trim(); if (!v) return; if (mode === 'new') { const g = CL.addTo(v, wp.id); if (by === 'mine') UI.sel.cats.mine = g; } else if (mode === 'ren') { if (!CL.renameGroup(cat, v)) { G.UI.toast('That name is taken', 1.2); return; } UI.sel.cats.mine = v; } save(); rer(); };
+    if (q('#grpok')) { q('#grpok').onclick = ok; q('#grpno').onclick = () => { form.style.display = 'none'; }; nm.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') ok(); if (e.key === 'Escape') form.style.display = 'none'; }; }
+  }
   { const q = id => root.querySelector(id); if (q('#mergeon')) q('#mergeon').onclick = () => { UI.mergeSel = [wp.id]; G.Audio.ui(); renderArmory(root); }; if (q('#mergeoff')) q('#mergeoff').onclick = () => { UI.mergeSel = null; G.Audio.ui(); renderArmory(root); }; if (q('#toworkshop')) q('#toworkshop').onclick = () => UI.show('workshop');
     if (q('#domerge')) q('#domerge').onclick = () => { const ids = UI.mergeSel.slice(); UI.mergeSel = null; G.Workshop.openMerge(ids); }; }
   const on = list.querySelector('.on'); if (on && !UI.mergeSel) on.scrollIntoView({ block: 'center' });
