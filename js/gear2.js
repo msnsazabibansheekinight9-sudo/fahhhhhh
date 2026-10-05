@@ -109,7 +109,7 @@ G.armorHit = function (kit, zone, loc, b, speed, st) {
 // ------------------------------------------------------------------ perks
 const gp0 = G.gearProps;
 G.gearProps = function (g) {
-  const R = gp0(g); if (!g || !g.cat) return R;
+  const R = gp0(g); if (!g || !['bomb', 'medieval'].includes(g.cat)) return R;
   if (g.slot === 'armor' || g.slot === 'uniform') { R.perks.length = 0; for (const k in R.mods) delete R.mods[k]; }
   const P = R.perks, M = R.mods, p = (n, d, good = true) => P.push([n, d, good]);
   if (g.cat === 'bomb') {

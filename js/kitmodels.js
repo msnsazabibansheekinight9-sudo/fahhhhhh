@@ -578,7 +578,10 @@ const AS = {
 
 // returns the back surface z (for packs)
 function armour(S, kit, AR, P) {
-  const spec = AS[AR.id] || { base: AR.model === 'pc' || AR.model === 'pcslick' ? 'carrier' : AR.model === 'iotv' || AR.model === 'vest' || AR.model === 'flak' ? 'vest' : AR.model === 'steel' ? 'steel' : AR.model === 'rig' ? 'rig' : 'belt' };
+  // a listed layout, the item's own layout, or a sensible one for its kind of carrier
+  const spec = AS[AR.id] || AR.spec || (AR.model === 'pcslick' ? { base: 'carrier', panel: [.25, .31], cum: 'elastic', shoulders: 'thin', kanga: true, load: ['mag', 'mag', 'mag'], back: 'zip', handle: true, belt: 'war' }
+    : AR.model === 'pc' ? { base: 'carrier', panel: [.27, .33], cum: 'full', shoulders: 'pad', sides: !!(AR.cov && AR.cov.sides), molle: 5, load: ['mag', 'mag', 'mag'], admin: true, side: ['ifak'], back: 'molle', handle: true, belt: 'war' }
+    : { base: AR.model === 'iotv' || AR.model === 'vest' || AR.model === 'flak' ? 'vest' : AR.model === 'steel' ? 'steel' : AR.model === 'rig' ? 'rig' : 'belt' });
   const C = S.chest, SP = S.spine, HP = S.hips, g = M.gear, dark = M.dark;
   const plates = AR.plates && P.rating > 0;
   let backZ = .14;
