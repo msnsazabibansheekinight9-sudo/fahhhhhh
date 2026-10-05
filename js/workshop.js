@@ -152,7 +152,7 @@ function tabMine(root) {
   $('#ws-imp').onclick = () => importDialog(root);
   L.querySelectorAll('[data-g]').forEach(b => b.onclick = () => { WS.sel = b.dataset.g; G.Audio.ui(); WS.render(root); });
   let wp = G.WEAPON[WS.sel]; if (!wp || !wp.custom) { wp = guns[guns.length - 1]; WS.sel = wp && wp.id; }
-  if (!wp) { head('Workshop', 'Your designs', 'Saved designs appear here'); const g0 = G.WEAPON[UI.sel.wp] || G.WEAPON.m4a1; showGun(g0); $('#wsr').innerHTML = `<div class="wsempty">Every saved design becomes a real weapon in the <b>Workshop</b> era: customise it in the Armory, take it to the range, missions, the battlefield or extraction, and handle it on the bench.</div>`; actions([]); return; }
+  if (!wp) { head('Workshop', 'Your designs', 'Saved designs appear here'); const g0 = G.WEAPON[UI.sel.wp] || G.WEAPON.m4a1; showGun(g0); $('#wsr').innerHTML = `<div class="wsempty">Every saved design becomes a real weapon under the <b>Workshop</b> type in the Armory: customise it in the Armory, take it to the range, missions, the battlefield or extraction, and handle it on the bench.</div>`; actions([]); return; }
   const Lw = UI.loadoutFor(wp);
   head(`Workshop · ${G.CLASS_NAMES[wp.c]}`, wp.n, `${wp.co} · ${wp.cal} · ${wp.act}`);
   const err = showGun(wp, Lw); if (err) note('Model error: ' + esc(err));
@@ -193,13 +193,14 @@ function importDialog(root) {
 function tabMerge(root) {
   const L = $('#wsl');
   const ids = WS.mergeIds = WS.mergeIds.filter(id => G.WEAPON[id]);
-  const eras = [['all', 'All']].concat(G.ERAS.map(e => [e.id, e.name]));
+  const eras = [['all', 'All']].concat(G.armoryTypes().filter(t => t.n).map(t => [t.id, t.name]));
+  if (!eras.some(([id]) => id === WS.era)) WS.era = 'all';
   if (WS.mergeOverride && WS.mergeOverride.ids.join() !== ids.join()) WS.mergeOverride = null;
   L.innerHTML = `<div class="wsbtns"><button class="btn small primary" id="ws-rmerge" title="2 to 10 random guns, a random base, then random edits">Random merge</button><label class="wsc" style="padding:4px 6px"><input type="checkbox" id="ws-rheavy" ${WS.rheavy ? 'checked' : ''}> include cannon & artillery</label>${ids.length ? '<button class="btn small" id="ws-mclear">Clear</button>' : ''}</div><div class="wssel"><div class="lbl" style="margin:0">Selected — the first gives the receiver</div>${ids.length ? ids.map((id, i) => `<div><span class="wsbox on">${i + 1}</span><b>${esc(G.WEAPON[id].n)}</b>${i ? `<button data-up="${id}" title="Use this gun's receiver">Make base</button>` : ''}<button data-rm="${id}">✕</button></div>`).join('') : '<div class="muted">Tick two or more guns below.</div>'}</div>
     <div style="padding:8px 14px;border-bottom:1px solid var(--line)"><input class="wsq" id="wsq" placeholder="Search all ${G.WEAPONS.length} guns…" value="${esc(WS.q)}"><div class="eras" style="margin-top:6px">${eras.map(([id, n]) => `<button class="chip ${WS.era === id ? 'on' : ''}" data-mera="${id}">${esc(n)}</button>`).join('')}</div></div><div id="wsml"></div>`;
   const list = () => {
     const q = WS.q.trim().toLowerCase();
-    const ws = G.WEAPONS.filter(w => (WS.era === 'all' || w.e === WS.era) && (!q || (w.n + ' ' + w.co + ' ' + w.cal).toLowerCase().includes(q))).slice(0, 250);
+    const ws = G.WEAPONS.filter(w => (WS.era === 'all' || G.typeOf(w) === WS.era) && (!q || (w.n + ' ' + w.co + ' ' + w.cal).toLowerCase().includes(q))).sort(G.byAge).slice(0, 2000);
     $('#wsml').innerHTML = ws.map(w => `<button class="witem" data-mw="${w.id}"><b><span class="wsbox ${ids.includes(w.id) ? 'on' : ''}">${ids.includes(w.id) ? ids.indexOf(w.id) + 1 : ''}</span>${esc(w.n)}</b><em>${w.y}</em><span>${esc(G.CLASS_NAMES[w.c])} · ${esc(w.cal)}</span></button>`).join('') || '<div class="wsempty">Nothing matches.</div>';
     $('#wsml').querySelectorAll('[data-mw]').forEach(b => b.onclick = () => { const id = b.dataset.mw, i = ids.indexOf(id); if (i >= 0) ids.splice(i, 1); else ids.push(id); G.Audio.ui(); const sc = L.scrollTop; tabMerge(root); $('#wsl').scrollTop = sc; });
   };

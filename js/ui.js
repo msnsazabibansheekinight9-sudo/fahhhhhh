@@ -207,15 +207,26 @@ function statBars(wp, S) {
   };
   return v;
 }
+// ---- the armory's weapon types: real guns by class (prototypes stay with their class), then the
+// fictional Psycho Arsenal and your workshop designs; each list runs oldest to newest
+G.TYPE_ORDER = ['PST', 'MUS', 'RIF', 'CAR', 'SMG', 'AR', 'BR', 'DMR', 'SR', 'SG', 'LMG', 'CAN', 'MOR', 'RCL', 'ATG', 'AAG', 'ART', 'HVY', 'NAV', 'PSY', 'CUSTOM'];
+G.TYPE_NAMES = { PST: 'Pistols & revolvers', MUS: 'Muskets & early rifles', RIF: 'Service rifles', CAR: 'Carbines', SMG: 'Submachine guns', AR: 'Assault rifles', BR: 'Battle rifles', DMR: 'Marksman rifles', SR: 'Sniper rifles', SG: 'Shotguns', LMG: 'Machine guns', CAN: 'Cannons', MOR: 'Mortars', RCL: 'Recoilless rifles', ATG: 'Anti-tank guns', AAG: 'Anti-aircraft guns', ART: 'Field guns & howitzers', HVY: 'Siege & railway guns', NAV: 'Naval guns', PSY: 'Psycho Arsenal', CUSTOM: 'Workshop' };
+G.typeOf = w => w.custom || w.e === 'custom' ? 'CUSTOM' : w.psy || w.e === 'psycho' ? 'PSY' : w.c;
+G.byAge = (a, b) => (a.y || 0) - (b.y || 0) || a.n.localeCompare(b.n);
+G.periodOf = y => y < 1700 ? 'Before 1700' : y < 1800 ? '1700s' : y < 1850 ? '1800 – 1849' : y < 1900 ? '1850 – 1899' : y < 1914 ? '1900 – 1913' : y < 1919 ? 'The Great War · 1914 – 1918' : y < 1939 ? 'Between the wars · 1919 – 1938' : y < 1946 ? 'Second World War · 1939 – 1945' : y < 1990 ? 'Cold War · 1946 – 1989' : y < 2010 ? 'Modern · 1990 – 2009' : 'Present day · 2010 –';
+G.armoryTypes = () => G.TYPE_ORDER.map(id => { const ws = G.WEAPONS.filter(w => G.typeOf(w) === id); const ys = ws.map(w => w.y || 0); return { id, name: G.TYPE_NAMES[id] || G.CLASS_NAMES[id] || id, n: ws.length, y0: Math.min(...ys), y1: Math.max(...ys) }; }).filter(t => t.n || t.id === 'CUSTOM');
 function renderArmory(root) {
   G.Game.mode = 'menu';
-  if (!G.WEAPONS.some(w => w.e === UI.sel.era)) UI.sel.era = 'ww2';
-  const era = UI.sel.era;
+  // the armory is split by weapon type; each type runs from its oldest gun down to its newest
+  const TYPES = G.armoryTypes();
+  { const w0 = G.WEAPON[UI.sel.wp]; if (w0 && G.typeOf(w0) !== UI.sel.type) UI.sel.type = G.typeOf(w0); }
+  if (!TYPES.some(t => t.id === UI.sel.type && t.n)) UI.sel.type = 'AR';
+  const type = UI.sel.type, inType = G.WEAPONS.filter(w => G.typeOf(w) === type).sort((a, b) => type === 'PSY' && a.psy !== b.psy ? (a.psy === 'overkill') - (b.psy === 'overkill') : G.byAge(a, b));
   let wp = G.WEAPON[UI.sel.wp];
-  if (!wp || wp.e !== era) { wp = G.WEAPONS.find(w => w.e === era); UI.sel.wp = wp.id; }
+  if (!wp || G.typeOf(wp) !== type) { wp = inType[0]; UI.sel.wp = wp.id; }
   const L = UI.loadoutFor(wp);
   root.innerHTML = `<section class="screen" id="armory">
-    <div class="col left"><div class="colhead"><div class="eyebrow">Era</div><div class="eras">${G.ERAS.map(e => `<button class="chip ${e.id === era ? 'on' : ''}" data-era="${e.id}" title="${e.span}">${esc(e.name)}</button>`).join('')}</div><div class="muted" style="font:12px var(--f-mono)">${G.ERA[era].span} · ${G.WEAPONS.filter(w => w.e === era).length} weapons</div>
+    <div class="col left"><div class="colhead"><div class="eyebrow">Weapon type</div><div class="eras">${TYPES.map(t => `<button class="chip ${t.id === type ? 'on' : ''}" data-type="${t.id}" title="${t.n ? `${t.n} weapons, ${t.y0}–${t.y1}` : 'Design your own'}">${esc(t.name)}</button>`).join('')}</div><div class="muted" style="font:12px var(--f-mono)">${inType.length} weapons${inType.length ? ` · ${inType[0].y} – ${inType[inType.length - 1].y}` : ''} · oldest first</div>
       <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">${UI.mergeSel ? `<button class="btn small primary" id="domerge" ${UI.mergeSel.length < 2 ? 'disabled' : ''}>Merge ${UI.mergeSel.length} guns →</button><button class="btn small" id="mergeoff">Cancel</button>` : `<button class="btn small" id="mergeon" title="Tick two or more guns from any era and fuse their best features into a new weapon">Merge mode</button><button class="btn small" id="toworkshop">Workshop</button>`}</div>
       ${UI.mergeSel ? `<div class="muted" style="font:12px var(--f-mono);margin-top:6px">Tick guns from any era. The first one ticked gives the receiver.${UI.mergeSel.length ? '<br>' + UI.mergeSel.map((id, i) => `${i + 1}. ${esc((G.WEAPON[id] || {}).n || id)}`).join('<br>') : ''}</div>` : ''}</div>
       <div class="scroll" id="wlist"></div></div>
@@ -224,12 +235,13 @@ function renderArmory(root) {
     <div class="col right"><div class="scroll" id="specs"></div></div>
   </section>`;
   const list = $('#wlist');
-  const groups = {};
-  for (const w of G.WEAPONS.filter(w => w.e === era)) { const k = w.psy ? 'PSY_' + w.psy : w.proto ? 'PROTO' : w.c; (groups[k] = groups[k] || []).push(w); }
-  const order = ['PSY_feasible', 'PSY_overkill', 'AR', 'BR', 'CAR', 'RIF', 'SMG', 'LMG', 'DMR', 'SR', 'SG', 'PST', ...(G.CLASS_ORDER_EXTRA || []), 'PROTO'];
-  list.innerHTML = order.filter(c => groups[c]).map(c => `<div class="wgroup">${c === 'PROTO' ? 'Prototype & experimental' : c.startsWith('PSY_') ? G.PSY_TIERS[c.slice(4)] : G.CLASS_NAMES[c]}</div>` + groups[c].map(w => `<button class="witem ${w.id === wp.id ? 'on' : ''}" data-wp="${w.id}"><b>${UI.mergeSel ? `<span style="display:inline-block;width:15px;height:15px;margin-right:7px;vertical-align:-2px;border:1px solid var(--brass);border-radius:2px;background:${UI.mergeSel.includes(w.id) ? 'var(--brass)' : 'transparent'};color:#16140c;font:700 11px/15px var(--f-mono);text-align:center">${UI.mergeSel.includes(w.id) ? UI.mergeSel.indexOf(w.id) + 1 : ''}</span>` : ''}${esc(w.n)}</b><em>${w.y}</em><span>${w.proto || w.psy ? G.CLASS_NAMES[w.c] + ' · ' : ''}${esc(w.co)} · ${esc(w.cal)}</span></button>`).join('')).join('');
+  const item = w => `<button class="witem ${w.id === wp.id ? 'on' : ''}" data-wp="${w.id}"><b>${UI.mergeSel ? `<span style="display:inline-block;width:15px;height:15px;margin-right:7px;vertical-align:-2px;border:1px solid var(--brass);border-radius:2px;background:${UI.mergeSel.includes(w.id) ? 'var(--brass)' : 'transparent'};color:#16140c;font:700 11px/15px var(--f-mono);text-align:center">${UI.mergeSel.includes(w.id) ? UI.mergeSel.indexOf(w.id) + 1 : ''}</span>` : ''}${esc(w.n)}</b><em>${w.y}</em><span>${w.proto ? 'Prototype · ' : ''}${type === 'PSY' || type === 'CUSTOM' ? G.CLASS_NAMES[w.c] + ' · ' : ''}${esc(w.co)} · ${esc(w.cal)}</span></button>`;
+  // period dividers down the list (Psycho Arsenal splits by tier instead)
+  let html = '', last = null;
+  for (const w of inType) { const k = type === 'PSY' ? G.PSY_TIERS[w.psy] || 'Psycho Arsenal' : type === 'CUSTOM' ? 'Your designs' : G.periodOf(w.y); if (k !== last) { html += `<div class="wgroup">${esc(k)}</div>`; last = k; } html += item(w); }
+  list.innerHTML = html;
   list.querySelectorAll('[data-wp]').forEach(b => b.onclick = () => { const id = b.dataset.wp; if (UI.mergeSel) { const i = UI.mergeSel.indexOf(id); if (i >= 0) UI.mergeSel.splice(i, 1); else UI.mergeSel.push(id); } UI.sel.wp = id; store.set('sel', UI.sel); G.Audio.ui(); const sc = list.scrollTop; renderArmory(root); $('#wlist').scrollTop = sc; });
-  root.querySelectorAll('[data-era]').forEach(b => b.onclick = () => { const e = b.dataset.era; if (!G.WEAPONS.some(w => w.e === e)) { G.Audio.ui(); UI.show('workshop'); return; } UI.sel.era = e; UI.sel.wp = null; store.set('sel', UI.sel); G.Audio.ui(); renderArmory(root); });
+  root.querySelectorAll('[data-type]').forEach(b => b.onclick = () => { const t = b.dataset.type; if (!G.WEAPONS.some(w => G.typeOf(w) === t)) { G.Audio.ui(); UI.show('workshop'); return; } UI.sel.type = t; UI.sel.wp = null; store.set('sel', UI.sel); G.Audio.ui(); renderArmory(root); $('#wlist').scrollTop = 0; });
   { const q = id => root.querySelector(id); if (q('#mergeon')) q('#mergeon').onclick = () => { UI.mergeSel = [wp.id]; G.Audio.ui(); renderArmory(root); }; if (q('#mergeoff')) q('#mergeoff').onclick = () => { UI.mergeSel = null; G.Audio.ui(); renderArmory(root); }; if (q('#toworkshop')) q('#toworkshop').onclick = () => UI.show('workshop');
     if (q('#domerge')) q('#domerge').onclick = () => { const ids = UI.mergeSel.slice(); UI.mergeSel = null; G.Workshop.openMerge(ids); }; }
   const on = list.querySelector('.on'); if (on && !UI.mergeSel) on.scrollIntoView({ block: 'center' });
@@ -244,7 +256,7 @@ function renderArmory(root) {
   function refresh() {
     const L = UI.loadoutFor(wp), S = G.resolveStats(wp, L), S0 = G.resolveStats(wp, G.defaultLoadout(wp));
     SR.show(wp, L, fst);
-    $('#wera').textContent = `${G.ERA[wp.e].name} · ${G.CLASS_NAMES[wp.c]}${wp.proto ? ' · Prototype' : ''}${wp.psy ? (wp.psy === 'feasible' ? ' · Feasible' : ' · Overkill') : ''}`;
+    $('#wera').textContent = `${G.CLASS_NAMES[wp.c]} · ${wp.custom ? 'Workshop design' : wp.psy ? 'Psycho Arsenal' : G.periodOf(wp.y)}${wp.proto ? ' · Prototype' : ''}${wp.psy ? (wp.psy === 'feasible' ? ' · Feasible' : ' · Overkill') : ''}`;
     $('#wname').textContent = wp.n;
     $('#wsub').textContent = `${wp.co} · adopted ${wp.y} · ${wp.cal} · ${{ bolt: 'bolt action', semi: 'semi-automatic', auto: 'selective fire', auto_ob: 'open bolt', pump: 'pump action', lever: 'lever action', rev: 'revolver', muzzle: (wp.m.lock ? { flint: 'flintlock', match: 'matchlock', wheel: 'wheellock', cap: 'percussion' }[wp.m.lock] + ' ' : '') + 'muzzle-loader', break: 'break-action', single: 'single-shot breechloader', cannon: 'muzzle-loading cannon', breech: 'breech-loading', mortar: 'drop-fire mortar', crank: 'hand-cranked' }[wp.act] || wp.act}`;
     const b = statBars(wp, S), b0 = statBars(wp, S0);
@@ -334,7 +346,7 @@ function renderMissions(root) {
   if (!G.WEAPON[C.secondary] || G.WEAPON[C.secondary].c !== 'PST') C.secondary = 'glock19';
   store.set('mis', C);
   const kit = G.Kit.current, nv = G.GEARID[kit.nvg];
-  const opts = (filter, cur) => G.ERAS.map(e => `<optgroup label="${esc(e.name)}">${G.WEAPONS.filter(w => w.e === e.id && filter(w)).map(w => `<option value="${w.id}" ${w.id === cur ? 'selected' : ''}>${esc(w.n)}</option>`).join('')}</optgroup>`).join('');
+  const opts = (filter, cur) => G.armoryTypes().map(t => { const ws = G.WEAPONS.filter(w => G.typeOf(w) === t.id && filter(w)).sort(G.byAge); return ws.length ? `<optgroup label="${esc(t.name)}">${ws.map(w => `<option value="${w.id}" ${w.id === cur ? 'selected' : ''}>${esc(w.n)} (${w.y})</option>`).join('')}</optgroup>` : ''; }).join('');
   const L = UI.loadoutFor(G.WEAPON[C.primary]);
   root.innerHTML = `<section class="screen" id="battle"><div class="setup">
     <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap"><div><div class="eyebrow">Counter-terror · solo</div><h1>Missions</h1></div><button class="btn small" id="back">Main menu</button></div>

@@ -324,7 +324,7 @@ BT.cfg = (() => { try { return Object.assign({ map: 'ruins', era: 'now', tod: 'd
 BT.render = function (root) {
   Game.mode = 'menu';
   const C = BT.cfg, esc = G.UI.esc, M = G.UI.mis;
-  const opts = (filter, cur) => G.ERAS.map(e => `<optgroup label="${esc(e.name)}">${G.WEAPONS.filter(w => w.e === e.id && filter(w)).map(w => `<option value="${w.id}" ${w.id === cur ? 'selected' : ''}>${esc(w.n)}</option>`).join('')}</optgroup>`).join('');
+  const opts = (filter, cur) => G.armoryTypes().map(t => { const ws = G.WEAPONS.filter(w => G.typeOf(w) === t.id && filter(w)).sort(G.byAge); return ws.length ? `<optgroup label="${esc(t.name)}">${ws.map(w => `<option value="${w.id}" ${w.id === cur ? 'selected' : ''}>${esc(w.n)} (${w.y})</option>`).join('')}</optgroup>` : ''; }).join('');
   root.innerHTML = `<section class="screen" id="battle"><div class="setup">
     <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap"><div><div class="eyebrow">Conquest · ${C.size} v ${C.size}</div><h1>Mass battlefield</h1></div><button class="btn small" id="back">Main menu</button></div>
     <div><span class="lbl">Battlefield</span><div class="row">${G.BATTLE_MAPS.map(m => `<button class="card ${m.id === C.map ? 'on' : ''}" data-bm="${m.id}"><small>${m.B * 2} m · 5 points</small><b>${esc(m.n)}</b><span>${esc(m.d)}</span></button>`).join('')}</div></div>

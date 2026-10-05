@@ -18,29 +18,29 @@ let B = null; // state of the gun on the bench
 
 const MODE_N = { semi: 'Semi', auto: 'Auto', burst3: '3-round burst', burst2: '2-round burst', bolt: 'Bolt', pump: 'Pump', lever: 'Lever' };
 const CYCLE = { bolt: 'bolt', pump: 'pump', lever: 'lever' };
-BN.open = function (id) { if (G.WEAPON[id]) { BN.wp = id; BN.era = G.WEAPON[id].e; } UI.show('bench'); };
+BN.open = function (id) { if (G.WEAPON[id]) { BN.wp = id; BN.type = G.typeOf(G.WEAPON[id]); } UI.show('bench'); };
 
 // ------------------------------------------------------------------ screen
 BN.render = function (root) {
   G.Game.mode = 'menu';
   let wp = G.WEAPON[BN.wp] || G.WEAPON[UI.sel.wp] || G.WEAPON.m4a1; BN.wp = wp.id;
-  BN.era = BN.era || wp.e;
-  const eras = G.ERAS.filter(e => G.WEAPONS.some(w => w.e === e.id));
+  const types = G.armoryTypes().filter(t => t.n);
+  if (!types.some(t => t.id === BN.type)) BN.type = G.typeOf(wp);
   root.innerHTML = `<section class="screen" id="bench">
-    <div class="col left"><div class="colhead"><div class="eyebrow">Handling bench</div><div class="eras">${eras.map(e => `<button class="chip ${e.id === BN.era ? 'on' : ''}" data-bera="${e.id}">${esc(e.name)}</button>`).join('')}</div><input class="wsq" id="bq" placeholder="Search every gun…" value="${esc(BN.q)}" style="margin-top:8px"></div><div class="scroll" id="bl"></div></div>
+    <div class="col left"><div class="colhead"><div class="eyebrow">Handling bench</div><div class="eras">${types.map(t => `<button class="chip ${t.id === BN.type ? 'on' : ''}" data-bera="${t.id}">${esc(t.name)}</button>`).join('')}</div><input class="wsq" id="bq" placeholder="Search every gun…" value="${esc(BN.q)}" style="margin-top:8px"></div><div class="scroll" id="bl"></div></div>
     <div class="stage"><div class="top"><div><div class="eyebrow" id="be"></div><h2 id="bnm"></h2><div class="sub" id="bsub"></div></div><button class="btn small" id="back">Main menu</button></div>
       <div><div class="actions"><button class="btn small" id="b-arm">Armory</button><button class="btn small" id="b-range">Take to the range</button><button class="btn small" id="b-reset">Reset gun</button><button class="btn small" id="b-view">Reset view</button></div><p class="hint">Drag parts to work them · drag empty space to rotate · wheel to zoom</p></div></div>
     <div class="col right"><div class="scroll" id="bp"></div></div></section>
     <div id="btip" style="position:fixed;z-index:30;pointer-events:none;padding:4px 8px;background:rgba(10,12,8,.92);border:1px solid var(--brass);color:var(--brass2);font:600 12px var(--f-mono);border-radius:2px;display:none"></div>`;
   const list = () => {
     const q = BN.q.trim().toLowerCase();
-    const ws = G.WEAPONS.filter(w => q ? (w.n + ' ' + w.co + ' ' + w.cal).toLowerCase().includes(q) : w.e === BN.era).slice(0, 250);
+    const ws = G.WEAPONS.filter(w => q ? (w.n + ' ' + w.co + ' ' + w.cal).toLowerCase().includes(q) : G.typeOf(w) === BN.type).sort(G.byAge).slice(0, q ? 250 : 1000);
     $('#bl').innerHTML = ws.map(w => `<button class="witem ${w.id === BN.wp ? 'on' : ''}" data-bw="${w.id}"><b>${esc(w.n)}</b><em>${w.y}</em><span>${esc(G.CLASS_NAMES[w.c])} · ${esc(w.cal)}</span></button>`).join('') || '<div class="wsempty">Nothing matches.</div>';
     $('#bl').querySelectorAll('[data-bw]').forEach(b => b.onclick = () => { BN.wp = b.dataset.bw; G.Audio.ui(); $('#bl').querySelectorAll('.witem').forEach(x => x.classList.toggle('on', x === b)); setup(G.WEAPON[BN.wp]); });
   };
   list();
   $('#bq').oninput = e => { BN.q = e.target.value; list(); };
-  root.querySelectorAll('[data-bera]').forEach(b => b.onclick = () => { BN.era = b.dataset.bera; BN.q = ''; G.Audio.ui(); BN.render(root); });
+  root.querySelectorAll('[data-bera]').forEach(b => b.onclick = () => { BN.type = b.dataset.bera; BN.q = ''; G.Audio.ui(); BN.render(root); });
   $('#back').onclick = () => UI.show('menu');
   $('#b-arm').onclick = () => { UI.sel.era = G.WEAPON[BN.wp].e; UI.sel.wp = BN.wp; UI.store.set('sel', UI.sel); UI.show('armory'); };
   $('#b-range').onclick = () => { UI.sel.era = G.WEAPON[BN.wp].e; UI.sel.wp = BN.wp; UI.store.set('sel', UI.sel); UI.startRange(); };
