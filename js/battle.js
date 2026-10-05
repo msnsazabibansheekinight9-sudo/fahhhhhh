@@ -149,7 +149,7 @@ BT.update = function (dt) {
   if ((S.chevT -= dt) <= 0) { S.chevT = .3; for (const b of Game.bots) if (b.chev) b.chev.visible = b.team === 0 && b.alive && b.pos.distanceTo(P.pos) < 80; }
   chaos(dt, S);
   // pickups pile up in a battle: keep the newest 24
-  if (Game.pickups.length > 24) { for (const p of Game.pickups.splice(0, Game.pickups.length - 24)) if (p.own && p.obj.parent) p.obj.parent.remove(p.obj); }
+  { const loose = Game.pickups.filter(p => !p.fixed); if (loose.length > 24) { const gone = new Set(loose.slice(0, loose.length - 24)); for (const p of gone) if (p.own && p.obj.parent) p.obj.parent.remove(p.obj); Game.pickups = Game.pickups.filter(p => !gone.has(p)); } }
   // death and deploy
   if (!P.alive) { if (!S.dead) { S.dead = true; S.deployT = 6; BT.deployScreen(); } S.deployT -= dt; BT.deployTick(); }
   if (S.tickets[0] <= 0 || S.tickets[1] <= 0 || S.t >= S.limit) BT.end();

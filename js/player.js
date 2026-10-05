@@ -470,7 +470,6 @@ class Player {
     this.wasSprint = this.sprinting; this.sprintOut = Math.max(0, (this.sprintOut || 0) - dt);
     let speed = [4.3, 2.3, .9][this.stance] * (this.sprinting ? 1.6 : 1) * lerp(1, .55, this.ads) * (S ? .82 + S.mob * .025 : 1) * (this.kitK || 1) * (this.km ? this.km.speed : 1);
     speed *= W.slowAt(this.pos);
-    if (this.W && this.W.wp.emplaced) { speed *= .12; this.sprinting = false; } // a carriage gun: you can only shuffle it round
     const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
     const wishX = (-sy * f + cy * r), wishZ = (-cy * f - sy * r);
     const len = Math.hypot(wishX, wishZ) || 1;

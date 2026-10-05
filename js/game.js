@@ -526,7 +526,7 @@ Game.update = function (dt, now) {
     // range-only toggles
     if (Game.mode === 'range') {
       if (input.fly) { P.fly = !P.fly; Game.toast(P.fly ? 'Fly mode on (Space/C up/down, Shift fast)' : 'Fly mode off'); if (!P.fly) P.pos.y = G.E.world.groundAt(P.pos.x, P.pos.z, P.pos.y); }
-      if (input.menu) G.UI.toggleRangeMenu();
+      if (input.menu && !Game.nearPick) G.UI.toggleRangeMenu();
       if (input.reset) { for (const T of Game.targets) T.reset && T.reset(); G.FX.clear(); Game.toast('Targets reset'); }
     }
     Game.updatePickups(dt, P, input);

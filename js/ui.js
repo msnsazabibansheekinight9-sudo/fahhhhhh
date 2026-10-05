@@ -599,7 +599,7 @@ UI.updateHUD = function (dt) {
   // mission objective
   updatePips(P, Gm); updateKitInfo(P);
   { const fx = $('#flashfx'); if (fx) fx.style.opacity = Math.min(1, (Gm.flashT || 0) / 2.5).toFixed(3); const ex = $('#expl'), X = P.expl; if (ex && X && X.list.length && (UI.dirty || Gm.frame % 10 === 0)) { const E = G.EXPLOSIVE[X.list[X.sel]]; ex.textContent = `${E.n} ×${X.counts[E.id] > 90 ? '∞' : X.counts[E.id]}  [3] use · [4] next`; } }
-  { const pk = $('#pick'), np = Gm.nearPick; if (pk) { if (np) { const cur = P.weapons.find(w => (w.wp.c === 'PST') === (np.wp.c === 'PST')); pk.textContent = `T — ${cur ? 'swap ' + cur.wp.n + ' for' : 'pick up'} ${np.wp.n} (${np.mag} + ${np.reserve})`; pk.style.display = 'block'; } else pk.style.display = 'none'; } }
+  { const pk = $('#pick'), np = Gm.nearPick; if (pk) { if (np) { const cur = P.weapons.find(w => (w.wp.c === 'PST') === (np.wp.c === 'PST')); pk.textContent = np.fixed ? `T — man the ${np.wp.n} (${np.mag} + ${np.reserve})` : `T — ${cur ? 'swap ' + cur.wp.n + ' for' : 'pick up'} ${np.wp.n} (${np.mag} + ${np.reserve})`; pk.style.display = 'block'; } else if (P.W && G.isEmplaced && G.isEmplaced(P.W.wp) && P.weapons.length > 1) { pk.textContent = `Manning the ${P.W.wp.n} · 1 / 2 or K — step away and leave it here`; pk.style.display = 'block'; } else pk.style.display = 'none'; } }
   if (Gm.mode === 'mission' && Gm.mission) {
     const Ms = Gm.mission, sc = $('#score'), t = Ms.t | 0, tm = `${(t / 60) | 0}:${String(t % 60).padStart(2, '0')}`;
     if (sc) { sc.children[0].textContent = Ms.killed; sc.children[2].textContent = Ms.total - Ms.killed; sc.children[1].textContent = `${tm} · hostiles left · hostages ${Ms.hostages - Ms.hostagesLost}`; }
