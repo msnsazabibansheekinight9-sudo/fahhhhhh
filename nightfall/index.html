@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nightfall at Ashgrove</title>
+<meta name="description" content="An original survival-horror game in the browser: a quarantined manor, rationed ammo, typewriter saves and things that should have stayed dead.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Special+Elite&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root { --fg:#e8dcc8; --dim:#9a8e7a; --red:#b3121b; --red2:#ff3a3a; --gold:#c9a24a; --bg:#000; --panel:rgba(12,8,6,0.88); --line:rgba(201,162,74,0.35); --fine:#3cff7a; --caution:#ffd23a; --danger:#ff3030; color-scheme:dark; }
+* { box-sizing:border-box; }
+html, body { margin:0; height:100%; background:var(--bg); color:var(--fg); overflow:hidden; font-family:Inter, system-ui, sans-serif; user-select:none; -webkit-user-select:none; }
+canvas#game { position:fixed; inset:0; width:100%; height:100%; display:block; }
+.layer { position:fixed; inset:0; pointer-events:none; }
+#vignette { background:radial-gradient(ellipse at center, rgba(0,0,0,0) 45%, rgba(0,0,0,0.75) 100%); }
+#dmg { background:radial-gradient(ellipse at center, rgba(120,0,0,0) 40%, rgba(150,0,0,0.85) 100%); opacity:0; transition:opacity .15s; }
+#lowhp { background:radial-gradient(ellipse at center, rgba(90,0,0,0) 55%, rgba(110,0,0,0.6) 100%); opacity:0; }
+#grain { opacity:.09; mix-blend-mode:overlay; width:100%; height:100%; image-rendering:pixelated; }
+#fade { background:#000; opacity:1; transition:opacity .8s; }
+.bar { position:fixed; left:0; right:0; height:0; background:#000; transition:height .6s; z-index:5; pointer-events:none; }
+#barT { top:0; } #barB { bottom:0; }
+body.cine #barT, body.cine #barB { height:11vh; }
+body.cine #hud { opacity:0; }
+#hud { transition:opacity .4s; }
+#cross { position:fixed; left:50%; top:50%; width:0; height:0; opacity:0; transition:opacity .15s; }
+#cross i { position:absolute; background:#fff; box-shadow:0 0 3px #000; }
+#cross .c { width:3px; height:3px; left:-1.5px; top:-1.5px; border-radius:50%; background:#ff4a4a; }
+#cross .h { width:10px; height:2px; top:-1px; } #cross .v { width:2px; height:10px; left:-1px; }
+#health { position:fixed; left:24px; bottom:24px; width:230px; padding:10px 14px 12px; background:linear-gradient(90deg, rgba(0,0,0,.75), rgba(0,0,0,0)); border-left:2px solid var(--line); }
+#health .lbl { font-family:Cinzel, serif; font-size:12px; letter-spacing:.3em; color:var(--dim); }
+#health .st { font-family:Cinzel, serif; font-weight:700; font-size:20px; letter-spacing:.18em; }
+#ecg { width:200px; height:46px; display:block; margin-top:4px; }
+#weapon { position:fixed; right:24px; bottom:24px; text-align:right; padding:10px 16px; background:linear-gradient(270deg, rgba(0,0,0,.75), rgba(0,0,0,0)); border-right:2px solid var(--line); min-width:200px; }
+#weapon .nm { font-family:Cinzel, serif; font-size:13px; letter-spacing:.22em; color:var(--dim); text-transform:uppercase; }
+#weapon .am { font-family:Cinzel, serif; font-size:44px; font-weight:700; line-height:1; }
+#weapon .am small { font-size:18px; color:var(--dim); font-weight:500; }
+#obj { position:fixed; left:24px; top:22px; max-width:420px; font-family:Cinzel, serif; transition:opacity 1s; }
+#obj .h { font-size:11px; letter-spacing:.35em; color:var(--gold); }
+#obj .t { font-size:17px; margin-top:4px; text-shadow:0 1px 4px #000; }
+#roomName { position:fixed; top:22px; right:24px; font-family:Cinzel, serif; letter-spacing:.3em; font-size:13px; color:var(--dim); text-transform:uppercase; transition:opacity 1s; }
+#prompt { position:fixed; left:50%; bottom:21vh; transform:translateX(-50%); font-size:15px; padding:7px 16px; background:rgba(0,0,0,.6); border:1px solid var(--line); border-radius:3px; opacity:0; transition:opacity .2s; white-space:nowrap; }
+#prompt b { color:var(--gold); font-family:Cinzel, serif; margin-right:8px; }
+#sub { pointer-events:none; position:fixed; left:50%; bottom:13vh; transform:translateX(-50%); width:min(860px, calc(100% - 32px)); text-align:center; font-size:20px; line-height:1.45; text-shadow:0 2px 6px #000, 0 0 2px #000; z-index:6; min-height:30px; }
+#sub .who { font-family:Cinzel, serif; color:var(--gold); font-size:14px; letter-spacing:.25em; display:block; margin-bottom:2px; }
+#toast { pointer-events:none; z-index:6; position:fixed; left:50%; top:16vh; transform:translateX(-50%); font-family:Cinzel, serif; font-size:16px; letter-spacing:.12em; padding:10px 22px; background:rgba(0,0,0,.7); border-top:1px solid var(--line); border-bottom:1px solid var(--line); opacity:0; transition:opacity .3s; text-align:center; max-width:calc(100% - 32px); }
+#hint { pointer-events:none; z-index:6; position:fixed; left:50%; top:24vh; transform:translateX(-50%); font-size:14px; color:#cfc4b0; background:rgba(0,0,0,.55); padding:6px 14px; border-radius:3px; opacity:0; transition:opacity .4s; max-width:calc(100% - 32px); text-align:center; }
+#timer { position:fixed; top:60px; left:50%; transform:translateX(-50%); font-family:'Special Elite', monospace; font-size:34px; color:var(--red2); text-shadow:0 0 10px #f00; display:none; }
+#bossbar { position:fixed; top:64px; left:50%; transform:translateX(-50%); width:min(560px, calc(100% - 32px)); display:none; text-align:center; }
+#bossbar .n { font-family:Cinzel, serif; letter-spacing:.3em; font-size:13px; color:#d9c7a0; margin-bottom:5px; }
+#bossbar .b { height:6px; background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.2); }
+#bossbar .f { height:100%; width:100%; background:linear-gradient(90deg, #6a0008, #ff2a2a); transition:width .2s; }
+.screen { position:fixed; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column; z-index:10; pointer-events:auto; }
+.screen.on { display:flex; }
+#title { background:radial-gradient(ellipse at 50% 60%, rgba(0,0,0,0.2), rgba(0,0,0,.85)); }
+#title h1 { font-family:Cinzel, serif; font-weight:900; font-size:clamp(46px, 10vw, 118px); letter-spacing:.12em; margin:0; color:#d8c8a8; text-shadow:0 0 30px rgba(180,0,0,.5), 0 4px 0 #300; line-height:1; text-align:center; }
+#title h2 { font-family:Cinzel, serif; font-weight:500; letter-spacing:.7em; font-size:clamp(13px, 2vw, 20px); color:var(--red2); margin:10px 0 44px; text-align:center; padding-left:.7em; }
+.menu { display:flex; flex-direction:column; gap:6px; align-items:center; }
+.menu button, .btn { font-family:Cinzel, serif; font-size:19px; letter-spacing:.25em; background:none; border:none; color:var(--fg); padding:9px 26px; cursor:pointer; text-transform:uppercase; position:relative; }
+.menu button:hover, .menu button:focus-visible, .btn:hover { color:#fff; text-shadow:0 0 12px var(--red2); outline:none; }
+.menu button:hover::before, .menu button:focus-visible::before { content:'›'; position:absolute; left:4px; color:var(--red2); }
+.menu button[disabled] { opacity:.3; pointer-events:none; }
+.foot { position:absolute; bottom:18px; left:0; right:0; text-align:center; font-size:12px; color:var(--dim); letter-spacing:.08em; padding:0 16px; }
+.panel { background:var(--panel); border:1px solid var(--line); padding:26px 30px; max-width:min(780px, calc(100% - 32px)); max-height:calc(100% - 40px); overflow:auto; box-shadow:0 20px 80px #000; }
+.panel h3 { font-family:Cinzel, serif; letter-spacing:.3em; margin:0 0 14px; color:var(--gold); font-weight:700; font-size:18px; text-transform:uppercase; }
+#controlsList { display:grid; grid-template-columns:auto 1fr; gap:6px 22px; font-size:15px; }
+#controlsList b { font-family:Cinzel, serif; color:var(--gold); text-align:right; }
+#file .paper { background:#d9cfb2; color:#2a2016; font-family:'Special Elite', monospace; padding:34px 38px; max-width:min(640px, calc(100% - 32px)); max-height:calc(100% - 60px); overflow:auto; font-size:16px; line-height:1.6; box-shadow:0 30px 90px #000; white-space:pre-wrap; transform:rotate(-0.6deg); }
+#file .paper h4 { margin:0 0 14px; font-size:20px; text-decoration:underline; }
+#inv .grid { display:grid; grid-template-columns:repeat(4, 112px); gap:8px; }
+@media (max-width:620px) { #inv .grid { grid-template-columns:repeat(3, 1fr); } }
+.slot { height:112px; border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.03); display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; font-size:12px; cursor:pointer; position:relative; padding:4px; }
+.slot:hover, .slot.sel { border-color:var(--gold); background:rgba(201,162,74,.08); }
+.slot .ic { font-size:34px; line-height:1.1; margin-bottom:6px; filter:drop-shadow(0 2px 2px #000); }
+.slot .ct { position:absolute; right:6px; bottom:4px; font-family:Cinzel, serif; font-size:14px; color:var(--gold); }
+.slot.eq::after { content:'E'; position:absolute; left:6px; top:4px; font-family:Cinzel, serif; color:var(--fine); font-size:12px; }
+#invInfo { margin-top:14px; min-height:68px; font-size:14px; color:#d8ccb4; }
+#invActs { margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; }
+#invActs button, .small { font-family:Cinzel, serif; letter-spacing:.15em; font-size:13px; padding:7px 14px; background:rgba(255,255,255,.05); border:1px solid var(--line); color:var(--fg); cursor:pointer; }
+#invActs button:hover, .small:hover { background:rgba(201,162,74,.2); }
+.tabs { display:flex; gap:6px; margin-bottom:14px; }
+.tabs button { font-family:Cinzel, serif; letter-spacing:.2em; font-size:13px; padding:6px 14px; background:none; border:1px solid transparent; color:var(--dim); cursor:pointer; }
+.tabs button.on { color:var(--fg); border-color:var(--line); }
+#mapC { width:min(560px, calc(100vw - 80px)); height:auto; display:block; background:#06080a; border:1px solid rgba(255,255,255,.1); }
+#death { background:radial-gradient(ellipse at center, rgba(60,0,0,.55), rgba(0,0,0,.95)); opacity:0; transition:opacity 2s; }
+#death.on { opacity:1; }
+#death h1 { font-family:Cinzel, serif; font-weight:900; color:var(--red2); font-size:clamp(48px, 10vw, 110px); letter-spacing:.15em; margin:0 0 30px; text-shadow:0 0 30px #a00; text-align:center; }
+#end { background:#000; }
+#end .txt { font-family:'Special Elite', monospace; font-size:19px; max-width:min(720px, calc(100% - 32px)); line-height:1.75; text-align:center; color:#d9ccb2; }
+#end .stats { margin:26px 0; font-family:Cinzel, serif; letter-spacing:.2em; display:grid; grid-template-columns:auto auto; gap:6px 30px; }
+#end .rank { font-family:Cinzel, serif; font-size:64px; color:var(--gold); text-shadow:0 0 20px rgba(201,162,74,.5); }
+#intro { background:#000; }
+#intro .txt { font-family:'Special Elite', monospace; font-size:clamp(16px, 2.3vw, 22px); max-width:min(760px, calc(100% - 32px)); line-height:1.8; text-align:center; color:#d8ccb4; opacity:0; transition:opacity 1.2s; }
+#skip { position:fixed; right:20px; bottom:16px; font-size:12px; color:var(--dim); letter-spacing:.15em; z-index:12; display:none; }
+body.cine #skip { display:block; }
+#loading { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:#000; z-index:50; font-family:Cinzel, serif; letter-spacing:.4em; color:var(--dim); }
+input[type=range] { accent-color:var(--red); width:200px; }
+.row { display:flex; align-items:center; gap:14px; margin:8px 0; font-size:14px; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="vignette" class="layer"></div>
+<div id="lowhp" class="layer"></div>
+<div id="dmg" class="layer"></div>
+<canvas id="grain" class="layer" width="256" height="256"></canvas>
+<div class="bar" id="barT"></div><div class="bar" id="barB"></div>
+<div id="hud" class="layer">
+  <div id="obj"><div class="h">OBJECTIVE</div><div class="t" id="objT"></div></div>
+  <div id="roomName"></div>
+  <div id="cross"><i class="c"></i><i class="h" id="chL"></i><i class="h" id="chR"></i><i class="v" id="chU"></i><i class="v" id="chD"></i></div>
+  <div id="prompt"><b>E</b><span id="promptT"></span></div>
+  <div id="health"><div class="lbl">CONDITION</div><div class="st" id="hpSt">FINE</div><canvas id="ecg" width="400" height="92"></canvas></div>
+  <div id="weapon"><div class="nm" id="wName">Handgun</div><div class="am" id="wAmmo">13 <small>/ 0</small></div></div>
+  <div id="timer"></div>
+  <div id="bossbar"><div class="n">THE LAZARUS FORM</div><div class="b"><div class="f" id="bossF"></div></div></div>
+</div>
+<div id="sub"></div>
+<div id="toast"></div>
+<div id="hint"></div>
+<div id="fade" class="layer"></div>
+<div id="skip">SPACE — SKIP</div>
+
+<div id="title" class="screen">
+  <h1>NIGHTFALL</h1>
+  <h2>AT ASHGROVE</h2>
+  <div class="menu">
+    <button id="bNew">New Game</button>
+    <button id="bCont">Continue</button>
+    <button id="bCtl">Controls</button>
+  </div>
+  <div class="foot">An original survival-horror story. Headphones recommended. Click the game to capture the mouse.</div>
+</div>
+<div id="intro" class="screen"><div class="txt" id="introT"></div></div>
+<div id="controls" class="screen"><div class="panel"><h3>Controls</h3>
+  <div id="controlsList">
+    <b>Mouse</b><span>Look (click the game to capture the mouse)</span>
+    <b>W A S D</b><span>Move — hold Shift to run (running is loud)</span>
+    <b>Right mouse</b><span>Aim. The reticle tightens while you hold steady. Left mouse fires.</span>
+    <b>Left mouse</b><span>Knife slash when not aiming</span>
+    <b>R</b><span>Reload</span>
+    <b>E</b><span>Interact, pick up, open doors, read</span>
+    <b>Q</b><span>Quick turn 180°</span>
+    <b>1 2 3</b><span>Handgun, shotgun, magnum</span>
+    <b>H</b><span>Quick heal (herbs, then spray)</span>
+    <b>F</b><span>Flashlight on/off</span>
+    <b>Tab / I</b><span>Inventory and files</span>
+    <b>M</b><span>Map</span>
+    <b>Esc / P</b><span>Pause</span>
+    <b>Arrows</b><span>Turn the camera without a mouse</span>
+  </div>
+  <div style="margin-top:20px;text-align:center"><button class="small" data-close>Back</button></div>
+</div></div>
+<div id="pause" class="screen" style="background:rgba(0,0,0,.6)"><div class="panel" style="text-align:center"><h3>Paused</h3>
+  <div class="menu"><button id="bRes">Resume</button><button id="bCtl2">Controls</button><button id="bTitle">Quit to title</button></div>
+  <div class="row" style="justify-content:center"><span>Volume</span><input type="range" id="vol" min="0" max="1" step="0.05" value="0.9"></div>
+  <div class="row" style="justify-content:center"><span>Mouse</span><input type="range" id="sens" min="0.0006" max="0.006" step="0.0002" value="0.0022"></div>
+  <div class="row" style="justify-content:center"><span>Brightness</span><input type="range" id="bright" min="0.6" max="2" step="0.05" value="1"></div>
+</div></div>
+<div id="inv" class="screen" style="background:rgba(0,0,0,.72)"><div class="panel">
+  <div class="tabs"><button data-tab="items" class="on">Items</button><button data-tab="files">Files</button></div>
+  <div id="invItems"><div class="grid" id="invGrid"></div><div id="invInfo"></div><div id="invActs"></div></div>
+  <div id="invFiles" style="display:none"></div>
+  <div style="margin-top:14px;text-align:right;font-size:12px;color:var(--dim)">TAB / ESC — CLOSE</div>
+</div></div>
+<div id="map" class="screen" style="background:rgba(0,0,0,.8)"><div class="panel" style="text-align:center"><h3>Ashgrove Manor</h3><canvas id="mapC" width="560" height="640"></canvas><div style="margin-top:10px;font-size:12px;color:var(--dim)">GREEN door: open · RED: locked · GOLD dots: items seen · M — CLOSE</div></div></div>
+<div id="file" class="screen" style="background:rgba(0,0,0,.75)"><div class="paper" id="fileP"></div><div style="margin-top:14px;font-size:12px;color:var(--dim);letter-spacing:.2em">E / ESC — CLOSE</div></div>
+<div id="death" class="screen"><h1>YOU DIED</h1><div class="menu"><button id="bRetry">Continue from last save</button><button id="bTitle2">Title</button></div></div>
+<div id="end" class="screen"><div class="txt" id="endT"></div><div class="stats" id="endS"></div><div class="rank" id="endR"></div><div class="menu" style="margin-top:20px"><button id="bTitle3">Return to title</button></div></div>
+<div id="loading">ENTERING THE MANOR…</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="js/tex.js"></script>
+<script src="js/models.js"></script>
+<script src="js/anim.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/world.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/enemies.js"></script>
+<script src="js/story.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
