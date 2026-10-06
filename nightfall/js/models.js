@@ -257,6 +257,16 @@ NF.models = (function () {
     return w;
   };
 
+  M.peddler = function () {
+    var p = M.human({ skin: '#a48a74', top: '#3a2e26', bottom: '#2a221c', coat: '#2a2420', coatLen: 0.75, hair: 'bald', gloves: '#2a1e18', seed: 4040, h: 1.02, belt: '#4a3420' });
+    var hm = std({ map: NF.tex.cloth('#1e1a16', false, 9), roughness: 1, side: THREE.DoubleSide });
+    mesh(p.J.headMesh, new THREE.SphereGeometry(0.14, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.62), hm, 0, 0.12, -0.02, 0.98, 1.15, 1.08, -0.3);
+    mesh(p.J.headMesh, box(0.2, 0.07, 0.06), std({ color: '#3a2a22', roughness: 1 }), 0, 0.06, 0.08);
+    var ey = std({ color: '#ffd080', emissive: '#a07020', emissiveIntensity: 1 }); mesh(p.J.headMesh, sphere(0.012, 6, 5), ey, 0.034, 0.122, 0.092); mesh(p.J.headMesh, sphere(0.012, 6, 5), ey, -0.034, 0.122, 0.092);
+    for (var i = 0; i < 6; i++) mesh(p.J.chest, box(0.07, 0.09, 0.04), std({ color: '#4a3826' }), -0.14 + (i % 3) * 0.14, 0.05 + (i / 3 | 0) * 0.1, 0.15);
+    var lan = grp(p.J.wrR, 0, -0.12, 0); mesh(lan, box(0.1, 0.14, 0.1), std({ color: '#3a3a30', metalness: 0.6 }), 0, -0.07, 0); mesh(lan, sphere(0.04, 8, 6), std({ color: '#ffd080', emissive: '#ffb040', emissiveIntensity: 2 }), 0, -0.07, 0);
+    return p;
+  };
   // -------------------------------------------------------------- weapons
   M.weapon = function (kind) {
     var g = new THREE.Group();
@@ -283,6 +293,20 @@ NF.models = (function () {
       mesh(g, box(0.03, 0.04, 0.08), steel, 0, 0.045, -0.02);
       mesh(g, box(0.03, 0.11, 0.045), wood, 0, -0.02, -0.04, 1, 1, 1, -0.3);
       g.userData.muzzle = new THREE.Vector3(0, 0.05, 0.29);
+    } else if (kind === 'smg') {
+      mesh(g, box(0.04, 0.06, 0.32), dark, 0, 0.04, 0.08); mesh(g, new THREE.CylinderGeometry(0.012, 0.012, 0.12, 8), steel, 0, 0.05, 0.3, 1, 1, 1, Math.PI / 2);
+      mesh(g, box(0.03, 0.16, 0.04), dark, 0, -0.07, 0.12); mesh(g, box(0.03, 0.1, 0.045), grip, 0, -0.04, -0.03, 1, 1, 1, -0.25); mesh(g, box(0.02, 0.04, 0.2), dark, 0, 0.03, -0.18);
+      g.userData.muzzle = new THREE.Vector3(0, 0.05, 0.37);
+    } else if (kind === 'rifle') {
+      mesh(g, new THREE.CylinderGeometry(0.012, 0.014, 0.75, 10), steel, 0, 0.06, 0.48, 1, 1, 1, Math.PI / 2); mesh(g, box(0.045, 0.07, 0.9), wood, 0, 0.02, 0.15);
+      mesh(g, box(0.04, 0.1, 0.3), wood, 0, -0.01, -0.36, 1, 1, 1, 0.12); mesh(g, new THREE.CylinderGeometry(0.022, 0.022, 0.3, 10), dark, 0, 0.13, 0.12, 1, 1, 1, Math.PI / 2);
+      g.userData.muzzle = new THREE.Vector3(0, 0.06, 0.86);
+    } else if (kind === 'gl') {
+      mesh(g, new THREE.CylinderGeometry(0.035, 0.035, 0.36, 12), dark, 0, 0.06, 0.3, 1, 1, 1, Math.PI / 2); mesh(g, box(0.05, 0.06, 0.18), dark, 0, 0.04, 0.06); mesh(g, box(0.045, 0.1, 0.32), wood, 0, -0.01, -0.18, 1, 1, 1, 0.15);
+      g.userData.muzzle = new THREE.Vector3(0, 0.06, 0.5);
+    } else if (kind === 'rpg') {
+      mesh(g, new THREE.CylinderGeometry(0.045, 0.045, 0.95, 12), std({ color: '#3a4a2a', roughness: 0.7 }), 0, 0.09, 0.1, 1, 1, 1, Math.PI / 2); mesh(g, box(0.03, 0.12, 0.05), dark, 0, -0.01, 0.05);
+      g.userData.muzzle = new THREE.Vector3(0, 0.09, 0.6);
     } else if (kind === 'knife') {
       mesh(g, box(0.025, 0.025, 0.11), grip, 0, 0, -0.02);
       mesh(g, box(0.004, 0.03, 0.17), steel, 0, 0.004, 0.12);

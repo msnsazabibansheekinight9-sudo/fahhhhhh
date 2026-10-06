@@ -4,6 +4,9 @@ NF.enemies = (function () {
   var E = { list: [], noises: [] }, scene, V3 = THREE.Vector3;
   var Mo = NF.models, A = NF.anim, PI = Math.PI;
   E.init = function (sc) { scene = sc; };
+  E.reg = {};
+  E.register = function (type, def) { E.reg[type] = def; };
+  E.remove = function (e) { scene.remove(e.rig.root); if (e.onRemove) e.onRemove(); var i = E.list.indexOf(e); if (i >= 0) E.list.splice(i, 1); };
   var STATS = {
     zombie: { hp: 60, speed: 0.7, rad: 0.32, turn: 2.2 },
     dog: { hp: 32, speed: 5.4, rad: 0.35, turn: 6 },
@@ -13,25 +16,33 @@ NF.enemies = (function () {
   };
   E.spawn = function (type, id, x, z, o) {
     o = o || {};
-    var rig = type === 'zombie' ? Mo.zombie(o.variant, o.seed || (Math.random() * 1e5 | 0)) : type === 'dog' ? Mo.dog(o.seed || 3) : type === 'skinner' ? Mo.skinner() : type === 'warden' ? Mo.warden() : Mo.abomination();
+    var reg = E.reg[type];
+    var rig = reg ? reg.build(o) : type === 'zombie' ? Mo.zombie(o.variant, o.seed || (Math.random() * 1e5 | 0)) : type === 'dog' ? Mo.dog(o.seed || 3) : type === 'skinner' ? Mo.skinner() : type === 'warden' ? Mo.warden() : Mo.abomination();
     rig.root.rotation.order = 'YXZ';
     scene.add(rig.root);
-    var st = STATS[type];
-    var e = { id: id, type: type, rig: rig, pos: new V3(x, 0, z), yaw: o.yaw || 0, hp: (o.hp || st.hp) * (type === 'zombie' ? 0.85 + Math.random() * 0.35 : 1), speed: st.speed * (o.speedMul || 1) * (type === 'zombie' ? 0.8 + Math.random() * 0.45 : 1), rad: st.rad, turn: st.turn,
+    var st = reg ? reg.stats : STATS[type];
+    var e = { id: id, type: type, rig: rig, pos: new V3(x, NF.world.ground(x, z), z), yaw: o.yaw || 0, hp: (o.hp || st.hp) * (type === 'zombie' ? 0.85 + Math.random() * 0.35 : 1), speed: st.speed * (o.speedMul || 1) * (type === 'zombie' ? 0.8 + Math.random() * 0.45 : 1), rad: st.rad, turn: st.turn,
       state: o.state || 'idle', t: 0, ph: Math.random() * 6, v: Math.random(), alert: !!o.alert, atkCd: 0, flinch: 0, flinchDir: 1, dead: false, fall: 0, fallDir: 1, legHp: 35, groanT: 2 + Math.random() * 5, stepT: 0, lastHeard: null, extra: {} };
     e.maxHp = e.hp;
     if (type === 'boss') { e.eyes = rig.eyes.map(function (g) { return { g: g, hp: 45, alive: true }; }); e.phase = 1; }
     if (o.hidden) { rig.root.visible = false; e.state = 'dormant'; }
+    e.opts = o; e.chunk = o.chunk; e.drop = o.drop;
+    if (reg && reg.init) reg.init(e, o);
+    if (type === 'zombie' && o.revenant) E.makeRevenant(e);
     E.list.push(e); syncRig(e);
     return e;
   };
+  E.makeRevenant = function (e) {
+    e.fast = true; e.speed = 3.3 + Math.random() * 0.6; e.hp = Math.max(e.hp, 90); e.maxHp = e.hp;
+    if (e.rig.skinMat) e.rig.skinMat.color.set('#ff7a6a').convertSRGBToLinear();
+  };
   E.byId = function (id) { for (var i = 0; i < E.list.length; i++) if (E.list[i].id === id) return E.list[i]; return null; };
   E.noise = function (pos, radius) { E.noises.push({ p: pos.clone(), r: radius, t: 0 }); };
-  function syncRig(e) { e.rig.root.position.copy(e.pos); e.rig.root.rotation.y = e.yaw; }
+  function syncRig(e) { e.rig.root.position.set(e.pos.x, e.pos.y + (e.lift || 0), e.pos.z); e.rig.root.rotation.y = e.yaw; }
   function angTo(e, p) { return Math.atan2(p.x - e.pos.x, p.z - e.pos.z); }
   function wrap(a) { while (a > PI) a -= 2 * PI; while (a < -PI) a += 2 * PI; return a; }
   function turnTo(e, target, dt, rate) { var d = wrap(target - e.yaw); var m = (rate || e.turn) * dt; e.yaw += Math.max(-m, Math.min(m, d)); return Math.abs(d); }
-  function eye(e) { return new V3(e.pos.x, e.type === 'dog' ? 0.6 : e.type === 'skinner' ? 0.5 : 1.6 * e.rig.scale, e.pos.z); }
+  function eye(e) { return new V3(e.pos.x, e.pos.y + (e.eyeH || (e.type === 'dog' ? 0.6 : e.type === 'skinner' ? 0.5 : 1.6 * e.rig.scale)), e.pos.z); }
   // pick where to walk: the player directly, or the next door toward them
   function steerTarget(e, P, canOpen) {
     var W = NF.world, ra = W.roomAt(e.pos.x, e.pos.z), rb = W.roomAt(P.pos.x, P.pos.z);
@@ -55,6 +66,7 @@ NF.enemies = (function () {
     E.list.forEach(function (o) { if (o === e || o.dead || o.state === 'dormant') return; var dx = e.pos.x - o.pos.x, dz = e.pos.z - o.pos.z, d2 = dx * dx + dz * dz, m = e.rad + o.rad; if (d2 < m * m && d2 > 1e-6) { var d = Math.sqrt(d2), p = (m - d) * 0.5; e.pos.x += dx / d * p; e.pos.z += dz / d * p; } });
     NF.world.collide(e.pos, e.rad, e.type === 'dog' ? 0.2 : 0.3);
     var r = NF.world.roomAt(e.pos.x, e.pos.z); if (r && r.safe) { e.pos.x = ox; e.pos.z = oz; return 0; }
+    e.pos.y = NF.world.ground(e.pos.x, e.pos.z);
     return speed * k;
   }
   function perceive(e, P, dt) {
@@ -68,6 +80,8 @@ NF.enemies = (function () {
   }
   E.damage = function (e, dmg, part, point, dir, weapon) {
     if (e.dead || e.state === 'dormant') return;
+    var reg = E.reg[e.type];
+    if (reg && reg.damage) { if (reg.damage(e, dmg, part, point, dir, weapon) === false) return; }
     var mul = 1;
     if (part === 'head') mul = e.type === 'zombie' ? 2.6 : e.type === 'dog' ? 1.8 : e.type === 'warden' ? 1.4 : 1.5;
     else if (part === 'leg' || part === 'arm') mul = 0.6;
@@ -84,15 +98,18 @@ NF.enemies = (function () {
     NF.audio.impact(point, true);
     e.alert = true;
     if (e.type === 'zombie' && part === 'leg') { e.legHp -= dmg; }
+    if (reg && reg.hurt && e.hp > 0) reg.hurt(e, amount, part, point, dir, weapon);
     if (e.hp <= 0) {
+      if (reg && reg.kill) { e.dead = true; e.state = 'dying'; e.t = 0; e.hp = 0; reg.kill(e, part, dir, weapon); NF.game.onKill(e); return; }
       if (e.type === 'warden') { e.state = 'stunned'; e.t = 0; e.hp = 0; NF.audio.roar(eye(e)); return; }
       kill(e, part, dir, weapon);
       return;
     }
     if (e.type === 'zombie') {
       var close = NF.game.player.pos.distanceTo(e.pos) < 2.5;
-      if ((weapon === 'shotgun' && close) || weapon === 'magnum' || e.legHp <= 0) { if (e.state !== 'down') { e.state = 'down'; e.t = 0; e.fallDir = e.legHp <= 0 ? -1 : 1; e.legHp = 30; } }
-      else if (e.state !== 'attack' && e.state !== 'down' && (weapon === 'shotgun' || part === 'head' || Math.random() < 0.3)) { e.state = 'stagger'; e.t = 0; }
+      if (e.legHp <= 0 && e.downs >= 1 && !e.legless) { e.legless = true; e.state = 'crawl'; e.t = 0; e.speed = 0.5; e.J = e.rig.J; e.rig.J.knL.visible = false; e.rig.J.knR.visible = false; NF.fx.blood(point, new V3(0, 0.6, 0), 20); }
+      else if ((weapon === 'shotgun' && close) || weapon === 'magnum' || e.legHp <= 0) { if (e.state !== 'down' && !e.legless) { e.state = 'down'; e.t = 0; e.fallDir = e.legHp <= 0 ? -1 : 1; e.legHp = 30; e.downs = (e.downs || 0) + 1; } }
+      else if (e.state !== 'attack' && e.state !== 'down' && !e.legless && (weapon === 'shotgun' || part === 'head' || Math.random() < 0.3)) { e.state = 'stagger'; e.t = 0; }
     } else if (e.type === 'dog' && e.state !== 'leap') { e.state = 'recover'; e.t = 0.2; e.pos.addScaledVector(dir, 0.4); }
     else if (e.type === 'skinner' && weapon !== 'handgun' && e.state !== 'pounce') { e.state = 'recover'; e.t = 0; }
     else if (e.type === 'boss' && e.phase === 1 && e.hp < e.maxHp * 0.5) { e.phase = 2; e.state = 'roar'; e.t = 0; e.speed *= 1.5; NF.game.event('bossPhase2'); }
@@ -106,6 +123,7 @@ NF.enemies = (function () {
       NF.fx.blood(e.rig.J.head.getWorldPosition(new V3()), new V3(0, 1, 0), 30);
     }
     if (e.type === 'zombie' || e.type === 'skinner') NF.audio.groan(eye(e), 0.7, 0.8);
+    if (e.type === 'zombie' && !e.extra.headless && !e.fast && !NF.world.roomAt(e.pos.x, e.pos.z) && NF.terrain && NF.terrain.ready && Math.random() < 0.3) e.reviveAt = 35 + Math.random() * 45;
     if (e.type === 'dog') NF.audio.growl(eye(e));
     if (e.type === 'boss') { NF.audio.roar(eye(e)); NF.game.event('bossDead'); }
     NF.game.onKill(e);
@@ -141,7 +159,10 @@ NF.enemies = (function () {
       var e = E.list[i];
       if (e.state === 'dormant') continue;
       e.t += dt; e.atkCd -= dt; e.flinch = Math.max(0, e.flinch - dt * 3);
-      var fn = UPDATE[e.type]; fn(e, t, dt, P);
+      e.lift = 0;
+      if (e.far) { if (e.pos.distanceTo(P.pos) > 70) continue; }
+      var reg = E.reg[e.type], fn = reg ? reg.update : UPDATE[e.type]; fn(e, t, dt, P);
+      if (!e.flying) e.pos.y = NF.world.ground(e.pos.x, e.pos.z);
       syncRig(e);
       if (e.extra.headless > 0) { e.extra.headless -= dt; if (Math.random() < 0.5) NF.fx.blood(e.rig.J.neck.getWorldPosition(tmp), new V3(0, 1.4, 0), 2); }
     }
@@ -150,25 +171,36 @@ NF.enemies = (function () {
   function fallAnim(e, dt, pose, lieY) {
     var f = Math.min(1, Math.max(0, (e.t - 0.25) / 0.5)); var ease = f * f;
     e.rig.root.rotation.x = -e.fallDir * PI / 2 * ease;
-    e.rig.root.position.y = (lieY || 0.14) * ease;
-    if (f > 0.5) e.rig.root.position.y += Math.sin(Math.min(1, (f - 0.5) * 4) * PI) * 0.04 * (1 - f);
+    e.lift = (lieY || 0.14) * ease;
+    if (f > 0.5) e.lift += Math.sin(Math.min(1, (f - 0.5) * 4) * PI) * 0.04 * (1 - f);
     if (e.t < 0.3) A.dying(pose, Math.min(1, e.t / 0.3)); else A.dead(pose);
   }
   var UPDATE = {
     zombie: function (e, t, dt, P) {
       var pose;
       if (e.state === 'dying' || e.state === 'dead') {
-        pose = A.base(); fallAnim(e, dt, pose); if (e.t > 1.2 && e.state === 'dying') { e.state = 'dead'; NF.fx.blood(e.pos.clone().setY(0.2), new V3(0, 0.5, 0), 6); }
-        A.apply(e.rig, pose, k(dt, 10)); e.rig.root.position.x = e.pos.x; e.rig.root.position.z = e.pos.z; return;
+        if (e.reviveAt && e.t > e.reviveAt && e.pos.distanceTo(P.pos) > 5 && e.pos.distanceTo(P.pos) < 40) {
+          e.dead = false; e.state = 'down'; e.t = 3.0; e.reviveAt = 0; e.hp = 110; e.maxHp = 110; e.alert = true; E.makeRevenant(e); e.fallDir = e.fallDir || 1; NF.game.onRevive(e); NF.audio.screech(eye(e)); return;
+        }
+        pose = A.base(); fallAnim(e, dt, pose); if (e.t > 1.2 && e.state === 'dying') { e.state = 'dead'; NF.fx.blood(e.pos.clone().setY(e.pos.y + 0.2), new V3(0, 0.5, 0), 6); }
+        A.apply(e.rig, pose, k(dt, 10));  return;
       }
       var d = perceive(e, P, dt);
       e.groanT -= dt; if (e.groanT < 0 && d < 18) { NF.audio.groan(eye(e), 0.9 + e.v * 0.3); e.groanT = 4 + Math.random() * 6; }
+      if (e.legless) {
+        e.rig.root.rotation.x = 0;
+        pose = A.crawl(e.ph, 1, t); pose.hips = [1.45, 0, 0.1 * Math.sin(e.ph)]; pose.hipsY = -0.78; pose.hipL = [-1.2, 0, 0.3]; pose.hipR = [-1.3, 0, -0.3]; pose.knL = [0, 0, 0]; pose.knR = [0, 0, 0];
+        pose.shL = [-1.9 + Math.sin(e.ph) * 0.5, 0, 0.3]; pose.shR = [-1.9 - Math.sin(e.ph) * 0.5, 0, -0.3]; pose.neck = [-0.9, 0, 0];
+        if (P.alive && d > 0.9) { var tgc = steerTarget(e, P) || P.pos; var spc = move(e, tgc, 0.45, dt); e.ph += dt * (spc * 5 + 0.3); }
+        if (d < 1.1 && e.atkCd <= 0 && P.alive) { P.hurt(10, e, 'bite'); e.atkCd = 1.8; }
+        A.apply(e.rig, pose, k(dt, 10)); return;
+      }
       if (e.state === 'eat') { pose = A.zEat(t, e.v); if (e.alert && e.t > 0.5) { e.state = 'rise'; e.t = 0; } }
       else if (e.state === 'rise') { pose = A.zEat(t, e.v); var kk = Math.min(1, e.t / 1.2); pose.hipsY *= 1 - kk; pose.hipL[0] *= 1 - kk; pose.hipR[0] *= 1 - kk; pose.knL[0] *= 1 - kk; pose.knR[0] *= 1 - kk; pose.spine[0] *= 1 - kk; turnTo(e, angTo(e, P.pos), dt, 1.5); if (e.t > 1.2) { e.state = 'chase'; e.t = 0; } }
       else if (e.state === 'down') {
         pose = A.base(); var lying = Math.min(1, e.t / 0.5), rising = e.t > 3.2 ? Math.min(1, (e.t - 3.2) / 1.0) : 0;
         var tilt = lying * (1 - rising);
-        e.rig.root.rotation.x = -e.fallDir * PI / 2 * tilt * tilt; e.rig.root.position.y = 0.14 * tilt;
+        e.rig.root.rotation.x = -e.fallDir * PI / 2 * tilt * tilt; e.lift = 0.14 * tilt;
         if (tilt > 0.5) { A.dead(pose); pose.shL[0] -= 0.4 * Math.sin(t * 3); pose.head = [0.3, 0.5 * Math.sin(t * 2), 0]; } else A.dying(pose, 1 - rising * rising);
         if (e.t > 4.2) { e.state = 'chase'; e.t = 0; e.rig.root.rotation.x = 0; }
       }
@@ -182,10 +214,11 @@ NF.enemies = (function () {
         e.state = 'chase';
         var tgt = steerTarget(e, P) || e.lastHeard;
         var sp = !tgt || d < 1.15 ? 0 : move(e, tgt, e.speed, dt);
-        e.ph += dt * (sp * 3.2 + 0.4);
-        pose = A.shamble(e.ph, Math.min(1, sp / 0.5 + 0.3), t, e.v);
-        if (d < 1.25 && e.atkCd <= 0 && !P.grabbedBy && P.invuln <= 0) { e.state = 'attack'; e.t = 0; e.extra.hitDone = false; }
-        e.stepT -= dt; if (e.stepT < 0 && sp > 0.1) { NF.audio.step(eye(e).setY(0), 'wood', 0.12); e.stepT = 0.8; }
+        if (e.fast) { e.ph += dt * (sp * 2.4 + 0.5); pose = A.walk(e.ph, Math.min(1, sp / 2.5 + 0.2), 1); A.add(pose, 'spine', 0.35, 0, 0); pose.shL = [-1.0 + Math.sin(e.ph) * 0.6, 0, 0.3]; pose.shR = [-1.0 - Math.sin(e.ph) * 0.6, 0, -0.3]; A.add(pose, 'head', 0.2, 0, 0.3); pose.jaw = [0.6, 0, 0]; if (Math.random() < dt * 0.6) NF.audio.screech(eye(e)); }
+        else { e.ph += dt * (sp * 3.2 + 0.4); pose = A.shamble(e.ph, Math.min(1, sp / 0.5 + 0.3), t, e.v); }
+        if (e.fast && d < 1.8 && e.atkCd <= 0 && P.alive) { P.hurt(14, e, 'claw'); e.atkCd = 1.2; NF.audio.knife(); }
+        else if (d < 1.25 && e.atkCd <= 0 && !P.grabbedBy && P.invuln <= 0) { e.state = 'attack'; e.t = 0; e.extra.hitDone = false; }
+        e.stepT -= dt; if (e.stepT < 0 && sp > 0.1) { NF.audio.step(e.pos.clone(), 'wood', 0.12); e.stepT = 0.8; }
       } else pose = A.shamble(e.ph, 0, t, e.v);
       if (e.flinch > 0 && e.state !== 'down') A.stagger(pose, e.flinch * 0.5, e.flinchDir);
       A.apply(e.rig, pose, k(dt, 10));
@@ -193,18 +226,18 @@ NF.enemies = (function () {
     dog: function (e, t, dt, P) {
       var pose;
       if (e.dead) {
-        var f = Math.min(1, e.t / 0.4); e.rig.root.rotation.z = PI / 2 * f * e.fallDir; e.rig.root.position.y = 0.1 * f;
+        var f = Math.min(1, e.t / 0.4); e.rig.root.rotation.z = PI / 2 * f * e.fallDir; e.lift = 0.1 * f;
         A.apply(e.rig, A.dogDead(), k(dt, 8)); return;
       }
       var d = perceive(e, P, dt);
       if (e.state === 'leap') {
         var kk = Math.min(1, e.t / 0.55);
         e.pos.lerpVectors(e.extra.from, e.extra.to, kk); NF.world.collide(e.pos, e.rad, 0.2);
-        e.rig.root.position.y = Math.sin(kk * PI) * 0.7;
+        e.lift = Math.sin(kk * PI) * 0.7;
         pose = A.dogLeap(kk);
         if (!e.extra.hitDone && kk > 0.6 && e.pos.distanceTo(P.pos) < 1.0) { e.extra.hitDone = true; if (P.alive) P.hurt(14, e, 'bite'); }
-        if (kk >= 1) { e.state = 'recover'; e.t = 0; e.rig.root.position.y = 0; }
-        A.apply(e.rig, pose, k(dt, 16)); e.rig.root.position.x = e.pos.x; e.rig.root.position.z = e.pos.z;
+        if (kk >= 1) { e.state = 'recover'; e.t = 0; e.lift = 0; }
+        A.apply(e.rig, pose, k(dt, 16)); 
         return;
       }
       if (e.state === 'recover') { pose = A.dogGrowl(t); turnTo(e, angTo(e, P.pos), dt); if (e.t > 0.7) { e.state = 'chase'; e.t = 0; } }
@@ -226,7 +259,7 @@ NF.enemies = (function () {
       var pose, J = e.rig.J;
       if (e.dead) {
         pose = A.crawl(0, 0, 0); pose.hipsY = -0.5; var f = Math.min(1, e.t / 0.5);
-        e.rig.root.rotation.z = f * 1.4 * e.fallDir; e.rig.root.position.y = 0.1 * f;
+        e.rig.root.rotation.z = f * 1.4 * e.fallDir; e.lift = 0.1 * f;
         A.apply(e.rig, pose, k(dt, 6)); J.tongue.scale.z = 0.05; return;
       }
       var d = e.pos.distanceTo(P.pos);
@@ -237,11 +270,11 @@ NF.enemies = (function () {
       if (e.state === 'pounce') {
         var kk = Math.min(1, e.t / 0.5);
         e.pos.lerpVectors(e.extra.from, e.extra.to, kk); NF.world.collide(e.pos, e.rad);
-        e.rig.root.position.y = Math.sin(kk * PI) * 0.8;
+        e.lift = Math.sin(kk * PI) * 0.8;
         pose = A.pounce(kk);
         if (!e.extra.hitDone && kk > 0.55 && e.pos.distanceTo(P.pos) < 1.3) { e.extra.hitDone = true; if (P.alive) P.hurt(26, e, 'claw'); }
-        if (kk >= 1) { e.state = 'recover'; e.t = 0; e.rig.root.position.y = 0; }
-        A.apply(e.rig, pose, k(dt, 16)); e.rig.root.position.x = e.pos.x; e.rig.root.position.z = e.pos.z; J.tongue.scale.z = 0.05; return;
+        if (kk >= 1) { e.state = 'recover'; e.t = 0; e.lift = 0; }
+        A.apply(e.rig, pose, k(dt, 16));  J.tongue.scale.z = 0.05; return;
       }
       if (e.state === 'lash') {
         var kl = e.t / 0.6; pose = A.crawl(e.ph, 0, t); pose.neck = [-0.9, 0, 0]; pose.head = [-0.2, 0, 0]; pose.jaw = [0.8, 0, 0];
@@ -276,14 +309,14 @@ NF.enemies = (function () {
       }
       if (e.state === 'cleave') {
         pose = A.cleave(Math.min(1, e.t / 1.3)); if (e.t < 0.55) turnTo(e, angTo(e, P.pos), dt, 2);
-        if (!e.extra.hitDone && e.t > 0.66) { e.extra.hitDone = true; NF.audio.thud(eye(e).setY(0.5), 1.2); NF.game.shake(0.5); var fwd = new V3(Math.sin(e.yaw), 0, Math.cos(e.yaw)); var to = P.pos.clone().sub(e.pos); if (d < 2.3 && fwd.dot(to.normalize()) > 0.4 && P.alive) P.hurt(38, e, 'cleave'); }
+        if (!e.extra.hitDone && e.t > 0.66) { e.extra.hitDone = true; NF.audio.thud(e.pos.clone().setY(e.pos.y + 0.5), 1.2); NF.game.shake(0.5); var fwd = new V3(Math.sin(e.yaw), 0, Math.cos(e.yaw)); var to = P.pos.clone().sub(e.pos); if (d < 2.3 && fwd.dot(to.normalize()) > 0.4 && P.alive) P.hurt(38, e, 'cleave'); }
         if (e.t > 1.6) { e.state = 'walk'; e.t = 0; e.atkCd = 0.6; }
       } else if (P.alive) {
         e.state = 'walk';
         var tgt = steerTarget(e, P, true);
         var sp = !tgt || d < 1.6 ? 0 : move(e, tgt, e.speed, dt);
         var prev = e.ph; e.ph += dt * (sp * 2.2 + 0.2);
-        if (Math.floor(prev / PI) !== Math.floor(e.ph / PI) && sp > 0.1) { NF.audio.thud(eye(e).setY(0), 0.9); NF.game.shake(Math.max(0, 0.35 - d * 0.025)); }
+        if (Math.floor(prev / PI) !== Math.floor(e.ph / PI) && sp > 0.1) { NF.audio.thud(e.pos.clone(), 0.9); NF.game.shake(Math.max(0, 0.35 - d * 0.025)); }
         pose = A.heavyWalk(e.ph, Math.min(1, sp / 1.2 + 0.1), t);
         if (d < 2.1 && e.atkCd <= 0) { e.state = 'cleave'; e.t = 0; e.extra.hitDone = false; }
       } else pose = A.idle(t, 0);
@@ -298,7 +331,7 @@ NF.enemies = (function () {
       if (e.state === 'dying' || e.state === 'dead') {
         pose = A.boss('hurt', 0, t); var f = Math.min(1, e.t / 2.2);
         pose.hipsY = -0.5 * f; pose.knL = [1.5 * f, 0, 0]; pose.knR = [1.5 * f, 0, 0]; pose.hipL = [-0.8 * f, 0, 0]; pose.hipR = [-0.8 * f, 0, 0];
-        if (e.t > 1.4) { var g = Math.min(1, (e.t - 1.4) / 0.8); b.root.rotation.x = PI / 2 * g * g; b.root.position.y = 0.3 * g; }
+        if (e.t > 1.4) { var g = Math.min(1, (e.t - 1.4) / 0.8); b.root.rotation.x = PI / 2 * g * g; e.lift = 0.3 * g; }
         if (e.state === 'dying' && e.t > 2.4) { e.state = 'dead'; NF.audio.thud(e.pos, 2); NF.game.shake(1); NF.fx.debris(e.pos.clone(), 10, 0.4); }
         A.apply(b, pose, k(dt, 4)); return;
       }
@@ -331,6 +364,7 @@ NF.enemies = (function () {
       A.apply(b, pose, k(dt, 8));
     }
   };
+  E.h = { move: move, steerTarget: steerTarget, perceive: perceive, turnTo: turnTo, angTo: angTo, eye: eye, wrap: wrap, fallAnim: fallAnim, k: k, syncRig: syncRig, kill: function (e, part, dir, w) { kill(e, part, dir, w); } };
   E.clear = function () { E.list.forEach(function (e) { scene.remove(e.rig.root); }); E.list = []; };
   return E;
 })();

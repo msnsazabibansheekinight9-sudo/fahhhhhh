@@ -94,6 +94,28 @@ body.cine #hud { opacity:0; }
 #skip { position:fixed; right:20px; bottom:16px; font-size:12px; color:var(--dim); letter-spacing:.15em; z-index:12; display:none; }
 body.cine #skip { display:block; }
 #loading { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:#000; z-index:50; font-family:Cinzel, serif; letter-spacing:.4em; color:var(--dim); }
+#compass { position:fixed; top:14px; left:50%; transform:translateX(-50%); width:min(520px, calc(100% - 200px)); height:26px; overflow:hidden; border-bottom:1px solid var(--line); background:linear-gradient(90deg, transparent, rgba(0,0,0,.45), transparent); display:none; font-family:Cinzel, serif; font-size:12px; letter-spacing:.1em; }
+#compass .tick { position:absolute; top:4px; transform:translateX(-50%); color:var(--dim); }
+#compass .tick.big { color:var(--fg); font-weight:700; }
+#compass .obj { position:absolute; top:0; transform:translateX(-50%); color:var(--gold); font-size:15px; text-shadow:0 0 6px #000; }
+#compassD { position:fixed; top:42px; left:50%; transform:translateX(-50%); font-size:12px; color:var(--gold); letter-spacing:.15em; font-family:Cinzel, serif; display:none; text-shadow:0 1px 3px #000; }
+#money { position:fixed; right:24px; bottom:118px; font-family:Cinzel, serif; color:var(--gold); font-size:16px; letter-spacing:.1em; text-shadow:0 1px 4px #000; }
+#status { position:fixed; left:24px; bottom:128px; font-family:Cinzel, serif; font-size:13px; letter-spacing:.2em; color:#b080ff; text-shadow:0 1px 4px #000; }
+#veh { position:fixed; right:24px; bottom:150px; font-family:Cinzel, serif; font-size:14px; letter-spacing:.15em; color:var(--fg); display:none; }
+#scope { position:fixed; inset:0; pointer-events:none; display:none; background:radial-gradient(circle at center, transparent 0, transparent 34vmin, #000 34.4vmin); }
+#scope::before, #scope::after { content:''; position:absolute; background:#000; }
+#scope::before { left:50%; top:16vh; bottom:16vh; width:2px; transform:translateX(-1px); }
+#scope::after { top:50%; left:calc(50% - 34vmin); right:calc(50% - 34vmin); height:2px; transform:translateY(-1px); }
+#areaName { position:fixed; left:50%; top:30vh; transform:translateX(-50%); font-family:Cinzel, serif; font-size:clamp(22px, 4vw, 40px); letter-spacing:.35em; color:#e8dcc8; text-shadow:0 2px 12px #000; opacity:0; transition:opacity 1.2s; pointer-events:none; text-align:center; white-space:nowrap; }
+#areaName small { display:block; font-size:12px; letter-spacing:.5em; color:var(--gold); margin-top:6px; }
+.shopGrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:8px; max-height:52vh; overflow:auto; }
+.shopItem { border:1px solid rgba(255,255,255,.14); padding:10px 12px; display:flex; flex-direction:column; gap:4px; cursor:pointer; background:rgba(255,255,255,.03); font-size:13px; }
+.shopItem:hover { border-color:var(--gold); background:rgba(201,162,74,.08); }
+.shopItem.off { opacity:.4; pointer-events:none; }
+.shopItem b { font-family:Cinzel, serif; letter-spacing:.08em; font-size:14px; }
+.shopItem .pr { color:var(--gold); font-family:Cinzel, serif; }
+.cols { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+@media (max-width:620px) { .cols { grid-template-columns:1fr; } }
 input[type=range] { accent-color:var(--red); width:200px; }
 .row { display:flex; align-items:center; gap:14px; margin:8px 0; font-size:14px; }
 </style>
@@ -113,8 +135,11 @@ input[type=range] { accent-color:var(--red); width:200px; }
   <div id="health"><div class="lbl">CONDITION</div><div class="st" id="hpSt">FINE</div><canvas id="ecg" width="400" height="92"></canvas></div>
   <div id="weapon"><div class="nm" id="wName">Handgun</div><div class="am" id="wAmmo">13 <small>/ 0</small></div></div>
   <div id="timer"></div>
+  <div id="compass"></div><div id="compassD"></div><div id="money"></div><div id="status"></div><div id="veh"></div>
   <div id="bossbar"><div class="n">THE LAZARUS FORM</div><div class="b"><div class="f" id="bossF"></div></div></div>
 </div>
+<div id="scope"></div>
+<div id="areaName"></div>
 <div id="sub"></div>
 <div id="toast"></div>
 <div id="hint"></div>
@@ -141,11 +166,13 @@ input[type=range] { accent-color:var(--red); width:200px; }
     <b>R</b><span>Reload</span>
     <b>E</b><span>Interact, pick up, open doors, read</span>
     <b>Q</b><span>Quick turn 180°</span>
-    <b>1 2 3</b><span>Handgun, shotgun, magnum</span>
+    <b>1 – 7</b><span>Handgun, shotgun, magnum, SMG, rifle, grenade launcher, rocket launcher</span>
+    <b>G</b><span>Throw a grenade</span>
+    <b>E (near a truck)</b><span>Get in or out. Drive with WASD, Shift to floor it, Space to brake</span>
     <b>H</b><span>Quick heal (herbs, then spray)</span>
     <b>F</b><span>Flashlight on/off</span>
     <b>Tab / I</b><span>Inventory and files</span>
-    <b>M</b><span>Map</span>
+    <b>M</b><span>Map (the manor indoors, the whole county outdoors)</span>
     <b>Esc / P</b><span>Pause</span>
     <b>Arrows</b><span>Turn the camera without a mouse</span>
   </div>
@@ -165,6 +192,18 @@ input[type=range] { accent-color:var(--red); width:200px; }
 </div></div>
 <div id="map" class="screen" style="background:rgba(0,0,0,.8)"><div class="panel" style="text-align:center"><h3>Ashgrove Manor</h3><canvas id="mapC" width="560" height="640"></canvas><div style="margin-top:10px;font-size:12px;color:var(--dim)">GREEN door: open · RED: locked · GOLD dots: items seen · M — CLOSE</div></div></div>
 <div id="file" class="screen" style="background:rgba(0,0,0,.75)"><div class="paper" id="fileP"></div><div style="margin-top:14px;font-size:12px;color:var(--dim);letter-spacing:.2em">E / ESC — CLOSE</div></div>
+<div id="shop" class="screen" style="background:rgba(0,0,0,.78)"><div class="panel" style="width:min(860px, calc(100% - 32px))">
+  <h3>The Peddler</h3>
+  <div id="shopTalk" style="font-family:'Special Elite',monospace;color:#d8ccb4;margin:-6px 0 12px">"Bullets, blades, bandages. Cash only, officer."</div>
+  <div class="tabs"><button data-stab="buy" class="on">Buy</button><button data-stab="sell">Sell</button><button data-stab="upgrade">Upgrade</button></div>
+  <div id="shopBody"></div>
+  <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><span id="shopMoney" style="font-family:Cinzel,serif;color:var(--gold);font-size:18px"></span><span style="font-size:12px;color:var(--dim)">ESC — LEAVE</span></div>
+</div></div>
+<div id="stash" class="screen" style="background:rgba(0,0,0,.78)"><div class="panel" style="width:min(760px, calc(100% - 32px))">
+  <h3>Item Box</h3><div style="color:var(--dim);font-size:13px;margin:-6px 0 12px">Every item box in the county shares the same contents.</div>
+  <div class="cols"><div><div style="font-family:Cinzel,serif;letter-spacing:.2em;margin-bottom:8px" id="stashCarry">CARRYING</div><div id="stashInv"></div></div><div><div style="font-family:Cinzel,serif;letter-spacing:.2em;margin-bottom:8px">IN THE BOX</div><div id="stashBox"></div></div></div>
+  <div style="margin-top:14px;text-align:right;font-size:12px;color:var(--dim)">ESC — CLOSE</div>
+</div></div>
 <div id="death" class="screen"><h1>YOU DIED</h1><div class="menu"><button id="bRetry">Continue from last save</button><button id="bTitle2">Title</button></div></div>
 <div id="end" class="screen"><div class="txt" id="endT"></div><div class="stats" id="endS"></div><div class="rank" id="endR"></div><div class="menu" style="margin-top:20px"><button id="bTitle3">Return to title</button></div></div>
 <div id="loading">ENTERING THE MANOR…</div>
@@ -175,8 +214,12 @@ input[type=range] { accent-color:var(--red); width:200px; }
 <script src="js/anim.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/world.js"></script>
+<script src="js/terrain.js"></script>
+<script src="js/structures.js"></script>
 <script src="js/fx.js"></script>
 <script src="js/enemies.js"></script>
+<script src="js/creatures.js"></script>
+<script src="js/vehicles.js"></script>
 <script src="js/story.js"></script>
 <script src="js/game.js"></script>
 </body>

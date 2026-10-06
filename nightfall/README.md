@@ -22,3 +22,25 @@ WASD to move, Shift to run, mouse to look, right mouse to aim, left mouse to fir
 
 ## Run it
 Serve this folder with any static web server and open `index.html`.
+
+## Act 2: Ashgrove County (open world)
+Leave the lab through the emergency exit and the game opens up into a **6 km × 6 km county** that streams in around you as you move: hills, forest, roads, rain and lightning.
+- **Places**: Halverson Falls (a town of about 50 buildings with a police station), Millbrook village, Harlan and Odell farms, St. Agnes Church and its graveyard, Crow Ridge Relay, Blackwater Reservoir and its walkable dam, Ashgrove Quarry, a Velgen field station, a ranger lookout, an old copper mine, a campground, gas stations, and about 250 cabins, wrecks, ruins and camps.
+- **New enemies**:
+  - Hollow villagers with axes, pitchforks, sickles, torches or shields. They can throw axes.
+  - The Butcher, a chainsaw mini-boss.
+  - Revenants: fast zombies, including dead zombies that get back up later.
+  - Legless crawlers.
+  - Bloaters that burst into poison gas.
+  - Crow swarms.
+  - Giant spiders that spit poison.
+  - Reapers that leap and can decapitate you.
+  - Burrowing giant worms.
+  - Carnivorous Bloom plants.
+  - Two bosses: Teo, turned, and the Warden, Unbound.
+- **Weapons**: an MP5-K, a scoped Remington 700, an M79 grenade launcher, an M72 rocket launcher and hand grenades.
+- **The Peddler**: a merchant in every safehouse. Buy weapons, ammo, herbs, larger pouches and a Kevlar vest. Sell treasures. Upgrade firepower, capacity, reload speed and fire rate.
+- **Survival**: crafting with gunpowder, red and blue herbs, poison, a limited pack, and item boxes that share their contents across safehouses.
+- **Driving**: pickup trucks you can drive. Ram the infected, and use the headlights.
+- **Navigation**: a county map that reveals places as you find them, a compass with an objective marker, and area titles.
+- **Story**: the police radio, the relay defence, Teo at the church, and the airfield evac against the Warden.

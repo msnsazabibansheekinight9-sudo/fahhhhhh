@@ -21,7 +21,28 @@ NF.world = (function () {
     if (opt.collide) m.userData.box = collider(x - w / 2, x + w / 2, z - d / 2, z + d / 2, y, y + h, opt.tag);
     return m;
   }
-  function collider(x0, x1, z0, z1, y0, y1, tag) { var b = { x0: x0, x1: x1, z0: z0, z1: z1, y0: y0 || 0, y1: y1 === undefined ? 10 : y1, tag: tag, on: true }; W.boxes.push(b); return b; }
+  // colliders live in a spatial hash so the open world can hold thousands of them
+  var CELL = 8, grid = {};
+  function cellsOf(b, fn) { for (var cx = Math.floor(b.x0 / CELL); cx <= Math.floor(b.x1 / CELL); cx++) for (var cz = Math.floor(b.z0 / CELL); cz <= Math.floor(b.z1 / CELL); cz++) fn(cx + ',' + cz); }
+  function collider(x0, x1, z0, z1, y0, y1, tag) {
+    var b = { x0: x0, x1: x1, z0: z0, z1: z1, y0: y0 || 0, y1: y1 === undefined ? 10 : y1, tag: tag, on: true };
+    W.boxes.push(b); cellsOf(b, function (k) { (grid[k] || (grid[k] = [])).push(b); });
+    return b;
+  }
+  W.removeCollider = function (b) {
+    cellsOf(b, function (k) { var a = grid[k]; if (!a) return; var i = a.indexOf(b); if (i >= 0) a.splice(i, 1); if (!a.length) delete grid[k]; });
+    var j = W.boxes.indexOf(b); if (j >= 0) W.boxes.splice(j, 1);
+  };
+  var qstamp = 0;
+  function near(x0, z0, x1, z1, out) {
+    qstamp++; out.length = 0;
+    for (var cx = Math.floor(x0 / CELL); cx <= Math.floor(x1 / CELL); cx++) for (var cz = Math.floor(z0 / CELL); cz <= Math.floor(z1 / CELL); cz++) {
+      var a = grid[cx + ',' + cz]; if (!a) continue;
+      for (var i = 0; i < a.length; i++) if (a[i]._q !== qstamp) { a[i]._q = qstamp; out.push(a[i]); }
+    }
+    return out;
+  }
+  var nearBuf = [];
   W.collider = collider; W.addBox = addBox;
   function initMats() {
     mats.wallpaper = std({ map: T.wallpaper(), roughness: 0.9 });
@@ -69,7 +90,7 @@ NF.world = (function () {
     var segs = [], cur = from;
     gaps.forEach(function (g) { segs.push([cur, g.c - g.w / 2]); cur = g.c + g.w / 2; });
     segs.push([cur, to]);
-    var mN = wallMats(rn ? rn.wall : (rp ? rp.wall : 'mansion')), mP = wallMats(rp ? rp.wall : (rn ? rn.wall : 'mansion'));
+    var mN = wallMats(rn ? rn.wall : 'stone'), mP = wallMats(rp ? rp.wall : 'stone');
     function piece(a, b, y0, y1, lower) {
       if (b - a < 0.01) return;
       var len = b - a, mid = (a + b) / 2, hh = y1 - y0;
@@ -221,6 +242,18 @@ NF.world = (function () {
     else if (type === 'key_raven') { m = new THREE.Mesh(Mo.box(0.03, 0.01, 0.14), mats.brass); m.position.y = 0.02; g.add(m); var bow = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.01, 6, 12), mats.brass); bow.rotation.x = Math.PI / 2; bow.position.set(0, 0.02, -0.09); g.add(bow); }
     else if (type === 'crest') { m = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.02, 6), std({ color: '#c0c4c8', metalness: 0.95, roughness: 0.2 })); m.position.y = 0.02; g.add(m); var gem = new THREE.Mesh(Mo.sphere(0.025), std({ color: '#c01020', emissive: '#600008' })); gem.position.y = 0.035; g.add(gem); }
     else if (type === 'keycard') { m = new THREE.Mesh(Mo.box(0.09, 0.004, 0.055), std({ color: '#e0e0e0', emissive: '#203040' })); m.position.y = 0.01; g.add(m); var s = new THREE.Mesh(Mo.box(0.091, 0.005, 0.012), std({ color: '#c02020' })); s.position.set(0, 0.011, 0.012); g.add(s); }
+    else if (type === 'money') { for (var mi = 0; mi < 3; mi++) { var bill = new THREE.Mesh(Mo.box(0.15, 0.01, 0.07), std({ color: '#5a7a4a', roughness: 0.8 })); bill.position.set(0, 0.005 + mi * 0.01, 0); bill.rotation.y = mi * 0.4; g.add(bill); } }
+    else if (type === 'treasure') { m = new THREE.Mesh(new THREE.OctahedronGeometry(0.07, 0), std({ color: '#d8b040', metalness: 0.95, roughness: 0.2, emissive: '#302000' })); m.position.y = 0.08; g.add(m); }
+    else if (type === 'powder') { m = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.12, 10), std({ color: '#3a3a3a', roughness: 0.6 })); m.position.y = 0.06; g.add(m); var lb = new THREE.Mesh(new THREE.CylinderGeometry(0.051, 0.061, 0.04, 10), std({ color: '#c0a030' })); lb.position.y = 0.07; g.add(lb); }
+    else if (type === 'red_herb' || type === 'blue_herb') { var hp = herbPot(); hp.traverse(function (c) { if (c.isMesh && c.geometry.type === 'ConeGeometry') c.material = std({ color: type === 'red_herb' ? '#a02020' : '#2a4aa0', roughness: 0.6, side: THREE.DoubleSide }); }); g.add(hp); }
+    else if (type === 'smg' || type === 'rifle' || type === 'gl' || type === 'rpg') { var w2 = Mo.weapon(type); w2.rotation.set(0, 0, Math.PI / 2); w2.position.y = 0.05; g.add(w2); }
+    else if (type === 'smg_ammo' || type === 'rifle_ammo' || type === 'gl_ammo' || type === 'rpg_ammo' || type === 'grenade' || type === 'fuse' || type === 'flare') {
+      var colr = { smg_ammo: '#4a6a3a', rifle_ammo: '#6a4a2a', gl_ammo: '#3a4a2a', rpg_ammo: '#3a4a2a', grenade: '#3a4a2a', fuse: '#c8c8c0', flare: '#c02020' }[type];
+      if (type === 'grenade') { m = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), std({ color: colr, roughness: 0.6 })); m.scale.y = 1.3; m.position.y = 0.06; }
+      else if (type === 'fuse') { m = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.16, 10), std({ color: colr, metalness: 0.7, roughness: 0.3, emissive: '#102030' })); m.rotation.z = Math.PI / 2; m.position.y = 0.03; }
+      else { m = new THREE.Mesh(Mo.box(0.16, 0.08, 0.1), std({ color: colr, roughness: 0.6 })); m.position.y = 0.04; }
+      g.add(m);
+    }
     else if (type === 'file') { m = new THREE.Mesh(Mo.box(0.22, 0.01, 0.3), std({ map: T.paper(), roughness: 0.9 })); m.position.y = 0.006; m.rotation.y = 0.3; g.add(m); }
     g.traverse(function (c) { if (c.isMesh) c.castShadow = true; });
     return g;
@@ -231,7 +264,7 @@ NF.world = (function () {
     var g = itemModel(type); g.position.set(x, y, z); scene.add(g);
     if (!sparkMat) sparkMat = new THREE.SpriteMaterial({ map: T.spark(), color: '#fff3c0', transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
     var sp = new THREE.Sprite(sparkMat.clone()); sp.scale.set(0.25, 0.25, 0.25); sp.position.set(x, y + 0.15, z); scene.add(sp);
-    var it = { id: id, type: type, x: x, y: y, z: z, mesh: g, spark: sp, taken: false, amount: opts.amount, file: opts.file, name: opts.name, onTake: opts.onTake };
+    var it = { id: id, type: type, x: x, y: y, z: z, mesh: g, spark: sp, taken: false, amount: opts.amount, file: opts.file, name: opts.name, onTake: opts.onTake, value: opts.value };
     W.items.push(it); return it;
   };
   W.takeItem = function (it) { it.taken = true; scene.remove(it.mesh); scene.remove(it.spark); };
@@ -252,6 +285,7 @@ NF.world = (function () {
       var w = r.x1 - r.x0, d = r.z1 - r.z0;
       var f = new THREE.Mesh(new THREE.PlaneGeometry(w, d), floorMat(r.floor, w, d)); f.rotation.x = -Math.PI / 2; f.position.set((r.x0 + r.x1) / 2, 0, (r.z0 + r.z1) / 2); f.receiveShadow = true; scene.add(f);
       var c = new THREE.Mesh(new THREE.PlaneGeometry(w, d), r.wall === 'lab' ? mats.labCeil : mats.ceiling); c.rotation.x = Math.PI / 2; c.position.set((r.x0 + r.x1) / 2, r.h, (r.z0 + r.z1) / 2); scene.add(c);
+      addBox((r.x0 + r.x1) / 2, r.h, (r.z0 + r.z1) / 2, w + 0.6, 0.5, d + 0.6, mats.stone, { uv: true, uvs: 3, cast: false });
       // cornice
       if (r.wall !== 'lab') { addBox((r.x0 + r.x1) / 2, r.h - 0.25, r.z0 + 0.2, w, 0.25, 0.12, mats.trim, { uv: false, cast: false }); addBox((r.x0 + r.x1) / 2, r.h - 0.25, r.z1 - 0.2, w, 0.25, 0.12, mats.trim, { uv: false, cast: false }); }
     });
@@ -503,11 +537,22 @@ NF.world = (function () {
     W.anims.push(function (t, dt) { var p = geo.attributes.position.array; for (var i = 0; i < n; i++) { p[i * 3 + 1] -= dt * 0.03; p[i * 3] += Math.sin(t * 0.3 + i) * dt * 0.02; if (p[i * 3 + 1] < 0) p[i * 3 + 1] = 4; } geo.attributes.position.needsUpdate = true; });
   };
   // -------------------------------------------------------------- queries
-  W.roomAt = function (x, z) { for (var i = 0; i < W.rooms.length; i++) { var r = W.rooms[i]; if (x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1) return r; } return null; };
+  W.extraRooms = [];
+  W.roomAt = function (x, z) {
+    for (var i = 0; i < W.rooms.length; i++) { var r = W.rooms[i]; if (x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1) return r; }
+    for (var j = 0; j < W.extraRooms.length; j++) { var q = W.extraRooms[j]; if (x >= q.x0 && x <= q.x1 && z >= q.z0 && z <= q.z1) return q; }
+    return null;
+  };
+  // walkable ground height: room floors indoors, terrain outdoors
+  W.ground = function (x, z) {
+    var r = W.roomAt(x, z); if (r) return r.y || 0;
+    return NF.terrain && NF.terrain.ready ? NF.terrain.height(x, z) : 0;
+  };
   W.collide = function (p, rad, y0) {
-    y0 = y0 || 0.3;
-    for (var i = 0; i < W.boxes.length; i++) {
-      var b = W.boxes[i]; if (!b.on || b.y1 < y0 || b.y0 > 1.6) continue;
+    y0 = (p.y || 0) + (y0 || 0.3); var yTop = (p.y || 0) + 1.6;
+    var list = near(p.x - rad, p.z - rad, p.x + rad, p.z + rad, nearBuf);
+    for (var i = 0; i < list.length; i++) {
+      var b = list[i]; if (!b.on || b.y1 < y0 || b.y0 > yTop) continue;
       var cx = Math.max(b.x0, Math.min(p.x, b.x1)), cz = Math.max(b.z0, Math.min(p.z, b.z1));
       var dx = p.x - cx, dz = p.z - cz, d2 = dx * dx + dz * dz;
       if (d2 < rad * rad) {
@@ -518,47 +563,59 @@ NF.world = (function () {
         }
       }
     }
+    var lim = NF.terrain ? NF.terrain.LIMIT : 1e9; p.x = Math.max(-lim, Math.min(lim, p.x)); p.z = Math.max(-lim, Math.min(lim, p.z));
   };
-  // ray vs boxes. returns distance or Infinity
-  W.ray = function (o, d, max, skipLow) {
+  // ray vs boxes, floors, ceilings and terrain. returns hit distance or max
+  var rayBuf = [], rayHit = {};
+  W.ray = function (o, d, max) {
     var best = max || 100;
-    for (var i = 0; i < W.boxes.length; i++) {
-      var b = W.boxes[i]; if (!b.on) continue;
+    var ex = o.x + d.x * best, ez = o.z + d.z * best;
+    var list;
+    if (best < 70) list = near(Math.min(o.x, ex), Math.min(o.z, ez), Math.max(o.x, ex), Math.max(o.z, ez), rayBuf); else list = W.boxes;
+    W.lastBox = null;
+    for (var i = 0; i < list.length; i++) {
+      var b = list[i]; if (!b.on) continue;
       var tmin = 0, tmax = best, ok = true;
       var mins = [b.x0, b.y0, b.z0], maxs = [b.x1, b.y1, b.z1], oo = [o.x, o.y, o.z], dd = [d.x, d.y, d.z];
       for (var a = 0; a < 3; a++) {
         if (Math.abs(dd[a]) < 1e-9) { if (oo[a] < mins[a] || oo[a] > maxs[a]) { ok = false; break; } }
         else { var t1 = (mins[a] - oo[a]) / dd[a], t2 = (maxs[a] - oo[a]) / dd[a]; if (t1 > t2) { var tt = t1; t1 = t2; t2 = tt; } tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2); if (tmin > tmax) { ok = false; break; } }
       }
-      if (ok && tmin < best && tmin > 0) best = tmin;
+      if (ok && tmin < best && tmin > 0) { best = tmin; W.lastBox = b; }
     }
-    // floor / ceiling
-    if (d.y < -1e-6) { var tf = -o.y / d.y; if (tf > 0 && tf < best) best = tf; }
-    var room = W.roomAt(o.x, o.z); if (room && d.y > 1e-6) { var tc = (room.h - o.y) / d.y; if (tc > 0 && tc < best) best = tc; }
+    var room = W.roomAt(o.x, o.z);
+    if (room) {
+      var fy = room.y || 0;
+      if (d.y < -1e-6) { var tf = (fy - o.y) / d.y; if (tf > 0 && tf < best) best = tf; }
+      if (d.y > 1e-6) { var tc = (fy + room.h - o.y) / d.y; if (tc > 0 && tc < best) best = tc; }
+    } else if (NF.terrain && NF.terrain.ready) best = NF.terrain.rayHit(o, d, best);
+    else if (d.y < -1e-6) { var tf2 = -o.y / d.y; if (tf2 > 0 && tf2 < best) best = tf2; }
     return best;
   };
   W.lineClear = function (a, b) { var d = new THREE.Vector3().subVectors(b, a), len = d.length(); d.divideScalar(len); return W.ray(a, d, len) >= len - 0.05; };
-  // room graph path: returns next waypoint toward target
+  // room graph path ('out' is the outdoors): returns the next door toward the target
   W.nextWaypoint = function (from, to, canOpen) {
     var ra = W.roomAt(from.x, from.z), rb = W.roomAt(to.x, to.z);
-    if (!ra || !rb || ra === rb) return null;
-    var q = [ra.id], prev = {}; prev[ra.id] = null;
+    var ia = ra ? ra.id : 'out', ib = rb ? rb.id : 'out';
+    if (ia === ib) return null;
+    var q = [ia], prev = {}; prev[ia] = null;
     while (q.length) {
-      var cur = q.shift(); if (cur === rb.id) break;
+      var cur = q.shift(); if (cur === ib) break;
       W.doors.forEach(function (d) {
         if (!d.open && !(canOpen && !d.lock && !d.never)) return;
-        var other = d.a === cur ? d.b : d.b === cur ? d.a : null;
+        var a = d.a || 'out', b = d.b || 'out';
+        var other = a === cur ? b : b === cur ? a : null;
         if (other && !(other in prev)) { prev[other] = { room: cur, door: d }; q.push(other); }
       });
-      if (cur === 'hall' && W.breakWall && !W.breakWall.userData.box.on) { /* hole leads nowhere */ }
     }
-    if (!(rb.id in prev)) return null;
-    var step = rb.id, door = null;
-    while (prev[step] && prev[step].room !== ra.id) step = prev[step].room;
-    door = prev[step] && prev[step].door;
-    if (!door) return null;
-    return door;
+    if (!(ib in prev)) return null;
+    var step = ib;
+    while (prev[step] && prev[step].room !== ia) step = prev[step].room;
+    return (prev[step] && prev[step].door) || null;
   };
+  W.removeItem = function (it) { scene.remove(it.mesh); scene.remove(it.spark); var i = W.items.indexOf(it); if (i >= 0) W.items.splice(i, 1); };
+  W.mats = function () { return mats; };
+  W.scene = function () { return scene; };
   W.update = function (t, dt) {
     updateDoors(dt);
     for (var i = 0; i < W.anims.length; i++) W.anims[i](t, dt);

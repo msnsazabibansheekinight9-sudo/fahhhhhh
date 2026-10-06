@@ -55,8 +55,21 @@ NF.fx = (function () {
     add(ring, new THREE.Vector3(), 0.6, { g: 0, fade: true, grow: 9 });
     F.debris(pos, 6, 0.4);
   };
+  var fireMat;
+  F.explosion = function (pos, r) {
+    flashLight.position.copy(pos); flashLight.intensity = 12; flashLight.distance = r * 6; flashT = 0.18;
+    if (!fireMat) fireMat = new THREE.SpriteMaterial({ map: NF.tex.smoke(), color: '#ffa040', blending: THREE.AdditiveBlending, transparent: true, depthWrite: false });
+    for (var i = 0; i < 16; i++) { var s = new THREE.Sprite(fireMat.clone()); s.material.color.set(i % 3 ? '#ff8a20' : '#ffd060'); s.position.copy(pos).add(new THREE.Vector3((Math.random() - .5) * r * 0.5, Math.random() * r * 0.3, (Math.random() - .5) * r * 0.5)); s.scale.setScalar(r * 0.4); add(s, new THREE.Vector3((Math.random() - .5) * 4, 2 + Math.random() * 3, (Math.random() - .5) * 4), 0.6 + Math.random() * 0.3, { g: 0, fade: true, grow: r * 1.2 }); }
+    for (var k = 0; k < 10; k++) { var sm = new THREE.Sprite(smokeMat.clone()); sm.material.color.set('#2a2622'); sm.material.opacity = 0.7; sm.position.copy(pos); sm.scale.setScalar(r * 0.5); add(sm, new THREE.Vector3((Math.random() - .5) * 3, 1.5 + Math.random() * 2, (Math.random() - .5) * 3), 3 + Math.random() * 2, { g: -0.1, fade: true, grow: r * 0.6 }); }
+    F.debris(pos, 8, 0.6); F.shock(pos);
+  };
+  F.puff = function (pos, col) { var s = new THREE.Sprite(smokeMat.clone()); s.material.color.set(col || '#888'); s.material.opacity = 0.5; s.position.copy(pos); s.scale.setScalar(0.15); add(s, new THREE.Vector3(0, 0.2, 0), 0.5, { g: 0, fade: true, grow: 0.6 }); };
+  F.splat = function (pos, col) { for (var i = 0; i < 8; i++) { var m = new THREE.Mesh(geoDrop, new THREE.MeshBasicMaterial({ color: col })); m.position.copy(pos); add(m, new THREE.Vector3((Math.random() - .5) * 3, Math.random() * 2, (Math.random() - .5) * 3), 0.8, {}); } };
+  F.feathers = function (pos) { for (var i = 0; i < 8; i++) { var m = new THREE.Mesh(geoShard, new THREE.MeshBasicMaterial({ color: '#111', side: THREE.DoubleSide })); m.scale.setScalar(0.6); m.position.copy(pos); add(m, new THREE.Vector3((Math.random() - .5) * 2, Math.random() * 1.5, (Math.random() - .5) * 2), 2, { g: 1.2, spin: 6 }); } };
+  F.dirt = function (pos) { var s = new THREE.Sprite(smokeMat.clone()); s.material.color.set('#5a4a38'); s.material.opacity = 0.6; s.position.copy(pos); s.scale.setScalar(0.5); add(s, new THREE.Vector3((Math.random() - .5), 1 + Math.random(), (Math.random() - .5)), 1.2, { g: 0.5, fade: true, grow: 1.2 }); };
+  F.flare = function (pos) { var s = new THREE.Sprite(sparkMat.clone()); s.material.color.set('#ff3020'); s.position.copy(pos); s.scale.setScalar(1.5); add(s, new THREE.Vector3(0, 22, 0), 2.5, { g: 4, fade: true }); flashLight.position.copy(pos); flashLight.color.set('#ff4030'); flashLight.intensity = 5; flashT = 1.2; setTimeout(function () { flashLight.color.set('#ffc070'); }, 1300); };
   F.update = function (dt) {
-    if (flashT > 0) { flashT -= dt; if (flashT <= 0) flashLight.intensity = 0; }
+    if (flashT > 0) { flashT -= dt; if (flashT <= 0) { flashLight.intensity = 0; flashLight.distance = 9; } }
     for (var i = F.parts.length - 1; i >= 0; i--) {
       var p = F.parts[i]; p.life -= dt;
       if (p.life <= 0) { scene.remove(p.o); if (p.o.material && p.o.material !== bloodMat && p.o.material !== shellMat && p.o.material !== sparkMat && p.o.material !== debrisMat && p.o.material !== glassMat) p.o.material.dispose(); F.parts.splice(i, 1); continue; }

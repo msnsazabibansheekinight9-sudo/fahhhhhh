@@ -119,6 +119,33 @@ NF.audio = (function () {
     noise(d, t, 1.4, 'highpass', 4000, 1, 0.25, 0.01);
   };
   A.typewriter = function () { if (!ctx) return; var t = now(), d = out(null, 0.2); for (var i = 0; i < 12; i++) { noise(d, t + i * 0.09 + Math.random() * 0.03, 0.03, 'bandpass', 2500, 2, 0.5); } tone(d, t + 1.2, 0.3, 'sine', 2000, 0, 0.08); };
+  A.boom = function (pos, r) {
+    if (!ctx) return; var t = now(), d = out(pos, 0.9); var big = Math.min(2, (r || 5) / 4);
+    noise(d, t, 1.6 * big, 'lowpass', 700, 0.7, 1.0, 0.005); tone(d, t, 0.9 * big, 'sine', 90, 25, 1.0); noise(d, t, 0.25, 'highpass', 2000, 1, 0.6); noise(d, t + 0.1, 2.5 * big, 'lowpass', 180, 1, 0.5, 0.2);
+  };
+  A.hiss = function (pos) { if (!ctx) return; var t = now(), d = out(pos, 0.3); noise(d, t, 0.6, 'highpass', 3500, 0.8, 0.3, 0.05); };
+  A.whisper = function (pos) { if (!ctx) return; var t = now(), d = out(pos, 0.5); for (var i = 0; i < 4; i++) { var f = noise(d, t + i * 0.16, 0.14, 'bandpass', 1200 + Math.random() * 1800, 6, 0.18, 0.03); } tone(d, t, 0.6, 'sawtooth', 140 + Math.random() * 40, 110, 0.05, 0.05); };
+  A.chainsaw = function (pos, cutting) { if (!ctx) return; var t = now(), d = out(pos, 0.3); var o = tone(d, t, 0.5, 'sawtooth', cutting ? 140 : 95, cutting ? 160 : 90, cutting ? 0.4 : 0.25, 0.01); var lfo = ctx.createOscillator(); lfo.frequency.value = 38; var lg = ctx.createGain(); lg.gain.value = 25; lfo.connect(lg); lg.connect(o.frequency); lfo.start(t); lfo.stop(t + 0.55); noise(d, t, 0.5, 'bandpass', cutting ? 2400 : 1200, 2, 0.2, 0.01); };
+  A.splatter = function (pos) { if (!ctx) return; var t = now(), d = out(pos, 0.5); noise(d, t, 0.6, 'lowpass', 600, 1, 0.9); tone(d, t, 0.3, 'sine', 80, 30, 0.6); };
+  A.caw = function (pos) { if (!ctx) return; var t = now(), d = out(pos, 0.5); for (var i = 0; i < 2; i++) { var tt = t + i * 0.25 + Math.random() * 0.1; tone(d, tt, 0.18, 'sawtooth', 700 + Math.random() * 200, 450, 0.12, 0.01); noise(d, tt, 0.16, 'bandpass', 1500, 4, 0.18, 0.01); } };
+  A.rumble = function (pos) { if (!ctx) return; var t = now(), d = out(pos, 0.4); noise(d, t, 1.4, 'lowpass', 120, 1, 0.8, 0.3); tone(d, t, 1.2, 'sine', 40, 32, 0.5, 0.3); };
+  A.thunder = function () { if (!ctx) return; var t = now(), d = out(null, 1.0); noise(d, t, 4, 'lowpass', 300, 0.7, 0.9, 0.05); noise(d, t + 0.3, 3, 'lowpass', 120, 1, 0.8, 0.4); };
+  A.engine = function (rpm, on) {
+    if (!ctx) return;
+    if (!A._eng) { var o = ctx.createOscillator(); o.type = 'sawtooth'; var o2 = ctx.createOscillator(); o2.type = 'square'; var f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 500; var g = ctx.createGain(); g.gain.value = 0; o.connect(f); o2.connect(f); f.connect(g); g.connect(sfx); o.start(); o2.start(); A._eng = { o: o, o2: o2, g: g, f: f }; }
+    var e = A._eng, t = now(); e.o.frequency.setTargetAtTime(30 + rpm * 70, t, 0.1); e.o2.frequency.setTargetAtTime(15 + rpm * 35, t, 0.1); e.f.frequency.setTargetAtTime(300 + rpm * 900, t, 0.1); e.g.gain.setTargetAtTime(on ? 0.13 : 0, t, 0.15);
+  };
+  A.rain = function (level) {
+    if (!ctx) return;
+    if (!A._rain) { var s = ctx.createBufferSource(); s.buffer = noiseBuf; s.loop = true; var f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 900; var g = ctx.createGain(); g.gain.value = 0; s.connect(f); f.connect(g); g.connect(sfx); s.start(); A._rain = g; }
+    A._rain.gain.setTargetAtTime(level * 0.09, now(), 0.5);
+  };
+  A.heli = function (pos, on) {
+    if (!ctx) return; var t = now(), d = out(pos, 0.4);
+    for (var i = 0; i < 6; i++) noise(d, t + i * 0.09, 0.07, 'lowpass', 250, 1, on ? 0.7 : 0.3);
+  };
+  A.cash = function () { if (!ctx) return; var t = now(), d = out(null, 0.2); tone(d, t, 0.12, 'square', 1800, 0, 0.06); tone(d, t + 0.07, 0.3, 'square', 2400, 0, 0.06); };
+  A.flare = function (pos) { if (!ctx) return; var t = now(), d = out(pos, 0.6); noise(d, t, 0.3, 'bandpass', 900, 1, 0.8); noise(d, t, 2.5, 'highpass', 4000, 1, 0.15, 0.2); };
   // ------------------------------------------------------------- music beds
   var amb = null, beds = {}, current = null;
   function startAmbience() {
