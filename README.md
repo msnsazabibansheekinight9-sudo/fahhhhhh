@@ -1,5 +1,7 @@
 # Ironsight Armory
 
+> Also in this repo: **[Ironclad](grimdark/)**, a procedural grimdark sci-fi FPS — see `grimdark/README.md`.
+
 A browser firearms simulator built with Three.js (r128). Everything is procedural: weapon models, textures, soldiers, maps and audio.
 
 - **1,770 real weapons** from the 1400s to today across seven eras — two big batches added at least ten more to every era and class group where enough real designs exist (rifles, carbines, battle and assault rifles, marksman and sniper rifles, SMGs, machine guns, shotguns, sidearms, prototypes, muskets, cannons, mortars, anti-tank, anti-aircraft, field, siege and naval guns, recoilless rifles) — including 94 prototypes and experimental designs (G11, TKB-059, Gyrojet, SPIW, OICW, EM-2, Hughes Lockless, XM25, NGSW…), each with its own weight, recoil, spread and reload handling, with real calibres, rates of fire, capacities and muzzle velocities.
