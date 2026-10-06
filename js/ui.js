@@ -110,18 +110,26 @@ UI.openChrome = async function () {
     if (/iPhone|iPad|iPod/i.test(ua)) { location.href = 'googlechromes://' + bare; return; }
     if (!tryOpen(u)) location.href = u; return;
   }
-  // inside claude.ai: open the game on its own in a new tab — no download
-  const w = /Android/i.test(ua) ? tryOpen(`intent://${ARTIFACT_URL.replace(/^https:\/\//, '')}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(ARTIFACT_URL)};end`) || tryOpen(ARTIFACT_URL)
-    : tryOpen(ARTIFACT_URL);
-  if (w) return;
-  // the host blocked new windows: hand over the link
-  const o = overlay(`<div class="dialog" style="width:min(560px,100%)"><div class="eyebrow">Open in Chrome</div><h2>Open the game in its own tab</h2>
-    <p class="muted">This frame isn't allowed to open new tabs, so use the link: click it, or copy it into Chrome's address bar. Nothing to download.</p>
-    <p><a id="oc-a" href="${ARTIFACT_URL}" target="_blank" rel="noopener" style="color:var(--brass2);font:600 15px var(--f-mono);word-break:break-all">${ARTIFACT_URL}</a></p>
-    <input id="oc-in" class="wsq" readonly value="${ARTIFACT_URL}" style="width:100%;user-select:text;-webkit-user-select:text">
-    <div class="btns"><button class="btn primary" id="oc-copy">Copy link</button><button class="btn" id="oc-file" title="A single self-contained file you can open in Chrome offline">Save as a file instead</button><button class="btn" id="oc-x">Close</button></div></div>`);
-  const inp = o.querySelector('#oc-in'); inp.onclick = () => inp.select();
-  o.querySelector('#oc-copy').onclick = async () => { inp.select(); let ok = false; try { await navigator.clipboard.writeText(ARTIFACT_URL); ok = true; } catch (e) { try { ok = document.execCommand('copy'); } catch (e2) {} } o.querySelector('#oc-copy').textContent = ok ? 'Copied — paste it into Chrome' : 'Select the link and copy it'; };
+  // inside claude.ai the game runs in a frame served from its own host. That page also opens on its own,
+  // top-level, full-window — so the main option hands Chrome this frame's real address
+  const direct = /^https?:/.test(u) && !/^https:\/\/(www\.)?claude\.ai\//.test(u) ? u.split('#')[0] : null;
+  const chromeLink = x => /Android/i.test(ua) ? `intent://${x.replace(/^https:\/\//, '')}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(x)};end` : /iPhone|iPad|iPod/i.test(ua) ? 'googlechromes://' + x.replace(/^https:\/\//, '') : x;
+  const row = (id, title, desc, url) => `<div style="border:1px solid var(--line);border-radius:4px;padding:10px 12px;margin:8px 0">
+      <b style="font-size:14px">${title}</b><div class="muted" style="font-size:12px;margin:3px 0 8px">${desc}</div>
+      <input class="wsq" id="${id}-in" readonly value="${esc(url)}" style="width:100%;user-select:text;-webkit-user-select:text;font-size:12px">
+      <div style="display:flex;gap:6px;margin-top:6px"><a class="btn primary small" id="${id}-go" href="${esc(chromeLink(url))}" target="_blank" rel="noopener" style="text-decoration:none;flex:1;text-align:center">Open ↗</a><button class="btn small" id="${id}-copy" style="flex:1">Copy link</button></div></div>`;
+  const o = overlay(`<div class="dialog" style="width:min(600px,100%);max-height:90vh;overflow:auto"><div class="eyebrow">Open in Chrome</div><h2>Play outside this window</h2>
+    ${direct ? row('oc-d', 'Direct game page (recommended)', 'The game on its own, without the claude.ai frame: full window, real mouse capture, nothing to download. If Open does nothing, copy the link into Chrome’s address bar. The Quartermaster uses its offline engine there.', direct) : ''}
+    ${row('oc-a', direct ? 'claude.ai page' : 'claude.ai page (recommended)', 'The published page on claude.ai, with the Claude-powered Quartermaster. Sign in to see it.', ARTIFACT_URL)}
+    <div style="border:1px solid var(--line);border-radius:4px;padding:10px 12px;margin:8px 0"><b style="font-size:14px">Offline file</b><div class="muted" style="font-size:12px;margin:3px 0 8px">One self-contained HTML file: open it in Chrome any time, even without internet after the first load of three.js.</div><button class="btn small" id="oc-file">Save as a file</button></div>
+    <div class="btns"><button class="btn" id="oc-x">Close</button></div></div>`);
+  for (const id of ['oc-d', 'oc-a']) {
+    const inp = o.querySelector('#' + id + '-in'); if (!inp) continue;
+    inp.onclick = () => inp.select();
+    o.querySelector('#' + id + '-copy').onclick = async e => { inp.select(); let ok = false; try { await navigator.clipboard.writeText(inp.value); ok = true; } catch (er) { try { ok = document.execCommand('copy'); } catch (e2) {} } e.target.textContent = ok ? 'Copied — paste it into Chrome' : 'Select the link and copy it'; };
+    // a real link click is the most widely allowed way out of a sandboxed frame; fall back to window.open
+    { const go = o.querySelector('#' + id + '-go'), href = go.href; go.addEventListener('click', () => { setTimeout(() => { if (document.hasFocus()) { const w = tryOpen(href); if (!w) UI.toast('Blocked here — copy the link into Chrome', 3); } }, 400); }); }
+  }
   o.querySelector('#oc-x').onclick = () => UI.closeOverlay();
   o.querySelector('#oc-file').onclick = () => { UI.closeOverlay(); UI.saveStandalone(); };
 };
