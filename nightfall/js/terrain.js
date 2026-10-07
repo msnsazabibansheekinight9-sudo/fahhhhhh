@@ -274,7 +274,15 @@ NF.terrain = (function () {
       if (ty === 'zombie') for (var g2 = 0; g2 < 2 + (r() * 3 | 0); g2++) spawnAt('zombie', 'wz' + wz + 'g' + g2, ex + (r() - .5) * 12, ez + (r() - .5) * 12, { variant: (r() * 8) | 0 });
     }
     // story items & treasures
-    itemAt('fuse', 'fuse', 452, 868.5, { y: 0.95, name: 'Relay Fuse' });
+    // story items for the longer Act 2
+    var hp2 = poi('harlan'); itemAt('fuel', 'fuel', hp2.x + 23, hp2.z + 4.6, { name: 'Fuel Can' });
+    // side quest: Raven Unit dog tags, lost when the helicopter went down
+    [[-1600 + 6, -820 + 3], [mn.x + 1, mn.z + 9], [q.x + 40, q.z - 30], [rg.x + 3, rg.z - 4], [poi('lake').x + 240, poi('lake').z - 120], [poi('odell').x - 10, poi('odell').z + 20]].forEach(function (p, i) { itemAt('tag' + i, 'dogtag', p[0], p[1], { name: 'Raven Unit Dog Tag' }); });
+    // side quest: Velgen sample cases scattered by the outbreak
+    for (var sv = 0; sv < 12; sv++) { var sx = (r() * 2 - 1) * 2500, sz = (r() * 2 - 1) * 2500; if (!clearOf(sx, sz, 20) || T.inWaterExact(sx, sz)) { sv--; continue; } itemAt('sample' + sv, 'sample', sx, sz, { name: 'Velgen Sample Case' }); place({ kind: 'crash', id: 'samplecrash' + sv, x: sx + 5, z: sz + 4, rot: r() * 6 }); }
+    // bounty targets
+    spawnAt('spider', 'broodmother', mn.x + 4, mn.z + 18, { boss: true });
+    spawnAt('reaper', 'alpha', rg.x + 40, rg.z - 30, { boss: true });
     itemAt('rifle', 'rifle', 440, 869, { y: 0.95, name: 'Remington 700 Rifle' });
     itemAt('treasure_bell', 'treasure', mb.x, mb.z + 14, { y: 0.1, name: 'Millbrook Silver Bell', value: 4000 });
     itemAt('treasure_mine', 'treasure', mn.x + 2, mn.z - 6, { name: 'Copper Idol', value: 6000 });

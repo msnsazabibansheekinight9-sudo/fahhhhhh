@@ -282,10 +282,11 @@ NF.creatures = (function () {
       root.traverse(function (c) { if (c.isMesh) c.castShadow = true; });
       return { root: root, body: body, J: J, hits: [{ j: torso, off: new V3(0, 0.05, 0.25), r: 0.35, part: 'head' }, { j: abd, off: new V3(0, 0, -0.35), r: 0.55, part: 'body' }], scale: 1, kind: 'spider' };
     },
-    init: function (e) { e.eyeH = 0.7; e.spitCd = 2; },
-    kill: function (e) { AU.screech(H().eye(e)); },
+    init: function (e, o) { e.eyeH = 0.7; e.spitCd = 2; if (o.boss) { e.boss = true; e.rig.root.scale.setScalar(2.3); e.rig.scale = 2.3; e.hp = e.maxHp = 1000; e.speed *= 0.8; e.rad = 1.6; e.broodT = 6; e.eyeH = 1.5; } },
+    kill: function (e) { AU.screech(H().eye(e)); if (e.boss) NF.game.event('bountyKill'); },
     update: function (e, t, dt, P) {
       var J = e.rig.J, d = e.pos.distanceTo(P.pos), gait = 0;
+      if (e.boss && !e.dead && e.alert && (e.broodT -= dt) < 0 && E.list.filter(function (x) { return x.brood && !x.dead; }).length < 6) { e.broodT = 7; for (var bi = 0; bi < 2; bi++) { var sp = E.spawn('spider', 'brood' + Math.random().toString(36).slice(2, 7), e.pos.x + (Math.random() - .5) * 3, e.pos.z + (Math.random() - .5) * 3, { alert: true }); sp.brood = true; sp.alert = true; sp.noDrop = true; sp.rig.root.scale.setScalar(0.55); sp.rig.scale = 0.55; sp.hp = sp.maxHp = 35; } AU.screech(H().eye(e)); }
       if (e.dead) { var f = Math.min(1, e.t / 0.6); J.legs.forEach(function (L) { L.kn.rotation.x = 1.75 + f * 1.2; L.s1.rotation.x = -(PI / 2 + 0.55) + f * 0.8; }); e.lift = -0.35 * f; return; }
       H().perceive(e, P, dt); e.spitCd -= dt;
       if (e.state === 'bite') {
@@ -326,8 +327,8 @@ NF.creatures = (function () {
       for (var s = 0; s < 6; s++) mesh(rig.J.spine, new THREE.ConeGeometry(0.025, 0.12, 5), std({ color: '#2a3a1a' }), 0, s * 0.06, -0.12, 1, 1, 1, -1.9);
       return rig;
     },
-    init: function (e) { e.eyeH = 1.4; },
-    kill: function (e) { AU.screech(H().eye(e)); },
+    init: function (e, o) { e.eyeH = 1.4; if (o.boss) { e.boss = true; e.rig.root.scale.setScalar(1.4); e.rig.scale = 1.12 * 1.4; e.hp = e.maxHp = 700; e.speed *= 1.15; e.rig.skinMat && e.rig.skinMat.color.set('#c06050').convertSRGBToLinear(); e.rig.root.traverse(function (m) { if (m.isMesh && m.material && m.material.map === scaleTex()) m.material = m.material.clone(), m.material.color.set('#b05040').convertSRGBToLinear(); }); } },
+    kill: function (e) { AU.screech(H().eye(e)); if (e.boss) NF.game.event('bountyKill'); },
     update: function (e, t, dt, P) {
       var pose, d = e.pos.distanceTo(P.pos);
       if (e.dead) { pose = A.base(); H().fallAnim(e, dt, pose); A.apply(e.rig, pose, k(dt, 10)); return; }

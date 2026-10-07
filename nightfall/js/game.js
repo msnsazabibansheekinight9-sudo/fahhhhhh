@@ -31,7 +31,7 @@ NF.game = (function () {
   var P = G.player = {
     pos: new V3(0, 0, 2.2), yaw: 0, hp: 100, alive: true, invuln: 0, ph: 0, speed: 0, grabbedBy: null, grabT: 0, flinch: 0,
     weapon: 'handgun', owned: { handgun: true, shotgun: false, magnum: false, smg: false, rifle: false, gl: false, rpg: false }, mag: { handgun: 13, shotgun: 0, magnum: 0, smg: 0, rifle: 0, gl: 0, rpg: 0 }, ammo: { handgun: 18, shotgun: 0, magnum: 0, smg: 0, rifle: 0, gl: 0, rpg: 0 },
-    inv: { herb: 0, mixed: 0, spray: 0, key_raven: 0, crest: 0, keycard: 0, red_herb: 0, blue_herb: 0, mixed_gr: 0, powder: 0, fuse: 0, flare: 0 }, files: [],
+    inv: { herb: 0, mixed: 0, spray: 0, key_raven: 0, crest: 0, keycard: 0, red_herb: 0, blue_herb: 0, mixed_gr: 0, powder: 0, fuse: 0, flare: 0, armory_key: 0, fuel: 0 }, files: [], collect: { dogtag: 0, sample: 0 }, claimed: {},
     money: 0, treasures: [], upg: {}, slots: 8, stash: {}, poison: 0, grenades: 0, vest: false, inVeh: null,
     fireCd: 0, reloadT: 0, knifeT: 0, healT: 0, recoil: 0, focus: 0, flashOn: true, deadT: 0, stepPh: 0,
     chest: function () { return new V3(P.pos.x, P.pos.y + 1.35, P.pos.z); },
@@ -143,7 +143,7 @@ NF.game = (function () {
     $('viewSel').onchange = function () { G.setView(this.value); };
     $('sens').oninput = function () { sens = +this.value; };
     $('bright').oninput = function () { renderer.toneMappingExposure = 1.15 * this.value; };
-    document.querySelectorAll('[data-tab]').forEach(function (b) { b.onclick = function () { document.querySelectorAll('[data-tab]').forEach(function (x) { x.classList.toggle('on', x === b); }); $('invItems').style.display = b.dataset.tab === 'items' ? '' : 'none'; $('invFiles').style.display = b.dataset.tab === 'files' ? '' : 'none'; }; });
+    document.querySelectorAll('[data-tab]').forEach(function (b) { b.onclick = function () { document.querySelectorAll('[data-tab]').forEach(function (x) { x.classList.toggle('on', x === b); }); $('invItems').style.display = b.dataset.tab === 'items' ? '' : 'none'; $('invFiles').style.display = b.dataset.tab === 'files' ? '' : 'none'; $('invQuests').style.display = b.dataset.tab === 'quests' ? '' : 'none'; if (b.dataset.tab === 'quests') buildQuests(); }; });
     try { var st = JSON.parse(localStorage.getItem('nf_settings') || '{}'); if (st.sens) { sens = st.sens; $('sens').value = st.sens; } } catch (e) { }
   }
   function showScreen(id) { document.querySelectorAll('.screen').forEach(function (s) { s.classList.toggle('on', s.id === id); }); }
@@ -216,7 +216,7 @@ NF.game = (function () {
   // ------------------------------------------------------------------ player
   function hurtPlayer(dmg, src, kind) {
     if (!P.alive || P.invuln > 0 || mode !== 'play') return;
-    if (P.vest) dmg *= 0.75;
+    if (P.vest) dmg *= P.vest === 'raven' ? 0.5 : 0.75;
     if (P.inVeh) { dmg *= 0.4; kind = 'hit'; }
     P.hp -= dmg; P.flinch = 1; P.invuln = kind === 'grab' ? 1.6 : 0.8; P.reloadT = 0; P.healT = 0;
     AU.hurt(); G.shake(kind === 'cleave' || kind === 'slam' ? 0.9 : 0.4);
@@ -609,12 +609,14 @@ NF.game = (function () {
     else if (t === 'money') { P.money += it.amount || 100; AU.cash(); }
     else if (t === 'treasure') { P.treasures.push({ name: it.name || 'Antique Pocket Watch', value: it.value || (800 + (Math.abs(Math.round(it.x * 13 + it.z)) % 12) * 250) }); AU.cash(); }
     else if (t === 'grenade') P.grenades += it.amount || 1;
+    else if (t === 'dogtag' || t === 'sample') { P.collect[t] = (P.collect[t] || 0) + 1; AU.cash(); var tot = t === 'dogtag' ? 6 : 12; W.takeItem(it); markTaken(it); toast((t === 'dogtag' ? 'Raven Unit dog tag ' : 'Velgen sample ') + P.collect[t] + ' / ' + tot); if (t === 'dogtag' && P.collect.dogtag === 1) hint('Dog tags of Raven Unit are scattered across the county. Find all six (Quests tab).', 6); return; }
     else P.inv[t] = (P.inv[t] || 0) + 1;
     W.takeItem(it); markTaken(it); AU.pickup();
     toast('Picked up ' + itemName(it) + (it.amount ? ' ×' + it.amount : ''));
     if (t === 'key_raven') { flags.gotRaven = true; spawnStage(); objective('raven'); say([['MARA', 'A raven on the bow. The library door had the same engraving.', 3.2]]); }
     if (t === 'crest') skinnerEvent();
-    if (t === 'fuse') { say([['MARA', 'The relay fuse. Crow Ridge is east of town, up on the hill.', 3]]); if (!flags.radio) objective('relay'); }
+    if (t === 'fuel') { say([['MARA', 'Diesel. Now, Crow Ridge.', 2]]); if (P.inv.fuse) objective('relay'); }
+    if (t === 'armory_key') { if (flags.obj === 'millbrook') objective('armory'); }
     if (t === 'shotgun') say([['MARA', 'Finally, something with some stopping power.', 2.6]]);
     if (t === 'magnum') say([['MARA', 'Velgen\'s armory. Six rounds. Make them count.', 2.8]]);
   }
@@ -648,7 +650,8 @@ NF.game = (function () {
     if (poi && G.lastPoi !== poi.id) { G.lastPoi = poi.id; if (poi.id !== 'manor') areaTitle(poi.name, poi.id === 'town' ? 'Pop. 2,140' : poi.id === 'airfield' ? 'Evac point' : 'Ashgrove County'); flags.disc = flags.disc || {}; flags.disc[poi.id] = true; }
     if (!poi) G.lastPoi = null;
     NF.terrain.pois.forEach(function (p) { if (Math.hypot(P.pos.x - p.x, P.pos.z - p.z) < p.r + 160) { flags.disc = flags.disc || {}; flags.disc[p.id] = true; } });
-    if (id === 'room_church' && flags.beacon && !flags.teoFight) teoScene();
+    if (id === 'room_church' && flags.damPower && !flags.teoFight) teoScene();
+    if (G.hold) holdTick();
     if (flags.defend && !flags.beacon) defendTick();
   }
   function areaTitle(name, sub) { var el = $('areaName'); el.innerHTML = name + '<small>' + (sub || '') + '</small>'; el.style.opacity = 1; clearTimeout(G.atT); G.atT = setTimeout(function () { el.style.opacity = 0; }, 3800); }
@@ -672,19 +675,56 @@ NF.game = (function () {
   function act2Event(name) {
     if (name === 'policeRadio') {
       if (!flags.escaped) return;
-      if (flags.radio) { say([['HOLLIS (radio)', flags.beacon ? 'Bird\'s on the way. Find that flare and get to the airfield.' : 'Fuse into the relay generator, Voss. Crow Ridge.', 3]]); return true; }
+      if (flags.radio) { say([['HOLLIS (radio)', RADIO_HINT[flags.obj] || 'Keep moving, Voss. I\'m with you.', 3.4]]); return true; }
       flags.radio = true;
       cine([
-        { pos: [P.pos.x - 2, P.pos.y + 1.7, P.pos.z + 1.5], look: [P.pos.x + 2, P.pos.y + 1.1, P.pos.z], dur: 8, lines: [['HOLLIS (radio)', 'You made it. Okay. The airfield beacon runs off the Crow Ridge relay, and the relay generator blew its fuse.', 4.2], ['HOLLIS (radio)', 'There\'s a spare in the armory, back of that station. Take it up the ridge, east of town.', 3.8]] },
+        { pos: [P.pos.x - 2, P.pos.y + 1.7, P.pos.z + 1.5], look: [P.pos.x + 2, P.pos.y + 1.1, P.pos.z], dur: 8, lines: [['HOLLIS (radio)', 'You made it. Okay. The airfield beacon runs off the Crow Ridge relay, and the relay generator blew its fuse.', 4.2], ['HOLLIS (radio)', 'There\'s a spare in the station armory, but the locker\'s keyed. Sheriff Doyle had the only key, and he went out to Millbrook two nights ago.', 4.6]] },
+        { pos: [P.pos.x + 2, P.pos.y + 1.5, P.pos.z + 2], look: [P.pos.x, P.pos.y + 1.3, P.pos.z], dur: 6, lines: [['HOLLIS (radio)', 'Millbrook is west, past the old highway. Something is wrong out there, Voss. They all go to the bell at night.', 4], ['MARA', 'Wonderful.', 1.2]] },
         { pos: [P.pos.x + 1.5, P.pos.y + 1.6, P.pos.z - 1.5], look: [P.pos.x, P.pos.y + 1.3, P.pos.z], dur: 4.6, lines: [['MARA', 'And Teo?', 1.4], ['HOLLIS (radio)', 'Last report had a wounded officer heading for St. Agnes. I\'m sorry, Voss. One thing at a time.', 3.2]] }
-      ], function () { objective('relay'); autosave(); });
+      ], function () { objective('millbrook'); autosave(); });
+      return true;
+    }
+    if (name === 'armory') {
+      if (P.inv.fuse || flags.armoryOpen) { toast('The armory locker is empty.'); return true; }
+      if (!P.inv.armory_key) { AU.door(P.pos, true); toast('Locked. The tag reads: ARMORY — S. DOYLE.'); return true; }
+      P.inv.armory_key = 0; flags.armoryOpen = true; P.inv.fuse = 1; P.ammo.handgun += 30; P.ammo.shotgun += 12; P.grenades += 2; AU.door(P.pos, false); AU.pickup();
+      toast('Took the relay fuse, ammunition and grenades');
+      say([['MARA', 'Fuse. Ammo. Grenades. Thank you, Sheriff.', 2.4], ['HOLLIS (radio)', 'One more thing, Voss. That generator ran dry weeks ago. Harlan Farm keeps diesel in the barn. South-west of town.', 4.4]]);
+      objective('fuel'); return true;
+    }
+    if (name === 'dampanel') {
+      if (!flags.beacon) { toast('The turbine controls are dead. Nothing to do here yet.'); return true; }
+      if (flags.damPower) { toast('The turbines are running.'); return true; }
+      if (G.hold) return true;
+      var dm = NF.terrain.poi('dam');
+      startHold('dam', { x: dm.x, z: dm.z }, 60, ['zombie', 'zombie', 'spider', 'hollow', 'bloater'], 'damhold', function () {
+        flags.damPower = true; AU.sting();
+        say([['', '(Deep in the dam, the turbines roar to life.)', 2.4], ['HOLLIS (radio)', 'Airfield grid is live! Lights on the runway. Now the flare, Voss: the sexton at St. Agnes Church had the last one.', 4.6], ['HOLLIS (radio)', 'And... that\'s where Teo was headed.', 2.4]]);
+        objective('church'); autosave();
+      });
+      say([['MARA', 'Turbines starting. Come on, come on...', 2.2], ['HOLLIS (radio)', 'Sixty seconds to sync. The noise will bring everything in the reservoir.', 3.4]]);
+      return true;
+    }
+    if (name === 'override') {
+      if (!flags.teoDead) { toast('ACCESS DENIED. The terminal wants a quarantine authorisation.'); return true; }
+      if (flags.override) { toast('Override code downloaded.'); return true; }
+      if (G.hold) return true;
+      var fl = NF.terrain.poi('fieldlab');
+      startHold('override', { x: fl.x, z: fl.z }, 75, ['skinner', 'reaper', 'zombie', 'zombie', 'hollow'], 'hack', function () {
+        flags.override = true; AU.sting();
+        if (P.files.indexOf('quarantine') < 0) P.files.push('quarantine');
+        say([['', '(DOWNLOAD COMPLETE — OVERRIDE 7-DELTA-ASHGROVE)', 2.6], ['HOLLIS (radio)', 'I see it on my end! The pilot will squawk the code. Get to the airfield helipad and fire that flare.', 4.4]]);
+        objective('airfield'); autosave();
+      });
+      say([['MARA', 'Downloading the override. This old thing is slow.', 2.6], ['HOLLIS (radio)', 'Seventy-five seconds. Velgen bred things to guard that station. Stay alive.', 3.4]]);
       return true;
     }
     if (name === 'generator') {
       if (flags.beacon) { toast('The beacon is live.'); return true; }
       if (flags.defend) return;
       if (!P.inv.fuse) { toast('The generator\'s fuse socket is empty.'); return true; }
-      P.inv.fuse = 0; flags.defend = true; G.defendT = 90; G.waveT = 2; objective('defend');
+      if (!P.inv.fuel) { toast('The fuel tank is bone dry. You need diesel.'); return true; }
+      P.inv.fuse = 0; P.inv.fuel = 0; flags.defend = true; G.defendT = 90; G.waveT = 2; objective('defend');
       $('timer').style.display = 'block'; AU.thud(P.pos, 1); AU.music('chase');
       say([['MARA', 'Fuse is in. Come on, come on—', 2], ['HOLLIS (radio)', 'Generator needs ninety seconds to spin up. And Voss, that noise will carry. They\'re coming to you.', 4]]);
       return true;
@@ -695,13 +735,23 @@ NF.game = (function () {
       var tb = E.byId('teo_boss') || { pos: P.pos.clone().add(new V3(0, 0, 3)) };
       cine([
         { pos: [P.pos.x + 1.5, P.pos.y + 1.2, P.pos.z + 1.2], look: [tb.pos.x, tb.pos.y + 0.3, tb.pos.z], dur: 6, lines: [['MARA', 'Teo...', 1.6], ['MARA', 'You said you were sorry you lied. You told me to go. You knew.', 3.8]] },
-        { pos: [tb.pos.x - 2, tb.pos.y + 1.6, tb.pos.z - 2], look: [tb.pos.x, tb.pos.y + 1, tb.pos.z + 3], dur: 5, at: function () { P.inv.flare = 1; AU.pickup(); }, lines: [['', '(The flare gun lies on the altar, where the sexton left it.)', 3], ['MARA', 'I\'m getting out, partner. For both of us.', 2.4]] }
-      ], function () { toast('Received the Flare Gun'); objective('airfield'); autosave(); AU.music(null); });
+        { pos: [tb.pos.x - 2, tb.pos.y + 1.6, tb.pos.z - 2], look: [tb.pos.x, tb.pos.y + 1, tb.pos.z + 3], dur: 5, at: function () { P.inv.flare = 1; AU.pickup(); }, lines: [['', '(The flare gun lies on the altar, where the sexton left it.)', 3], ['MARA', 'I\'m getting out, partner. For both of us.', 2.4]] },
+        { pos: [P.pos.x - 1.5, P.pos.y + 1.7, P.pos.z - 1], look: [P.pos.x + 2, P.pos.y + 1.4, P.pos.z + 2], dur: 9, lines: [['HOLLIS (radio)', 'Voss... bad news. The CDC just put the county under federal quarantine. Anything that flies out gets shot down.', 4.6], ['HOLLIS (radio)', 'Unless it squawks a Velgen biohazard override. The codes are on the terminal at the Velgen Field Station, far south-east. I\'m sorry.', 4.6]] }
+      ], function () { toast('Received the Flare Gun'); objective('override'); autosave(); AU.music(null); });
       return true;
     }
     if (name === 'unboundPhase') { AU.sting(); say([['', '(The Warden tears free of its restraints.)', 2.4]]); return true; }
     if (name === 'unboundDead') { flags.unboundDead = true; G.bossRef = null; $('bossbar').style.display = 'none'; later(evacScene, 2500); return true; }
-    if (name === 'butcherDead') { toast('The Butcher is dead'); E.byId('butcher') && dropAt(E.byId('butcher').pos, 'money', 5000); return true; }
+    if (name === 'butcherDead') {
+      var bu = E.byId('butcher'), at = bu ? bu.pos : P.pos;
+      dropAt(at, 'money', 5000);
+      if (!flags.armoryOpen && !P.inv.armory_key) { var k = dropAt(at, 'armory_key', 1); k.name = 'Armory Key'; }
+      if (P.files.indexOf('doyle') < 0) P.files.push('doyle');
+      say([['MARA', 'Doyle\'s key ring. And his notebook...', 2.2], ['MARA', 'The armory key. Back to the station.', 2.2]]);
+      if (flags.obj === 'millbrook') objective('armory');
+      return true;
+    }
+    if (name === 'bountyKill') { toast('Bounty target down. Claim the reward from the Peddler.'); return true; }
     if (name === 'wormDead') { toast('The burrower is dead'); return true; }
     return false;
   }
@@ -814,9 +864,30 @@ NF.game = (function () {
     }
     if (G.defendT <= 0) {
       flags.beacon = true; flags.defend = false; $('timer').style.display = 'none'; AU.music(null); AU.sting();
-      say([['', '(High above, the beacon flares red.)', 2.4], ['HOLLIS (radio)', 'Beacon\'s live! Bird is twenty minutes out. Pilot won\'t set down without a flare, and the last flare gun went to the sexton at St. Agnes Church.', 5], ['HOLLIS (radio)', 'North-west of the ridge. Go.', 2]]);
-      objective('church'); autosave();
+      say([['', '(High above, the beacon flares red.)', 2.4], ['HOLLIS (radio)', 'Beacon\'s live! But the airfield grid is down. No runway lights, no landing.', 4], ['HOLLIS (radio)', 'The airfield runs on Blackwater Dam. Get those turbines turning. Far north-west, past Millbrook.', 4.4]]);
+      objective('dam'); autosave();
     }
+  }
+  var RADIO_HINT = { millbrook: 'Millbrook, Voss. West of town. Find Doyle.', armory: 'Armory locker is at the back of the station.', fuel: 'Diesel at Harlan Farm, in the barn.', relay: 'Fuse and fuel into the relay generator. Crow Ridge, east of town.', dam: 'Blackwater Dam. The turbine controls are on top of the dam.', church: 'St. Agnes Church. The flare gun.', override: 'The Velgen Field Station, far south-east. Get that override.', airfield: 'Airfield helipad. Fire the flare.' };
+  function startHold(id, center, secs, mix, objKey, done) {
+    G.hold = { id: id, c: center, t: secs, wave: 2, n: 0, mix: mix, done: done }; flags.holding = id;
+    objective(objKey); $('timer').style.display = 'block'; AU.music('chase'); AU.thud(P.pos, 1);
+  }
+  function holdTick() {
+    var h = G.hold, dt = G.lastDt || 1 / 60, dist = Math.hypot(P.pos.x - h.c.x, P.pos.z - h.c.z);
+    if (dist < 50) h.t -= dt; else if (Math.random() < 0.01) toast('Get back — the timer only runs while you hold the area!');
+    h.wave -= dt; $('timer').textContent = (h.id === 'dam' ? 'TURBINES ' : 'DOWNLOAD ') + Math.max(0, Math.ceil(h.t)) + 's';
+    if (h.wave <= 0 && E.list.filter(function (e) { return !e.dead && e.alert; }).length < 20) {
+      h.wave = 7; h.n++;
+      for (var i = 0; i < 3 + Math.min(4, h.n); i++) {
+        var a = Math.random() * PI * 2, rr = 26 + Math.random() * 10, x = h.c.x + Math.cos(a) * rr, z = h.c.z + Math.sin(a) * rr;
+        var ty = h.mix[(Math.random() * h.mix.length) | 0];
+        if (NF.terrain.inWater && NF.terrain.inWater(x, z)) continue;
+        var e = E.spawn(ty, h.id + 'w' + h.n + '_' + i, x, z, { alert: true, weapon: 'axe', variant: (Math.random() * 8) | 0, revenant: Math.random() < 0.2 });
+        e.alert = true; e.noDrop = Math.random() < 0.6; if (e.type === 'skinner') e.lastHeard = P.pos.clone();
+      }
+    }
+    if (h.t <= 0) { G.hold = null; flags.holding = null; $('timer').style.display = 'none'; AU.music(null); h.done(); }
   }
   function teoScene() {
     flags.teoFight = true;
@@ -832,6 +903,7 @@ NF.game = (function () {
   function flareEvent() {
     if (flags.flared) { toast('The helicopter is coming.'); return; }
     if (!P.inv.flare) { toast(flags.beacon ? 'You need the flare gun from St. Agnes Church.' : 'The beacon isn\'t live yet.'); return; }
+    if (!flags.override) { toast('Without the Velgen override the helicopter will be shot down. Get the code from the field station.'); return; }
     P.inv.flare = 0; flags.flared = true; FX.flare(P.chest()); AU.flare(P.pos);
     var af = NF.terrain.poi('airfield');
     heli = makeHeli(); heli.position.set(af.x - 400, af.h + 60, af.z + 400); scene.add(heli);
@@ -961,7 +1033,7 @@ NF.game = (function () {
     WORDER.forEach(function (w) { if (P.owned[w]) list.push({ k: w, ct: P.mag[w] + '/' + P.ammo[w], eq: P.weapon === w }); });
     list.push({ k: 'knife' });
     if (P.grenades > 0) list.push({ k: 'grenade', ct: P.grenades });
-    CONSUMABLE.concat(['key_raven', 'crest', 'keycard', 'fuse', 'flare']).forEach(function (k) { if (P.inv[k] > 0) list.push({ k: k, ct: P.inv[k] }); });
+    CONSUMABLE.concat(['key_raven', 'crest', 'keycard', 'armory_key', 'fuse', 'fuel', 'flare']).forEach(function (k) { if (P.inv[k] > 0) list.push({ k: k, ct: P.inv[k] }); });
     list.forEach(function (it) {
       var d = document.createElement('div'); d.className = 'slot' + (it.eq ? ' eq' : '') + (invSel === it.k ? ' sel' : '');
       d.innerHTML = '<div class="ic">' + S.items[it.k].icon + '</div><div>' + S.items[it.k].name + '</div>' + (it.ct !== undefined && it.ct !== '' ? '<div class="ct">' + it.ct + '</div>' : '');
@@ -992,9 +1064,39 @@ NF.game = (function () {
     var fl = $('invFiles'); fl.innerHTML = P.files.length ? '' : '<div style="color:var(--dim)">No files found yet.</div>';
     P.files.forEach(function (id) { var bb = document.createElement('button'); bb.className = 'small'; bb.style.display = 'block'; bb.style.margin = '0 0 8px'; bb.textContent = S.files[id].title; bb.onclick = function () { readFile(id); }; fl.appendChild(bb); });
   }
+  function buildQuests() {
+    var f = flags, k = f.killed || {};
+    var story = [
+      ['ACT I — ASHGROVE MANOR', null],
+      ['Find a way through the manor', f.gotCrest], ['Find Teo', f.teoTalked], ['Reach the laboratory', f.labIn], ['Stop Dr. Crane', f.bossDead], ['Escape the self-destruct', f.escaped],
+      ['ACT II — ASHGROVE COUNTY', null],
+      ['Reach the Halverson Falls police station', f.radio], ['Take the armory key from the Butcher in Millbrook', f.armoryOpen || P.inv.armory_key], ['Open the station armory', f.armoryOpen], ['Find diesel at Harlan Farm', f.beacon || P.inv.fuel],
+      ['Restart the Crow Ridge beacon', f.beacon], ['Power the airfield from Blackwater Dam', f.damPower], ['St. Agnes Church', f.teoDead], ['Get the Velgen quarantine override', f.override], ['Escape Ashgrove County', f.unboundDead]
+    ];
+    var html = '<div style="display:grid;grid-template-columns:1fr;gap:4px;font-size:14px">';
+    var current = false;
+    story.forEach(function (q) {
+      if (q[1] === null) { html += '<div style="font-family:Cinzel,serif;letter-spacing:.2em;color:var(--gold);margin:10px 0 4px">' + q[0] + '</div>'; return; }
+      var done = !!q[1], cur = !done && !current; if (cur) current = true;
+      html += '<div style="color:' + (done ? 'var(--dim)' : cur ? 'var(--fg)' : 'rgba(255,255,255,.3)') + '">' + (done ? '✔ ' : cur ? '▶ ' : '· ') + (done || cur ? q[0] : '???') + '</div>';
+    });
+    html += '<div style="font-family:Cinzel,serif;letter-spacing:.2em;color:var(--gold);margin:14px 0 4px">SIDE QUESTS</div>';
+    html += '<div>🏷️ Raven Unit dog tags: ' + (P.collect.dogtag || 0) + ' / 6' + (P.claimed.tags ? ' ✔' : '') + '</div><div>🧪 Velgen sample cases: ' + (P.collect.sample || 0) + ' / 12</div>';
+    html += '<div style="font-family:Cinzel,serif;letter-spacing:.2em;color:var(--gold);margin:14px 0 4px">BOUNTIES</div>';
+    BOUNTIES.forEach(function (b) { var done = b.ids.some(function (id) { return k[id]; }); html += '<div style="color:' + (done ? 'var(--dim)' : 'var(--fg)') + '">' + (done ? '✔ ' : '☠ ') + b.name + ' — ' + b.where + ' · $' + b.reward.toLocaleString() + (P.claimed[b.key] ? ' (paid)' : done ? ' (claim at the Peddler)' : '') + '</div>'; });
+    $('invQuests').innerHTML = html + '</div>';
+  }
   // ------------------------------------------------------------------ the peddler
   var shopTab = 'buy';
   var TALK = ['"Bullets, blades, bandages. Cash only, officer."', '"Velgen paid me to keep quiet. You pay me to keep you breathing."', '"That rifle? Took it off a man who didn\'t need it anymore."', '"Come back alive. Dead customers don\'t tip."', '"I hear the Warden walks the roads at night. Bad for business."'];
+  var BOUNTIES = [
+    { key: 'butcher', name: 'The Butcher', where: 'Millbrook', reward: 8000, ids: ['butcher'] },
+    { key: 'qworm', name: 'The Quarry Burrower', where: 'Ashgrove Quarry', reward: 12000, ids: ['qworm'] },
+    { key: 'brood', name: 'The Brood Mother', where: 'Old Copper Mine', reward: 15000, ids: ['broodmother'] },
+    { key: 'alpha', name: 'Reaper Alpha', where: 'near the Ranger Lookout', reward: 12000, ids: ['alpha'] },
+    { key: 'worms', name: 'Farm Burrowers', where: 'Harlan and Odell farms', reward: 6000, ids: ['harlanworm', 'odellworm'] },
+    { key: 'teo', name: 'What Teo became', where: 'St. Agnes Church', reward: 5000, ids: ['teo_boss'] }
+  ];
   G.openShop = function () {
     openUI('shop'); $('shopTalk').textContent = TALK[(Math.random() * TALK.length) | 0];
     document.querySelectorAll('[data-stab]').forEach(function (b) { b.onclick = function () { shopTab = b.dataset.stab; document.querySelectorAll('[data-stab]').forEach(function (x) { x.classList.toggle('on', x === b); }); buildShop(); }; });
@@ -1017,6 +1119,16 @@ NF.game = (function () {
       card('Hand Grenade', 'Press G to throw. You carry ' + P.grenades + '.', 1200, function () { P.grenades++; });
       if (P.slots < 16) card('Larger Pouch', 'Carry 2 more items (' + P.slots + ' → ' + (P.slots + 2) + ').', 4000 + (P.slots - 8) * 2500, function () { P.slots += 2; });
       if (!P.vest) card('Kevlar Vest', 'Take a quarter less damage from everything.', 15000, function () { P.vest = true; });
+    } else if (shopTab === 'bounty') {
+      body.insertAdjacentHTML('afterbegin', '<div style="color:var(--dim);margin-bottom:10px">Kill these and come back. The Peddler pays on proof. Collectibles are paid for here too.</div>');
+      var killed = flags.killed || {};
+      BOUNTIES.forEach(function (b) {
+        var done = b.ids.some(function (id) { return killed[id]; }), claimed = P.claimed[b.key];
+        card(b.name, b.where + (claimed ? ' · claimed' : done ? ' · DEAD — claim your reward' : ''), done && !claimed ? -b.reward : 0, function () { P.claimed[b.key] = true; }, !done || claimed, claimed ? 'Paid' : done ? null : '$' + b.reward.toLocaleString() + ' bounty');
+      });
+      var tags = P.collect.dogtag || 0, smp = P.collect.sample || 0;
+      card('Raven Unit dog tags', tags + ' of 6 found. Bring all six for the Raven Unit armour (half damage).', 0, function () { P.claimed.tags = true; P.vest = 'raven'; toast('Raven Unit armour equipped: half damage from everything'); }, tags < 6 || P.claimed.tags, P.claimed.tags ? 'Claimed' : tags >= 6 ? 'Claim armour' : tags + '/6');
+      card('Velgen sample cases', smp + ' found, ' + (P.claimed.samples || 0) + ' sold. $3,000 each.', -(smp - (P.claimed.samples || 0)) * 3000, function () { P.claimed.samples = smp; }, smp <= (P.claimed.samples || 0), smp > (P.claimed.samples || 0) ? null : 'None to sell');
     } else if (shopTab === 'sell') {
       if (!P.treasures.length && !CONSUMABLE.some(function (c) { return P.inv[c] > 0; })) body.insertAdjacentHTML('beforeend', '<div style="color:var(--dim)">Nothing to sell. Treasures from around the county fetch a good price.</div>');
       P.treasures.slice().forEach(function (t, i) { card(t.name, 'Treasure', -t.value, function () { P.treasures.splice(P.treasures.indexOf(t), 1); }); });
@@ -1084,8 +1196,13 @@ NF.game = (function () {
   function objTarget() {
     var T2 = NF.terrain, o = flags.obj;
     if (!flags.escaped || !T2) return null;
-    if (o === 'town' || (o === 'relay' && !P.inv.fuse && !flags.radio)) return { x: 436, z: 862 };
-    if (o === 'relay') return P.inv.fuse ? { x: T2.poi('relay').x + 8, z: T2.poi('relay').z - 3 } : { x: 452, z: 868 };
+    if (o === 'town') return { x: 436, z: 862 };
+    if (o === 'millbrook') { var bu = E.byId('butcher'); return bu && !bu.dead ? { x: bu.pos.x, z: bu.pos.z } : T2.poi('millbrook'); }
+    if (o === 'armory') return P.inv.armory_key ? { x: 456, z: 857 } : T2.poi('millbrook');
+    if (o === 'fuel') return P.inv.fuel ? { x: T2.poi('relay').x + 8, z: T2.poi('relay').z - 3 } : { x: T2.poi('harlan').x + 23, z: T2.poi('harlan').z + 4 };
+    if (o === 'relay') return { x: T2.poi('relay').x + 8, z: T2.poi('relay').z - 3 };
+    if (o === 'dam' || o === 'damhold') return T2.poi('dam');
+    if (o === 'override' || o === 'hack') { var fl = T2.poi('fieldlab'); return { x: fl.x - 4, z: fl.z + 2 }; }
     if (o === 'defend') return T2.poi('relay');
     if (o === 'church') return T2.poi('church');
     if (o === 'airfield' || o === 'final') { var af = T2.poi('airfield'); return { x: af.x - 80, z: af.z + 120 }; }
@@ -1124,7 +1241,7 @@ NF.game = (function () {
   function snapshot() {
     var killed = {}; E.list.forEach(function (e) { if (e.dead) killed[e.id] = true; });
     return { v: 2, pos: [P.pos.x, P.pos.z], yaw: P.yaw, hp: P.hp, weapon: P.weapon, owned: P.owned, mag: P.mag, ammo: P.ammo, inv: P.inv, files: P.files, flags: JSON.parse(JSON.stringify(flags)), killed: killed, stats: stats, flash: P.flashOn,
-      money: P.money, treasures: P.treasures, upg: P.upg, slots: P.slots, stash: P.stash, grenades: P.grenades, vest: P.vest, veh: NF.vehicles.state() };
+      money: P.money, treasures: P.treasures, collect: P.collect, claimed: P.claimed, upg: P.upg, slots: P.slots, stash: P.stash, grenades: P.grenades, vest: P.vest, veh: NF.vehicles.state() };
   }
   function writeSave(d) { try { localStorage.setItem('nf_save', JSON.stringify(d)); return true; } catch (e) { return false; } }
   function loadData() { try { var s = localStorage.getItem('nf_save'); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
@@ -1140,11 +1257,13 @@ NF.game = (function () {
     flags = d.flags || {}; P.pos.set(d.pos[0], 0, d.pos[1]); P.yaw = d.yaw; cam.yaw = d.yaw; P.hp = d.hp; P.weapon = d.weapon; P.owned = d.owned; P.mag = d.mag; P.ammo = d.ammo; P.inv = d.inv; P.files = d.files || []; stats = d.stats || stats; P.flashOn = d.flash !== false;
     P.money = d.money || 0; P.treasures = d.treasures || []; P.upg = d.upg || {}; P.slots = d.slots || 8; P.stash = d.stash || {}; P.grenades = d.grenades || 0; P.vest = !!d.vest; P.poison = 0;
     ['smg', 'rifle', 'gl', 'rpg'].forEach(function (w) { if (P.owned[w] === undefined) { P.owned[w] = false; P.mag[w] = 0; P.ammo[w] = 0; } });
-    ['red_herb', 'blue_herb', 'mixed_gr', 'powder', 'fuse', 'flare'].forEach(function (k) { if (P.inv[k] === undefined) P.inv[k] = 0; });
+    ['red_herb', 'blue_herb', 'mixed_gr', 'powder', 'fuse', 'flare', 'armory_key', 'fuel'].forEach(function (k) { if (P.inv[k] === undefined) P.inv[k] = 0; });
+    P.collect = d.collect || { dogtag: 0, sample: 0 }; P.claimed = d.claimed || {};
+    if (flags.holding) flags.holding = null;
     NF.vehicles.restore(d.veh);
     if (flags.escaped) {
       act2Spots();
-      if (flags.defend && !flags.beacon) { flags.defend = false; P.inv.fuse = 1; }
+      if (flags.defend && !flags.beacon) { flags.defend = false; P.inv.fuse = 1; P.inv.fuel = 1; }
       if (flags.teoFight && !flags.teoDead) flags.teoFight = false;
       if (flags.flared && !flags.unboundDead) { flags.flared = false; P.inv.flare = 1; }
       NF.terrain.update(P.pos.x, P.pos.z, flags, true);

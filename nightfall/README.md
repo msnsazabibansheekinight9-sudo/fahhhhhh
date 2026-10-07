@@ -45,4 +45,15 @@ Leave the lab through the emergency exit and the game opens up into a **6 km × 
 - **Driving**: pickup trucks you can drive. Ram the infected, and use the headlights.
 - **Navigation**: a full-screen survey map you can pan and zoom, with hill shading, contour lines, forests, roads, building footprints, fog of war, safehouse and truck icons, the objective route, a scale bar and a manor floor-plan tab. There is also a rotating minimap on the HUD, a compass with an objective marker, and area titles.
 - **First or third person**: press V (or use the pause menu) to switch views at any time. First person has its own arms and weapon view, with aiming down the sights, recoil, sway, head bob, reload and knife animations. The mouse wheel cycles weapons.
-- **Story**: the police radio, the relay defence, Teo at the church, and the airfield evac against the Warden.
+- **Story — nine chapters**:
+  1. The police radio sends you to Millbrook, where you take Sheriff Doyle's armory key from the Butcher.
+  2. Open the station armory for the relay fuse.
+  3. Find diesel in the Harlan Farm barn.
+  4. Hold Crow Ridge Relay while the beacon starts.
+  5. Hold Blackwater Dam while its turbines power the airfield.
+  6. Face what Teo became at St. Agnes Church to get the flare gun.
+  7. Under the CDC quarantine, hold the Velgen Field Station while its terminal downloads the override code.
+  8. Fire the flare at the airfield.
+  9. Defeat the Warden, Unbound.
+- **Side quests**: six Raven Unit dog tags to collect (the reward is armour that halves damage) and twelve Velgen sample cases the Peddler buys.
+- **Bounties**: the Butcher, the Quarry Burrower, the Brood Mother (a giant spider that spawns its young), the Reaper Alpha, the farm burrowers and Teo, paid out by the Peddler. A Quests tab in the inventory tracks chapters, collectibles and bounties.

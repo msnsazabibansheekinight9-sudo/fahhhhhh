@@ -254,6 +254,10 @@ NF.world = (function () {
       else { m = new THREE.Mesh(Mo.box(0.16, 0.08, 0.1), std({ color: colr, roughness: 0.6 })); m.position.y = 0.04; }
       g.add(m);
     }
+    else if (type === 'armory_key') { m = new THREE.Mesh(Mo.box(0.03, 0.01, 0.12), mats.brass); m.position.y = 0.02; g.add(m); var ring = new THREE.Mesh(new THREE.TorusGeometry(0.04, 0.008, 6, 14), std({ color: '#aaa', metalness: 0.9 })); ring.rotation.x = Math.PI / 2; ring.position.set(0, 0.02, -0.09); g.add(ring); }
+    else if (type === 'fuel') { m = new THREE.Mesh(Mo.box(0.3, 0.42, 0.18), std({ color: '#a01a10', metalness: 0.5, roughness: 0.4 })); m.position.y = 0.21; g.add(m); var sp2 = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.1, 8), std({ color: '#222' })); sp2.position.set(0.1, 0.46, 0); g.add(sp2); }
+    else if (type === 'dogtag') { for (var dt2 = 0; dt2 < 2; dt2++) { var tg = new THREE.Mesh(Mo.box(0.05, 0.004, 0.03), std({ color: '#c8c8c0', metalness: 0.95, roughness: 0.25 })); tg.position.set(dt2 * 0.02, 0.005 + dt2 * 0.004, dt2 * 0.01); tg.rotation.y = dt2 * 0.5; g.add(tg); } }
+    else if (type === 'sample') { m = new THREE.Mesh(Mo.box(0.3, 0.14, 0.2), std({ color: '#d8d8d0', metalness: 0.6, roughness: 0.3 })); m.position.y = 0.07; g.add(m); var vial = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.12, 10), std({ color: '#30ff90', emissive: '#10a040', emissiveIntensity: 1.5 })); vial.position.set(0, 0.2, 0); g.add(vial); }
     else if (type === 'file') { m = new THREE.Mesh(Mo.box(0.22, 0.01, 0.3), std({ map: T.paper(), roughness: 0.9 })); m.position.y = 0.006; m.rotation.y = 0.3; g.add(m); }
     g.traverse(function (c) { if (c.isMesh) c.castShadow = true; });
     return g;
