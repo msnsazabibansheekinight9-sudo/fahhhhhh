@@ -319,16 +319,23 @@ NF.world = (function () {
     var stairMat = std({ map: T.wood(), color: '#6a4a36', roughness: 0.5 });
     [-1, 1].forEach(function (s) {
       var x = s * 8.6;
-      for (var i = 0; i < 14; i++) { var y = i * 0.29; addBox(x, 0, 6.5 + i * 0.75, 2.6, y + 0.29, 0.75, i % 2 ? stairMat : mats.darkwood, { uv: false }); }
-      collider(x - 1.4, x + 1.4, 6.2, 17, 0, 4.2, 'stairs');
+      for (var i = 0; i < 14; i++) { var y = i * 0.29; addBox(x, 0, 6.5 + i * 0.75, 2.6, y + 0.29, 0.75, i % 2 ? stairMat : mats.darkwood, { uv: false }); collider(x - 1.3, x + 1.3, 6.5 + i * 0.75 - 0.375, 6.5 + i * 0.75 + 0.375, 0, y + 0.29, 'step'); }
+      addBox(x, 0, 16.83, 2.6, 4.15, 0.42, mats.darkwood, { uv: false }); collider(x - 1.3, x + 1.3, 16.6, 17.05, 0, 4.15, 'step');
+      // outer wall side and banister keep you on the stairs
+      collider(x - s * 1.32 - 0.05, x - s * 1.32 + 0.05, 6.1, 17, 0.3, 6, 'rail');
       // banister
       for (var b = 0; b < 14; b++) addBox(x - s * 1.25, b * 0.29 + 0.29, 6.6 + b * 0.75, 0.06, 0.9, 0.06, mats.darkwood, { uv: false });
       var rail = addBox(x - s * 1.25, 0, 11.75, 0.1, 0.08, 10.8, mats.trim, { uv: false }); rail.position.y = 2.5; rail.rotation.x = -Math.atan2(4.06, 10.5);
     });
     addBox(0, 3.9, 18.5, 20, 0.25, 3, mats.darkwood, { uv: false });
-    collider(-10, 10, 17, 20, 3.9, 4.2, 'balcony');
-    for (var i = -9; i <= 9; i += 0.5) addBox(i, 4.15, 17.05, 0.05, 0.9, 0.05, mats.darkwood, { uv: false, cast: false });
-    addBox(0, 5.05, 17.05, 20, 0.08, 0.12, mats.trim, { uv: false });
+    collider(-10, 10, 17, 20, 3.9, 4.15, 'balcony');
+    // balcony railing, open where the two staircases arrive
+    for (var i = -7.2; i <= 7.2; i += 0.5) addBox(i, 4.15, 17.05, 0.05, 0.9, 0.05, mats.darkwood, { uv: false, cast: false });
+    addBox(0, 5.05, 17.05, 14.5, 0.08, 0.12, mats.trim, { uv: false });
+    collider(-7.3, 7.3, 16.98, 17.12, 4.15, 5.1, 'rail');
+    // something worth the climb
+    W.item('hg_ammo_balc', 'hg_ammo', -4, 4.15, 19, { amount: 12 });
+    W.item('herb_balc', 'herb', 4.5, 4.15, 19.2);
     [-6, -3, 3, 6].forEach(function (x) { addBox(x, 0, 17.2, 0.5, 3.9, 0.5, mats.stone, { collide: true }); });
     // chandelier
     var ch = new THREE.Group(); ch.position.set(0, 6.3, 9);
@@ -547,6 +554,17 @@ NF.world = (function () {
   W.ground = function (x, z) {
     var r = W.roomAt(x, z); if (r) return r.y || 0;
     return NF.terrain && NF.terrain.ready ? NF.terrain.height(x, z) : 0;
+  };
+  var floorBuf = [];
+  W.floorAt = function (x, z, y, rad) {
+    var f = W.ground(x, z); rad = rad || 0.2;
+    var list = near(x - rad, z - rad, x + rad, z + rad, floorBuf);
+    for (var i = 0; i < list.length; i++) {
+      var b = list[i]; if (!b.on || b.y1 <= f || b.y1 > y + 0.36) continue;
+      if (x < b.x0 - rad * 0.5 || x > b.x1 + rad * 0.5 || z < b.z0 - rad * 0.5 || z > b.z1 + rad * 0.5) continue;
+      f = b.y1;
+    }
+    return f;
   };
   W.collide = function (p, rad, y0) {
     y0 = (p.y || 0) + (y0 || 0.3); var yTop = (p.y || 0) + 1.6;

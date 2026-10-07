@@ -14,11 +14,12 @@ October 1998. Officer Mara Voss's helicopter goes down near the Velgen Pharmaceu
   - The **Warden**, an unkillable stalker that smashes through a wall, follows you from room to room and opens doors. It can only be stunned, and it won't enter safe rooms.
   - **The Lazarus Form**, the final boss, with two phases, slam and sweep attacks, eyes you can shoot out and an exposed heart.
 - **Weapons**: an M19 handgun (crits when your aim is steady), an M37 pump shotgun, a Bulldog .50 magnum and a knife. Ammo is scarce.
+- **Movement**: walkable twin staircases up to the main hall balcony, step climbing, jumping, gravity and fall damage.
 - **Classic systems**: typewriter saves, herbs (which can be combined), first aid spray, key items, files to read, a map, an ECG health display, quick turn and cutscenes you can skip.
 - **Ending**: a self-destruct escape, followed by a rank screen.
 
 ## Controls
-WASD to move, Shift to run, mouse to look, right mouse to aim, left mouse to fire (knife when not aiming), R to reload, E to interact, Q to quick turn, 1/2/3 to switch weapons, H to heal, F for the flashlight, Tab for inventory, M for the map, Esc to pause.
+WASD to move, Shift to run, Space to jump (stairs and low ledges are climbed by walking into them), mouse to look, right mouse to aim, left mouse to fire (knife when not aiming), R to reload, E to interact, Q to quick turn, 1/2/3 to switch weapons, H to heal, F for the flashlight, Tab for inventory, M for the map, Esc to pause.
 
 ## Run it
 Serve this folder with any static web server and open `index.html`.

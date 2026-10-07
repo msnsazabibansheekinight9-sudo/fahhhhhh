@@ -110,7 +110,7 @@ NF.game = (function () {
     document.addEventListener('keydown', function (e) {
       AU.init();
       var k = e.key.toLowerCase(); keys[k] = true;
-      if (k === 'tab') e.preventDefault();
+      if (k === 'tab' || (k === ' ' && mode !== 'title')) e.preventDefault();
       if (mode === 'cine' && (k === ' ' || k === 'enter' || k === 'escape')) { skipCine(); return; }
       if (mode === 'ui') { if (k === 'escape' || k === 'tab' || k === 'i' || k === 'm' || (k === 'e' && G.ui === 'file') || (k === 'p' && G.ui === 'pause')) closeUI(); return; }
       if (mode !== 'play') return;
@@ -173,11 +173,11 @@ NF.game = (function () {
     AU.music(null);
     cine([
       { pos: [0, 6.5, 14], look: [0, 6.3, 9], pos2: [0, 4.5, 13], look2: [0, 2.5, 6], dur: 4, at: function () { fade(0, 2.5); } },
-      { pos: [3.5, 1.6, 6.5], look: [0, 1.4, 2], pos2: [2.2, 1.6, 5.6], look2: [0, 1.4, 1.8], dur: 5.5, at: function () { setTimeout(function () { var d = W.doors.filter(function (x) { return x.id === 'front'; })[0]; AU.thud(new V3(0, 1.5, -0.5), 1.2); setTimeout(function () { AU.thud(new V3(0, 1.5, -0.5), 1); }, 600); setTimeout(function () { AU.thud(new V3(0, 1.5, -0.5), 1); }, 1100); }, 600); },
+      { pos: [3.5, 1.6, 6.5], look: [0, 1.4, 2], pos2: [2.2, 1.6, 5.6], look2: [0, 1.4, 1.8], dur: 5.5, at: function () { later(function () { var d = W.doors.filter(function (x) { return x.id === 'front'; })[0]; AU.thud(new V3(0, 1.5, -0.5), 1.2); later(function () { AU.thud(new V3(0, 1.5, -0.5), 1); }, 600); later(function () { AU.thud(new V3(0, 1.5, -0.5), 1); }, 1100); }, 600); },
         lines: [['', '(Hammering — from outside the front doors.)', 2.5], ['MARA', 'Hey! HEY! There\'s someone in here!', 2.8]] },
       { pos: [-1.6, 1.7, 4.2], look: [0, 1.55, 1.6], dur: 6,
         lines: [['MARA', 'Teo? Teo, do you copy? ...Raven Unit, anyone?', 3], ['', '(Static.)', 1.4], ['MARA', 'Boarded in. Great. Somebody wanted us in here.', 2.8]] },
-      { pos: [1.2, 1.8, 0.4], look: [-6, 1.5, 9], dur: 4.5, at: function () { setTimeout(function () { AU.gun('handgun'); AU.sting(); }, 400); },
+      { pos: [1.2, 1.8, 0.4], look: [-6, 1.5, 9], dur: 4.5, at: function () { later(function () { AU.gun('handgun'); AU.sting(); }, 400); },
         lines: [['', '(A gunshot echoes from the west wing.)', 2], ['MARA', 'A gunshot — the dining room. Teo...', 2.5]] }
     ], function () { objective('start'); hint('Click the game to capture the mouse · WASD move · Shift run · Right-click aim · E interact', 7); autosave(); });
   }
@@ -266,7 +266,7 @@ NF.game = (function () {
     FX.muzzle(mz, fwd, w !== 'handgun');
     var rr = new V3(-Math.cos(P.yaw), 0, Math.sin(P.yaw)).multiplyScalar(-1);
     if (w === 'handgun') FX.shell(mz.clone().addScaledVector(fwd, -0.12), rr, false);
-    if (w === 'shotgun') setTimeout(function () { FX.shell(mz.clone().addScaledVector(fwd, -0.5), rr, true); AU.reload('pump'); }, 380);
+    if (w === 'shotgun') later(function () { FX.shell(mz.clone().addScaledVector(fwd, -0.5), rr, true); AU.reload('pump'); }, 380);
     if (w === 'smg' || w === 'rifle') FX.shell(mz.clone().addScaledVector(fwd, -0.3), rr, false);
     AU.gun(w === 'smg' ? 'handgun' : w === 'rifle' ? 'magnum' : w); E.noise(P.pos, w === 'handgun' || w === 'smg' ? 22 : 34);
     cam.pitch = Math.min(1.0, cam.pitch + d.recoil * (0.7 + Math.random() * 0.5)); cam.yaw += (Math.random() - .5) * d.recoil * 0.4;
@@ -275,7 +275,7 @@ NF.game = (function () {
   function knife() {
     if (P.knifeT > 0 || P.reloadT > 0) return;
     P.knifeT = 0.5; AU.knife();
-    setTimeout(function () {
+    later(function () {
       var fwd = new V3(Math.sin(P.yaw), 0, Math.cos(P.yaw)), best = null, bd = 1.8;
       E.list.forEach(function (e) { if (e.dead || e.state === 'dormant') return; var to = e.pos.clone().sub(P.pos); var d = to.length(); if (d < bd && fwd.dot(to.normalize()) > 0.4) { bd = d; best = e; } });
       if (best) { var pt = best.pos.clone().setY(best.pos.y + (best.type === 'dog' ? 0.6 : best.state === 'down' ? 0.3 : 1.25)); E.damage(best, best.state === 'down' ? 16 : 10, 'body', pt, fwd, 'knife'); AU.impact(pt, true); }
@@ -291,7 +291,7 @@ NF.game = (function () {
     if (w === 'gl') { m = new THREE.Mesh(Mo.sphere(0.05, 8, 6), new THREE.MeshStandardMaterial({ color: '#3a4a2a' })); var v = dir.multiplyScalar(32); v.y += 2.2; NF.creatures.shoot({ pos: mz, vel: v, g: 9.8, mesh: m, explode: { r: 6, dmg: 160 }, life: 5, trail: '#999' }); AU.gun('shotgun'); }
     else { m = new THREE.Group(); var b = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.5, 8), new THREE.MeshStandardMaterial({ color: '#4a5a3a' })); b.rotation.x = PI / 2; m.add(b); m.lookAt(dir); NF.creatures.shoot({ pos: mz, vel: dir.multiplyScalar(55), g: 0.4, mesh: m, explode: { r: 8, dmg: 650 }, life: 6, trail: '#ccc' }); AU.boom(mz, 2); FX.puff(mz.clone().addScaledVector(dir, -1.2), '#bbb'); }
     FX.muzzle(mz, dir, true); E.noise(P.pos, 30); P.recoil = 1; vmKick(w); cam.pitch = Math.min(1, cam.pitch + d.recoil); G.shake(0.3);
-    if (P.ammo[w] > 0) setTimeout(function () { if (P.weapon === w && P.mag[w] === 0) startReload(); }, 400);
+    if (P.ammo[w] > 0) later(function () { if (P.weapon === w && P.mag[w] === 0) startReload(); }, 400);
   }
   function throwGrenade() {
     if (P.grenades <= 0) { toast('No grenades'); return; }
@@ -299,7 +299,7 @@ NF.game = (function () {
     P.grenades--; P.knifeT = 0.5; AU.knife();
     var from = P.chest().add(new V3(0, 0.3, 0)), f = camForward(); var v = f.multiplyScalar(15); v.y += 5;
     var m = new THREE.Mesh(Mo.sphere(0.06, 8, 6), new THREE.MeshStandardMaterial({ color: '#3a4a2a', roughness: 0.6 })); m.scale.y = 1.3;
-    setTimeout(function () { NF.creatures.shoot({ pos: from, vel: v, g: 12, mesh: m, explode: { r: 6.5, dmg: 180 }, life: 2.4, spin: 9 }); }, 150);
+    later(function () { NF.creatures.shoot({ pos: from, vel: v, g: 12, mesh: m, explode: { r: 6.5, dmg: 180 }, life: 2.4, spin: 9 }); }, 150);
   }
   G.poison = function (n) { if (P.poison <= 0) toast('Poisoned! Use a blue herb'); P.poison = Math.max(P.poison, n); };
   G.toastMsg = function (m) { toast(m); };
@@ -356,7 +356,22 @@ NF.game = (function () {
     P.pos.addScaledVector(P.vel, dt); W.collide(P.pos, 0.3);
     E.list.forEach(function (e) { if (e.dead || e.state === 'dormant') return; var dx = P.pos.x - e.pos.x, dz = P.pos.z - e.pos.z, d2 = dx * dx + dz * dz, m = 0.3 + e.rad; if (d2 < m * m && d2 > 1e-6) { var d = Math.sqrt(d2); P.pos.x += dx / d * (m - d); P.pos.z += dz / d * (m - d); } });
     W.collide(P.pos, 0.3);
-    P.pos.y = W.ground(P.pos.x, P.pos.z);
+    // gravity, steps and jumping
+    var floorY = W.floorAt(P.pos.x, P.pos.z, P.pos.y, 0.25);
+    if (P.onGround && floorY < P.pos.y && P.pos.y - floorY < 0.45 && P.vy <= 0) { P.pos.y = floorY; }
+    else if (floorY > P.pos.y) { P.pos.y = floorY; P.vy = Math.max(0, P.vy); P.onGround = true; }
+    if (P.pos.y > floorY + 0.001 || P.vy > 0) {
+      P.vy = (P.vy || 0) - 19 * dt; P.pos.y += P.vy * dt; P.onGround = false; P.airT = (P.airT || 0) + dt;
+      if (P.pos.y <= floorY) {
+        var impact = -P.vy; P.pos.y = floorY; P.vy = 0; P.onGround = true;
+        AU.step(P.pos.clone(), 'wood', Math.min(0.9, 0.3 + impact * 0.06)); E.noise(P.pos, 6);
+        if (impact > 13) { P.invuln = 0; hurtPlayer(Math.round((impact - 12) * 7), null, 'fall'); }
+        P.landT = 0.18; P.airT = 0;
+      }
+    } else { P.onGround = true; P.vy = 0; P.airT = 0; }
+    if (canAct && keys[' '] && P.onGround && !P.jumpHeld && P.healT <= 0 && P.reloadT <= 0 && !P.grabbedBy) { P.vy = 6.3; P.onGround = false; P.pos.y += 0.02; AU.step(P.pos.clone(), 'wood', 0.25); }
+    P.jumpHeld = !!keys[' '];
+    if (P.landT > 0) P.landT -= dt;
     var sp = Math.hypot(P.vel.x, P.vel.z); P.speed = sp;
     if (cam.fps) P.yaw = cam.yaw;
     if (aiming) { P.yaw = cam.yaw; P.focus = Math.min(1, P.focus + dt * (sp > 0.3 ? 0.25 : 0.9)); }
@@ -364,7 +379,7 @@ NF.game = (function () {
     if (P.grabbedBy) { P.grabT -= dt; if (P.grabT <= 0 || P.grabbedBy.dead) { var z = P.grabbedBy; if (!z.dead) { var push = z.pos.clone().sub(P.pos).setY(0).normalize(); z.pos.addScaledVector(push, 0.8); z.state = 'stagger'; z.t = 0; W.collide(z.pos, z.rad); } P.grabbedBy = null; } }
     // footsteps
     var prev = P.ph; P.ph += dt * (sp * (running ? 2.4 : 3.0) + (sp > 0.1 ? 1 : 0));
-    if (sp > 0.3 && Math.floor(prev / PI) !== Math.floor(P.ph / PI)) {
+    if (sp > 0.3 && P.onGround !== false && Math.floor(prev / PI) !== Math.floor(P.ph / PI)) {
       var room = W.roomAt(P.pos.x, P.pos.z); AU.step(P.pos.clone(), room ? (room.floor === 'tile' || room.floor === 'marble' ? 'tile' : room.floor) : 'wood', running ? 0.5 : 0.28);
       E.noise(P.pos, running ? 9 : 2.2);
     }
@@ -386,6 +401,8 @@ NF.game = (function () {
       else { gl.position.set(-0.1, -0.02, 0.2); gl.rotation.set(0.6, 0.38, 0.1); }
     }
     if (state === 2 && sp > 0.15) { A.add(pose, 'spine', 0.15, 0, 0.1); A.add(pose, 'knR', 0.3, 0, 0); if (!aiming) { pose.shL = [-0.5, 0, -0.3]; pose.elL = [-1.6, 0, 0]; } }
+    if (!P.onGround && P.airT > 0.05) { A.add(pose, 'hipL', -0.7, 0, 0.05); A.add(pose, 'hipR', -0.3, 0, -0.05); A.add(pose, 'knL', 1.1, 0, 0); A.add(pose, 'knR', 0.7, 0, 0); if (!aiming) { A.add(pose, 'shL', -0.3, 0, 0.5); A.add(pose, 'shR', -0.3, 0, -0.5); } }
+    if (P.landT > 0) { A.add(pose, 'knL', 0.6, 0, 0); A.add(pose, 'knR', 0.6, 0, 0); A.add(pose, 'hipL', -0.4, 0, 0); A.add(pose, 'hipR', -0.4, 0, 0); pose.hipsY = (pose.hipsY || 0) - 0.12; }
     if (P.flinch > 0) A.flinch(pose, P.flinch);
     A.apply(rig, pose, 1 - Math.exp(-dt * 14));
     rig.root.position.copy(P.pos); rig.root.rotation.y = P.yaw; rig.root.rotation.x = 0;
@@ -443,7 +460,7 @@ NF.game = (function () {
   G.enterVehicle = function (v) { P.inVeh = v; mouse.aim = false; toast('E — get out · W/S drive · A/D steer · Space brake'); AU.thud(v.pos, 0.6); };
   G.exitVehicle = function (forced) {
     var v = P.inVeh; if (!v) return; P.inVeh = null; rig.root.visible = true; $('veh').style.display = 'none'; NF.vehicles.lights(null, false); AU.engine(0, false);
-    var side = new V3(Math.cos(v.yaw), 0, -Math.sin(v.yaw)); P.pos.copy(v.pos).addScaledVector(side, 1.8); W.collide(P.pos, 0.3); P.pos.y = W.ground(P.pos.x, P.pos.z);
+    var side = new V3(Math.cos(v.yaw), 0, -Math.sin(v.yaw)); P.pos.copy(v.pos).addScaledVector(side, 1.8); W.collide(P.pos, 0.3); P.pos.y = W.ground(P.pos.x, P.pos.z); P.vy = 0; P.onGround = true;
     if (forced) { P.hp -= 25; if (P.hp <= 0) hurtPlayer(10, null, 'blast'); }
   };
   G.shake = function (a) { cam.shake = Math.min(1.5, cam.shake + a); };
@@ -495,7 +512,7 @@ NF.game = (function () {
     cam.fov += (tFov - cam.fov) * (1 - Math.exp(-dt * 12));
     var f = camForward(), flat = new V3(f.x, 0, f.z).normalize();
     var bob = P.speed > 0.3 ? Math.sin(P.ph * 2) * 0.03 * Math.min(1, P.speed / 3) : 0;
-    camPos.set(P.pos.x, P.pos.y + 1.6 + bob - (P.healT > 0 ? 0.1 : 0), P.pos.z).addScaledVector(flat, 0.1);
+    camPos.set(P.pos.x, P.pos.y + 1.6 + bob - (P.healT > 0 ? 0.1 : 0) - (P.landT > 0 ? P.landT * 0.5 : 0), P.pos.z).addScaledVector(flat, 0.1);
     if (cam.shake > 0) { camPos.x += (Math.random() - .5) * cam.shake * 0.08; camPos.y += (Math.random() - .5) * cam.shake * 0.08; cam.shake = Math.max(0, cam.shake - dt * 2.4); }
     if (P.grabbedBy) camPos.x += Math.sin(T * 30) * 0.02;
     camera.position.copy(camPos); lookAt.copy(camPos).add(f); camera.lookAt(lookAt);
@@ -553,9 +570,9 @@ NF.game = (function () {
   function findInteract() {
     var best = null, bd = 99, fwd = new V3(Math.sin(P.yaw), 0, Math.cos(P.yaw));
     function consider(x, z, r, obj) { var dx = x - P.pos.x, dz = z - P.pos.z, d = Math.hypot(dx, dz); if (d > r) return; var facing = d < 0.6 ? 1 : (dx * fwd.x + dz * fwd.z) / d; var score = d - facing * 0.6; if (facing > -0.2 && score < bd) { bd = score; best = obj; } }
-    W.items.forEach(function (it) { if (!it.taken) consider(it.x, it.z, 1.5, { kind: 'item', it: it }); });
+    W.items.forEach(function (it) { if (!it.taken && Math.abs(it.y - P.pos.y) < 2.2) consider(it.x, it.z, 1.5, { kind: 'item', it: it }); });
     W.doors.forEach(function (d) { if (!d.open || d.relock) consider(d.x, d.z, 1.9, { kind: 'door', d: d }); });
-    W.spots.forEach(function (s) { if (s.on) consider(s.x, s.z, s.r, { kind: 'spot', s: s }); });
+    W.spots.forEach(function (s) { if (s.on && Math.abs(W.ground(s.x, s.z) - P.pos.y) < 2.2) consider(s.x, s.z, s.r, { kind: 'spot', s: s }); });
     if (!best) { var v = NF.vehicles.nearest(P.pos, 3.4); if (v) best = { kind: 'veh', v: v }; }
     return best;
   }
@@ -646,7 +663,7 @@ NF.game = (function () {
     flags.escaped = true; G.escapeT = undefined; $('timer').style.display = 'none'; act2Spots(); NF.mapui.prebuild();
     var behind = new V3(0, 3, 64);
     cine([
-      { pos: [6, 2.2, 88], look: [0, 3, 70], pos2: [7, 3.2, 92], look2: [0, 5, 66], dur: 4.2, at: function () { [0, 400, 900, 1500].forEach(function (d, i) { setTimeout(function () { NF.creatures.explode(new V3((i - 1.5) * 6, 4 + i, 60 - i * 4), 9, 0, false); }, d); }); AU.music(null); }, lines: [['', '(Behind her, Velgen\'s laboratory tears itself apart.)', 3.6]] },
+      { pos: [6, 2.2, 88], look: [0, 3, 70], pos2: [7, 3.2, 92], look2: [0, 5, 66], dur: 4.2, at: function () { [0, 400, 900, 1500].forEach(function (d, i) { later(function () { NF.creatures.explode(new V3((i - 1.5) * 6, 4 + i, 60 - i * 4), 9, 0, false); }, d); }); AU.music(null); }, lines: [['', '(Behind her, Velgen\'s laboratory tears itself apart.)', 3.6]] },
       { pos: [3, 1.7, 80], look: [0, 1.4, 76], dur: 4.6, lines: [['MARA', 'Raven Unit to County Dispatch. Anybody. Please.', 3], ['', '(Static.)', 1.4]] },
       { pos: [1.5, 1.7, 82], look: [0, 1.5, 76], dur: 7.4, lines: [['HOLLIS (radio)', '—Voss? Voss, this is Hollis at County. Thank God. Where are you?', 3.4], ['MARA', 'Outside the Ashgrove estate. The manor\'s gone. Teo\'s missing.', 3.2]] },
       { pos: [4, 2.4, 84], look: [0, 1.5, 76], dur: 9, lines: [['HOLLIS (radio)', 'Listen. The whole county\'s gone dark. The evac bird can only land at the airfield, and only if the beacon\'s up.', 4.2], ['HOLLIS (radio)', 'Get to the police station in Halverson Falls, north up Route 9. Call me from the station radio. Trucks still run if you find one.', 4.6]] }
@@ -683,7 +700,7 @@ NF.game = (function () {
       return true;
     }
     if (name === 'unboundPhase') { AU.sting(); say([['', '(The Warden tears free of its restraints.)', 2.4]]); return true; }
-    if (name === 'unboundDead') { flags.unboundDead = true; G.bossRef = null; $('bossbar').style.display = 'none'; setTimeout(evacScene, 2500); return true; }
+    if (name === 'unboundDead') { flags.unboundDead = true; G.bossRef = null; $('bossbar').style.display = 'none'; later(evacScene, 2500); return true; }
     if (name === 'butcherDead') { toast('The Butcher is dead'); E.byId('butcher') && dropAt(E.byId('butcher').pos, 'money', 5000); return true; }
     if (name === 'wormDead') { toast('The burrower is dead'); return true; }
     return false;
@@ -703,14 +720,14 @@ NF.game = (function () {
     s.pos.set(25.0, 0, 15.6);
     AU.glass(new V3(24, 5, 15)); FX.glass(new V3(24, 5.5, 15), new V3(0, -1, 0));
     cine([
-      { pos: [21.2, 1.3, 11.2], look: [25, 0.4, 15.4], pos2: [21.6, 1.0, 11.8], look2: [24.6, 0.4, 15], dur: 3.6, at: function () { AU.sting(); setTimeout(function () { AU.screech(new V3(25, 0.5, 15.5)); }, 500); }, lines: [['', '(Something drops from the rafters.)', 1.8], ['MARA', '...What the hell are you?', 1.8]] },
+      { pos: [21.2, 1.3, 11.2], look: [25, 0.4, 15.4], pos2: [21.6, 1.0, 11.8], look2: [24.6, 0.4, 15], dur: 3.6, at: function () { AU.sting(); later(function () { AU.screech(new V3(25, 0.5, 15.5)); }, 500); }, lines: [['', '(Something drops from the rafters.)', 1.8], ['MARA', '...What the hell are you?', 1.8]] },
       { pos: [23.6, 0.55, 14.2], look: [25.0, 0.55, 15.6], dur: 2.6, lines: [['MARA', '(whispering) No eyes. It can\'t see me. It\'s listening.', 2.6]] }
     ], function () { hint('It hunts by sound. WALK — don\'t run. Gunshots will bring it straight to you.', 7); });
   }
   function dogEvent() {
     flags.hallDogs = true;
-    [29, 38].forEach(function (z, i) { setTimeout(function () { AU.glass(new V3(-3, 2, z)); FX.glass(new V3(-2.8, 2, z), new V3(1, 0, 0)); var win = W.windows.filter(function (w) { return w.z === z; })[0]; if (win) win.mesh.material = new THREE.MeshStandardMaterial({ color: '#05070a' }); }, i * 450); });
-    setTimeout(function () { spawnStage(); AU.sting(); }, 200);
+    [29, 38].forEach(function (z, i) { later(function () { AU.glass(new V3(-3, 2, z)); FX.glass(new V3(-2.8, 2, z), new V3(1, 0, 0)); var win = W.windows.filter(function (w) { return w.z === z; })[0]; if (win) win.mesh.material = new THREE.MeshStandardMaterial({ color: '#05070a' }); }, i * 450); });
+    later(function () { spawnStage(); AU.sting(); }, 200);
     say([['MARA', 'Not again—!', 1.5]]);
   }
   function teoTalk() {
@@ -728,7 +745,7 @@ NF.game = (function () {
     flags.warden = true;
     var bw = W.breakWall;
     cine([
-      { pos: [1.6, 1.7, 39.5], look: [-3, 1.6, 33], dur: 3.4, at: function () { AU.thud(new V3(-4, 1, 33), 1.5); G.shake(0.4); setTimeout(function () { AU.thud(new V3(-4, 1, 33), 1.6); G.shake(0.5); }, 900); setTimeout(function () { AU.thud(new V3(-4, 1, 33), 1.8); G.shake(0.6); }, 1800); }, lines: [['', '(Something is pounding on the other side of the wall.)', 3]] },
+      { pos: [1.6, 1.7, 39.5], look: [-3, 1.6, 33], dur: 3.4, at: function () { AU.thud(new V3(-4, 1, 33), 1.5); G.shake(0.4); later(function () { AU.thud(new V3(-4, 1, 33), 1.6); G.shake(0.5); }, 900); later(function () { AU.thud(new V3(-4, 1, 33), 1.8); G.shake(0.6); }, 1800); }, lines: [['', '(Something is pounding on the other side of the wall.)', 3]] },
       { pos: [1.4, 1.5, 37.8], look: [-3, 2.0, 33], dur: 3.2, at: function () {
           bw.visible = false; bw.userData.box.on = false; FX.debris(new V3(-3, 0.2, 33), 22, 1); AU.thud(new V3(-3, 1, 33), 2.5); G.shake(1.2); AU.sting();
           spawnStage(); var w = E.byId('warden'); if (w) { w.pos.set(-3.6, 0, 33); w.state = 'walk'; }
@@ -765,14 +782,14 @@ NF.game = (function () {
     if (name === 'bossPhase2') {
       say([['CRANE', 'MORE... I need MORE!', 2.2]]);
       [[-10.3, 51], [10.3, 56]].forEach(function (p, i) {
-        setTimeout(function () {
+        later(function () {
           AU.glass(new V3(p[0], 1.5, p[1])); FX.glass(new V3(p[0], 1.5, p[1]), new V3(-Math.sign(p[0]), 0, 0));
           var tk = null; W.specimens = W.specimens || [];
           E.spawn('zombie', 'z_spec' + i, p[0] - Math.sign(p[0]) * 1.4, p[1], { variant: 2, alert: true, seed: 90 + i, yaw: -Math.sign(p[0]) * PI / 2 });
         }, 600 + i * 900);
       });
     }
-    if (name === 'bossDead') { flags.bossDead = true; $('bossbar').style.display = 'none'; setTimeout(function () { startEscape(); autosave(); }, 2800); }
+    if (name === 'bossDead') { flags.bossDead = true; $('bossbar').style.display = 'none'; later(function () { startEscape(); autosave(); }, 2800); }
   };
   function startEscape() {
     if (G.escapeT !== undefined) return;
@@ -819,7 +836,7 @@ NF.game = (function () {
     var af = NF.terrain.poi('airfield');
     heli = makeHeli(); heli.position.set(af.x - 400, af.h + 60, af.z + 400); scene.add(heli);
     say([['MARA', 'Come on... come on...', 2], ['PILOT (radio)', 'Flare sighted. Inbound, ninety seconds.', 2.6]]);
-    setTimeout(function () {
+    later(function () {
       var e = E.spawn('unbound', 'unbound', af.x - 40 + 16, af.z + 20, { yaw: -PI / 2 });
       cine([
         { pos: [af.x - 72, af.h + 2.2, af.z + 112], look: [af.x - 24, af.h + 3, af.z + 20], dur: 3.4, at: function () { AU.thud(e.pos, 2.5); G.shake(1.2); FX.debris(e.pos.clone().setY(e.pos.y + 1), 20, 1); AU.sting(); }, lines: [['', '(Something tears through the hangar doors.)', 2.6]] },
@@ -849,7 +866,7 @@ NF.game = (function () {
     if (!heli) { heli = makeHeli(); scene.add(heli); }
     cine([
       { pos: [pad.x + 14, pad.y + 4, pad.z - 10], look: [pad.x, pad.y + 2, pad.z], dur: 6, at: function () { heli.position.set(pad.x + 30, pad.y + 25, pad.z - 30); }, lines: [['PILOT (radio)', 'Setting down! Get aboard, officer!', 2.6], ['MARA', 'Get us out of here.', 2]] },
-      { pos: [pad.x - 20, pad.y + 30, pad.z - 30], look: [pad.x, pad.y + 10, pad.z], dur: 6, at: function () { setTimeout(function () { G.evacT = 40; }, 2500); }, lines: [['', '(Dawn breaks over Ashgrove County.)', 3]] }
+      { pos: [pad.x - 20, pad.y + 30, pad.z - 30], look: [pad.x, pad.y + 10, pad.z], dur: 6, at: function () { later(function () { G.evacT = 40; }, 2500); }, lines: [['', '(Dawn breaks over Ashgrove County.)', 3]] }
     ], ending);
   }
   function dropAt(pos, type, amount) { var id = 'drop' + (G.dropN = (G.dropN || 0) + 1); var it = W.item(id, type, pos.x + (Math.random() - .5), W.ground(pos.x, pos.z), pos.z + (Math.random() - .5), { amount: amount }); return it; }
@@ -872,7 +889,7 @@ NF.game = (function () {
     if (G.bossRef === e) { G.bossRef = null; }
     if (e.noDrop || !flags.escaped || e.type === 'boss') return;
     var r = Math.random();
-    setTimeout(function () {
+    later(function () {
       if (r < 0.35) dropAt(e.pos, 'money', 50 * (1 + (Math.random() * (e.type === 'zombie' ? 4 : 12) | 0)));
       else if (r < 0.6) { var owned = WORDER.filter(function (w) { return P.owned[w] && w !== 'rpg' && w !== 'gl'; }); var w = owned[(Math.random() * owned.length) | 0]; var t = { handgun: 'hg_ammo', shotgun: 'sg_ammo', magnum: 'mag_ammo', smg: 'smg_ammo', rifle: 'rifle_ammo' }[w]; dropAt(e.pos, t, NF.terrain.defaultAmount(t)); }
       else if (r < 0.66) dropAt(e.pos, 'powder', 1);
@@ -909,7 +926,7 @@ NF.game = (function () {
     c.i = c.steps.length; endCine();
   }
   function endCine() {
-    var c = cineData; cineData = null; document.body.classList.remove('cine'); mode = 'play'; sayQ = []; $('sub').innerHTML = '';
+    var c = cineData; cineData = null; document.body.classList.remove('cine'); mode = 'play'; P.jumpHeld = true; sayQ = []; $('sub').innerHTML = '';
     cam.yaw = P.yaw; cam.pitch = -0.08; camera.fov = 62; camera.updateProjectionMatrix();
     if (c && c.done) c.done();
   }
@@ -936,7 +953,7 @@ NF.game = (function () {
     showScreen(which);
   }
   function viewHeading() { var f = new V3(); camera.getWorldDirection(f); return P.inVeh || !cam.fps ? Math.atan2(-Math.sin(cam.yaw), Math.cos(cam.yaw)) : Math.atan2(-f.x, f.z); }
-  function closeUI() { NF.mapui.close(); hideScreens(); mode = 'play'; G.ui = null; }
+  function closeUI() { NF.mapui.close(); hideScreens(); mode = P.alive ? 'play' : 'dead'; G.ui = null; }
   var invSel = null;
   function buildInv() {
     var g = $('invGrid'); g.innerHTML = '';
@@ -1267,6 +1284,11 @@ NF.game = (function () {
 
   // ------------------------------------------------------------------ loop
   var frame = 0;
+  // story and combat timers run on game time, so pausing or opening a menu pauses them too
+  var timers = [];
+  function later(fn, ms) { timers.push({ t: (ms || 0) / 1000, fn: fn }); }
+  G.later = later;
+  function runTimers(dt) { for (var i = timers.length - 1; i >= 0; i--) { timers[i].t -= dt; if (timers[i].t <= 0) { var f = timers[i].fn; timers.splice(i, 1); f(); } } }
   function loop() {
     requestAnimationFrame(loop);
     tick(Math.min(0.05, clock.getDelta()));
@@ -1280,7 +1302,7 @@ NF.game = (function () {
     if (mode !== 'ui') {
       if (mode === 'play' || mode === 'cine' || mode === 'dead') {
         if (mode === 'play') stats.time += dt;
-        G.lastDt = dt;
+        G.lastDt = dt; runTimers(dt);
         if (mode === 'play') NF.vehicles.update(dt, P.inVeh, P.inVeh ? keys : {}); else NF.vehicles.update(dt, null, {});
         updatePlayer(dt);
         E.update(T, dt, P);

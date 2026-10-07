@@ -11,7 +11,7 @@ NF.enemies = (function () {
     zombie: { hp: 60, speed: 0.7, rad: 0.32, turn: 2.2 },
     dog: { hp: 32, speed: 5.4, rad: 0.35, turn: 6 },
     skinner: { hp: 140, speed: 3.6, rad: 0.4, turn: 5 },
-    warden: { hp: 450, speed: 1.75, rad: 0.5, turn: 2.5 },
+    warden: { hp: 300, speed: 1.75, rad: 0.5, turn: 2.5 },
     boss: { hp: 1300, speed: 1.15, rad: 1.0, turn: 1.6 }
   };
   E.spawn = function (type, id, x, z, o) {
@@ -64,9 +64,9 @@ NF.enemies = (function () {
     e.pos.x += Math.sin(e.yaw) * speed * k * dt; e.pos.z += Math.cos(e.yaw) * speed * k * dt;
     // separation
     E.list.forEach(function (o) { if (o === e || o.dead || o.state === 'dormant') return; var dx = e.pos.x - o.pos.x, dz = e.pos.z - o.pos.z, d2 = dx * dx + dz * dz, m = e.rad + o.rad; if (d2 < m * m && d2 > 1e-6) { var d = Math.sqrt(d2), p = (m - d) * 0.5; e.pos.x += dx / d * p; e.pos.z += dz / d * p; } });
-    NF.world.collide(e.pos, e.rad, e.type === 'dog' ? 0.2 : 0.3);
+    NF.world.collide(e.pos, e.rad, 0.32);
     var r = NF.world.roomAt(e.pos.x, e.pos.z); if (r && r.safe) { e.pos.x = ox; e.pos.z = oz; return 0; }
-    e.pos.y = NF.world.ground(e.pos.x, e.pos.z);
+    var fy0 = NF.world.floorAt(e.pos.x, e.pos.z, e.pos.y, e.rad * 0.6); if (fy0 > e.pos.y - 0.4) e.pos.y = fy0;
     return speed * k;
   }
   function perceive(e, P, dt) {
@@ -162,7 +162,7 @@ NF.enemies = (function () {
       e.lift = 0;
       if (e.far) { if (e.pos.distanceTo(P.pos) > 70) continue; }
       var reg = E.reg[e.type], fn = reg ? reg.update : UPDATE[e.type]; fn(e, t, dt, P);
-      if (!e.flying) e.pos.y = NF.world.ground(e.pos.x, e.pos.z);
+      if (!e.flying) { var fy = NF.world.floorAt(e.pos.x, e.pos.z, e.pos.y, e.rad * 0.6); e.pos.y = fy < e.pos.y - 0.4 ? Math.max(fy, e.pos.y - dt * 9) : fy; }
       syncRig(e);
       if (e.extra.headless > 0) { e.extra.headless -= dt; if (Math.random() < 0.5) NF.fx.blood(e.rig.J.neck.getWorldPosition(tmp), new V3(0, 1.4, 0), 2); }
     }
