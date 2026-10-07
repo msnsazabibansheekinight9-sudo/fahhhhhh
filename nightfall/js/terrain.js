@@ -1,7 +1,8 @@
 // Ashgrove County: a 6 km x 6 km open world streamed in 128 m chunks around the player.
 var NF = window.NF || (window.NF = {});
 NF.terrain = (function () {
-  var T = { ready: false, CH: 128, S: 40, LIMIT: 3040, chunks: {}, lamps: [], pois: [], roads: [] };
+  var T = { ready: false, CH: 128, S: 40, HALF: 8192, LIMIT: 8150, chunks: {}, lamps: [], pois: [], roads: [] };
+  T.NCH = T.HALF / T.CH;
   var scene, W, Mo, std, V3 = THREE.Vector3;
   var CH = T.CH, S = T.S;
   // ------------------------------------------------------------------ noise
@@ -36,8 +37,23 @@ NF.terrain = (function () {
     P('dam', 'Blackwater Dam', -520, 2050, 40, { flat: true }),
     P('fieldlab', 'Velgen Field Station', 2380, -1480, 70, { flat: true }),
     P('ranger', 'Ranger Lookout', -2100, 600, 30, { flat: true, hill: 60 }),
-    P('mine', 'Old Copper Mine', -2300, 2100, 45, { flat: true })
+    P('mine', 'Old Copper Mine', -2300, 2100, 45, { flat: true }),
+    // the wider county
+    P('granite', 'Granite Falls', 4800, 3200, 230, { flat: true }),
+    P('truckstop', 'Route 9 Truck Stop', 3600, 600, 60, { flat: true }),
+    P('campus', 'Velgen Corporate Campus', 6200, -1800, 230, { flat: true }),
+    P('windfarm', 'Copper Hills Wind Farm', 5200, -4800, 260, {}),
+    P('prison', 'Saltmarsh Penitentiary', 2600, -6000, 170, { flat: true }),
+    P('fort', 'Fort Halvers', -1500, -5200, 250, { flat: true }),
+    P('railyard', 'Ashgrove Rail Yard', -2800, -1800, 170, { flat: true }),
+    P('bayou', 'Blackroot Bayou', -5200, -3200, 430, { lake: true, bayou: true }),
+    P('coldcreek', 'Cold Creek', -4600, 5200, 170, { flat: true }),
+    P('lodge', 'Kessler Pass Lodge', 1200, 6600, 75, { flat: true, hill: 150 }),
+    P('observatory', 'Echo Ridge Observatory', -6400, 1600, 45, { flat: true, hill: 130 }),
+    P('halloran', 'Lake Halloran', 3200, 5400, 460, { lake: true }),
+    P('logging', 'Pine Hollow Logging Camp', -2400, 7000, 90, { flat: true })
   ];
+  T.lakes = T.pois.filter(function (p) { return p.lake; });
   function poi(id) { for (var i = 0; i < T.pois.length; i++) if (T.pois[i].id === id) return T.pois[i]; }
   T.poi = poi;
   var ROADS = [
@@ -54,10 +70,34 @@ NF.terrain = (function () {
     [[1480, 1080], [1600, 520]],
     [[-860, 1220], [-1500, 900], [-2050, 640]],
     [[-820, 1700], [-1600, 1950], [-2250, 2080]],
-    [[2030, 2080], [2150, 2140]]
+    [[2030, 2080], [2150, 2140]],
+    // highways into the wider county
+    [[1600, 440], [2600, 560], [3600, 600]],
+    [[3600, 600], [4700, -300], [5600, -1200], [6100, -1650]],
+    [[3600, 600], [4200, 1700], [4800, 2990]],
+    [[2400, 2330], [3600, 2800], [4620, 3200]],
+    [[4800, 3410], [4300, 4300], [3600, 4900]],
+    [[3600, 4900], [2600, 5600], [1250, 6540]],
+    [[-2250, 2080], [-3500, 3600], [-4600, 5050]],
+    [[-4600, 5350], [-3600, 6400], [-2450, 6950]],
+    [[-2350, 7000], [-600, 7050], [1150, 6620]],
+    [[-1600, -780], [-2200, -1300], [-2800, -1620]],
+    [[-2800, -1980], [-2300, -3600], [-1500, -4940]],
+    [[-1250, -5200], [700, -5700], [2420, -6000]],
+    [[2780, -6000], [4000, -5500], [5000, -4900]],
+    [[5200, -4600], [5800, -3200], [6200, -2040]],
+    [[2380, -1480], [2500, -3500], [2600, -5820]],
+    [[-2970, -1800], [-4200, -2500], [-4800, -2900]],
+    [[-5600, -2900], [-5900, -800], [-6400, 1550]],
+    [[-2050, 640], [-4000, 1100], [-6350, 1600]],
+    [[-2800, -1800], [0, -2600], [2800, -2700], [6000, -2050]]
   ];
   // town streets
-  var STREETS = [[[300, 740], [540, 740]], [[300, 820], [560, 820]], [[300, 900], [540, 900]], [[340, 700], [340, 960]], [[500, 700], [500, 960]]];
+  var STREETS = [[[300, 740], [540, 740]], [[300, 820], [560, 820]], [[300, 900], [540, 900]], [[340, 700], [340, 960]], [[500, 700], [500, 960]],
+    // Granite Falls
+    [[4800, 2990], [4800, 3410]], [[4620, 3100], [4980, 3100]], [[4620, 3200], [4980, 3200]], [[4620, 3300], [4980, 3300]], [[4700, 3040], [4700, 3360]], [[4900, 3040], [4900, 3360]],
+    // Cold Creek
+    [[-4600, 5050], [-4600, 5350]], [[-4730, 5200], [-4470, 5200]]];
   function segs(list, w) { var out = []; list.forEach(function (pl) { for (var i = 0; i < pl.length - 1; i++) out.push({ ax: pl[i][0], az: pl[i][1], bx: pl[i + 1][0], bz: pl[i + 1][1], w: w }); }); return out; }
   T.roads = segs(ROADS, 4.2).concat(segs(STREETS, 4.5));
   function segDist(s, x, z) {
@@ -69,7 +109,9 @@ NF.terrain = (function () {
   function low(x, z) {
     var h = 34 * fbm(x / 760, z / 760, 3) + 6;
     T.pois.forEach(function (p) { if (p.hill) { var d2 = (x - p.x) * (x - p.x) + (z - p.z) * (z - p.z); h += p.hill * Math.exp(-d2 / (240 * 240)); } });
-    var s = Math.max(Math.abs(x), Math.abs(z)); if (s > 2450) h += Math.pow((s - 2450) / 600, 2) * 260 * (0.8 + 0.4 * fbm(x / 120, z / 120, 2));
+    var s = Math.max(Math.abs(x), Math.abs(z)), e0 = T.HALF - 650; if (s > e0) h += Math.pow((s - e0) / 600, 2) * 260 * (0.8 + 0.4 * fbm(x / 120, z / 120, 2));
+    if (z > 4600) h += Math.pow(Math.min(1, (z - 4600) / 2600), 1.6) * 210 * (0.55 + 0.45 * fbm(x / 420, z / 420, 3));
+    if (z < -3800 && x < -3000) h -= 18 * Math.min(1, (-3800 - z) / 1200) * Math.min(1, (-3000 - x) / 1500);
     return h;
   }
   function base(x, z) { return low(x, z) + 9 * fbm(x / 170 + 5, z / 170, 3) + 1.6 * fbm(x / 38, z / 38, 2); }
@@ -81,6 +123,7 @@ NF.terrain = (function () {
       var p = T.pois[i], d = Math.sqrt((x - p.x) * (x - p.x) + (z - p.z) * (z - p.z));
       if (d > p.r * 1.6 + 60) continue;
       if (p.flat) { var t = sstep(p.r, p.r * 1.5 + 30, d); h = p.h + (h - p.h) * t; }
+      else if (p.bayou) { var fb = sstep(p.r + 60, p.r - 80, d); var marsh = p.water - 0.9 + 2.4 * fbm(x / 70, z / 70, 3); h = h + (marsh - h) * fb; }
       else if (p.lake) { var f = sstep(p.r + 40, p.r - 60, d); h = h + (p.water - 9 - h) * f; }
       else if (p.pit) { var g = sstep(p.r + 10, p.r - 30, d); var floorH = p.h - 24 * sstep(p.r, 0, d); var ter = Math.floor((p.h - (p.h - floorH)) / 4) * 4; h = h + (Math.min(h, ter + 0.5) - h) * g; }
     }
@@ -104,7 +147,8 @@ NF.terrain = (function () {
     }
     return best;
   };
-  T.inWater = function (x, z) { var l = poi('lake'); var d = Math.hypot(x - l.x, z - l.z); return d < l.r + 30 && T.height(x, z) < l.water - 0.4; };
+  T.lakeAt = function (x, z, pad) { for (var i = 0; i < T.lakes.length; i++) { var l = T.lakes[i]; if (Math.hypot(x - l.x, z - l.z) < l.r + (pad || 0)) return l; } return null; };
+  T.inWater = function (x, z) { var l = T.lakeAt(x, z, 60); return !!l && T.height(x, z) < l.water - 0.4; };
   // ------------------------------------------------------------ textures & geometry
   var tex = {}, mats = {}, geos = {};
   function canvasTex(w, h, fn, rep) { var c = document.createElement('canvas'); c.width = w; c.height = h; fn(c.getContext('2d'), w, h); var t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding; t.anisotropy = 4; if (rep) t.repeat.set(rep, rep); return t; }
@@ -151,6 +195,7 @@ NF.terrain = (function () {
     mats.lamp = std({ color: '#fff0c0', emissive: '#ffd890', emissiveIntensity: 2 });
     mats.red = std({ color: '#ff2020', emissive: '#ff1010', emissiveIntensity: 2 });
     mats.water = new THREE.MeshStandardMaterial({ color: new THREE.Color('#0a1a22').convertSRGBToLinear(), roughness: 0.08, metalness: 0.6, transparent: true, opacity: 0.88 });
+    mats.swamp = new THREE.MeshStandardMaterial({ color: new THREE.Color('#1a2214').convertSRGBToLinear(), roughness: 0.2, metalness: 0.3, transparent: true, opacity: 0.92 });
     mats.asphalt = std({ color: '#2a2a2a', roughness: 0.9, map: NF.tex.stone() });
     mats.stone = std({ map: NF.tex.stone(), roughness: 0.95 });
     mats.cloth = std({ color: '#6a5a3a', roughness: 1, side: THREE.DoubleSide });
@@ -250,8 +295,10 @@ NF.terrain = (function () {
     // safehouse on the gas station lot near the manor
     place({ kind: 'shack', id: 'gas1shack', x: poi('gas1').x - 26, z: poi('gas1').z + 4, safe: true, name: 'Motel Office' });
     // ---- wilderness: cabins, wrecks, camps, hunting stands
-    for (var wc = 0; wc < 260; wc++) {
-      var cx2 = (r() * 2 - 1) * 2700, cz2 = (r() * 2 - 1) * 2700;
+    var EDGE = T.HALF - 500;
+    for (var wc = 0; wc < 1700; wc++) {
+      var cx2 = (r() * 2 - 1) * EDGE, cz2 = (r() * 2 - 1) * EDGE;
+      if (T.lakeAt(cx2, cz2, 30)) continue;
       if (!clearOf(cx2, cz2, 30) || Math.hypot(cx2, cz2 - 36) < 160) continue;
       var kind = r(); var id = 'w' + wc;
       if (kind < 0.4) place({ kind: 'house', id: id, x: Math.round(cx2), z: Math.round(cz2), w: 7, d: 6, face: (r() * 4) | 0, h: 2.8, style: 'old', tint: '#7a6a58', wild: true });
@@ -267,19 +314,126 @@ NF.terrain = (function () {
     T.roads.forEach(function (s, si) { if (s.w > 4.3) return; var len = Math.hypot(s.bx - s.ax, s.bz - s.az), nx = -(s.bz - s.az) / len, nz = (s.bx - s.ax) / len; for (var t = 0; t < len; t += 45) { var f = t / len; place({ kind: 'pole', id: 'pp' + si + '_' + t, x: s.ax + (s.bx - s.ax) * f + nx * 7, z: s.az + (s.bz - s.az) * f + nz * 7 }); } });
     // wandering threats in the wild
     var types = ['zombie', 'zombie', 'zombie', 'dogpack', 'crows', 'spider', 'reaper', 'zombie', 'hollow', 'bloater', 'skinner'];
-    for (var wz = 0; wz < 520; wz++) {
-      var ex = (r() * 2 - 1) * 2800, ez = (r() * 2 - 1) * 2800; if (Math.hypot(ex, ez - 36) < 120) continue;
+    for (var wz = 0; wz < 3200; wz++) {
+      var ex = (r() * 2 - 1) * EDGE, ez = (r() * 2 - 1) * EDGE; if (Math.hypot(ex, ez - 36) < 120) continue;
       var ty = types[(r() * types.length) | 0]; if (T.inWaterExact(ex, ez)) continue;
       spawnAt(ty, 'wz' + wz, ex, ez, { variant: (r() * 8) | 0, weapon: 'axe', revenant: r() < 0.12 });
       if (ty === 'zombie') for (var g2 = 0; g2 < 2 + (r() * 3 | 0); g2++) spawnAt('zombie', 'wz' + wz + 'g' + g2, ex + (r() - .5) * 12, ez + (r() - .5) * 12, { variant: (r() * 8) | 0 });
     }
     // story items & treasures
+    // ================================================================ the wider county
+    var SHOPS = ['HARDWARE', 'PHARMACY', 'DINER', 'GROCERY', 'BARBER', 'BANK', 'TAVERN', 'BOOKS', 'GUNS & TACKLE', 'POST OFFICE', 'LAUNDROMAT', 'MOTEL', 'FEED & SEED', 'CINEMA'];
+    var TINTS = ['#c8c0b0', '#9aa8a0', '#b0a088', '#a08a7a', '#8a9aa8', '#c0b8a0', '#a8a090'];
+    function lot2(pre, i, x, z, face, kind, style) {
+      var shop = kind === 'shop', w = shop ? 12 : 8 + (r() * 3 | 0), d = shop ? 10 : 7 + (r() * 3 | 0);
+      if (r() < 0.7) loot(pre + i + 'l', x + (r() - .5) * 3, z + (r() - .5) * 3, r);
+      place({ kind: 'house', id: pre + i, x: x, z: z, w: face % 2 ? d : w, d: face % 2 ? w : d, face: face, h: shop ? 4 : 3.2, style: style || (r() < 0.3 ? 'brick' : 'siding'), tint: TINTS[(r() * TINTS.length) | 0], sign: shop ? SHOPS[(r() * SHOPS.length) | 0] : null });
+    }
+    function townGrid(pre, cx, cz, half, mainX, crossZ, sideX, style) {
+      var n = 0;
+      for (var z = cz - half + 8; z <= cz + half - 8; z += 18) {
+        if (crossZ.some(function (cz2) { return Math.abs(z - cz2) < 10; })) continue;
+        lot2(pre, n++, mainX - 15, z, 1, r() < 0.5 ? 'shop' : 'house', style); lot2(pre, n++, mainX + 15, z, 3, r() < 0.5 ? 'shop' : 'house', style);
+        sideX.forEach(function (sx) { lot2(pre, n++, sx - 14, z, 1, 'house', style); lot2(pre, n++, sx + 14, z, 3, 'house', style); });
+      }
+      crossZ.forEach(function (zz) { for (var x = cx - half + 20; x <= cx + half - 20; x += 18) { if (Math.abs(x - mainX) < 12 || sideX.some(function (sx) { return Math.abs(x - sx) < 12; })) continue; lot2(pre, n++, x, zz - 13, 0, r() < 0.3 ? 'shop' : 'house', style); lot2(pre, n++, x, zz + 13, 2, 'house', style); } });
+      return n;
+    }
+    function crowd(pre, cx, cz, rad, n, mix, o) { for (var i = 0; i < n; i++) { var a = r() * 6.28, d = 8 + r() * rad, x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d; if (T.inWaterExact(x, z)) continue; var ty = mix[(r() * mix.length) | 0]; spawnAt(ty, pre + i, x, z, Object.assign({ variant: (r() * 8) | 0, weapon: ['axe', 'pitchfork', 'sickle', 'torch', 'shield'][(r() * 5) | 0], revenant: r() < 0.15 }, o || {})); } }
+    function safehouse(id, x, z, name) { place({ kind: 'shack', id: id, x: x, z: z, safe: true, name: name }); T.lamps.push({ x: x, y: 3, z: z - 4, c: '#ffd090', i: 1 }); }
+    // ---- Granite Falls, the county seat
+    var gf = poi('granite');
+    townGrid('gf', gf.x, gf.z, 190, 4800, [3100, 3200, 3300], [4700, 4900]);
+    place({ kind: 'house', id: 'gfhospital', x: 4980, z: 3050, w: 30, d: 18, face: 3, h: 7, style: 'concrete', flatRoof: true, sign: 'COUNTY HOSPITAL', doorW: 3, lit: true, name: 'Granite County Hospital' });
+    for (var hs = 0; hs < 6; hs++) itemAt('gfhosp' + hs, ['spray', 'herb', 'blue_herb', 'red_herb', 'spray', 'herb'][hs], 4970 + (hs % 3) * 6, 3045 + (hs / 3 | 0) * 6);
+    place({ kind: 'house', id: 'gfcourt', x: 4620, z: 3380, w: 24, d: 16, face: 2, h: 6, style: 'brick', sign: 'COURTHOUSE', doorW: 2.4, name: 'Courthouse' });
+    place({ kind: 'watertower', id: 'gfwt', x: 4980, z: 3400 });
+    safehouse('gfshack', 4560, 3080, 'Granite Falls Motel');
+    for (var gl2 = 3000; gl2 <= 3400; gl2 += 28) { T.lamps.push({ x: 4806, y: 5, z: gl2 }); place({ kind: 'streetlamp', id: 'gfl' + gl2, x: 4806, z: gl2 }); }
+    for (var gc = 0; gc < 30; gc++) place({ kind: 'car', id: 'gfcar' + gc, x: 4800 + (r() < 0.5 ? -2.5 : 2.5), z: 3000 + r() * 400, rot: r() * 6.28 });
+    crowd('gfz', gf.x, gf.z, 210, 110, ['zombie', 'zombie', 'zombie', 'zombie', 'bloater', 'zombie', 'reaper']);
+    spawnAt('skinner', 'gfsk1', 4980, 3060); spawnAt('skinner', 'gfsk2', 4700, 3300); spawnAt('crows', 'gfcr', 4850, 3150);
+    // ---- Route 9 truck stop
+    var ts = poi('truckstop'); place({ kind: 'gas', id: 'truckstop', x: ts.x, z: ts.z }); T.lamps.push({ x: ts.x, y: 5, z: ts.z, c: '#e8f0ff', i: 1.4 });
+    safehouse('tsshack', ts.x - 30, ts.z + 6, 'Truck Stop Office'); for (var tt = 0; tt < 5; tt++) place({ kind: 'car', id: 'tscar' + tt, x: ts.x + 20 + tt * 5, z: ts.z - 20, rot: 1.57 });
+    crowd('tsz', ts.x, ts.z, 50, 10, ['zombie', 'zombie', 'dogpack']);
+    // ---- Velgen corporate campus
+    var cp2 = poi('campus');
+    [[-70, -60, 'VELGEN BIOMEDICAL', 'Velgen Research Tower'], [60, -60, 'LAZARUS WING', 'Lazarus Wing'], [-70, 60, 'ANIMAL RESEARCH', 'Animal Research'], [60, 60, 'ADMINISTRATION', 'Administration']].forEach(function (b, i) {
+      place({ kind: 'house', id: 'vc' + i, x: cp2.x + b[0], z: cp2.z + b[1], w: 34, d: 24, face: i < 2 ? 2 : 0, h: 9, style: 'concrete', flatRoof: true, sign: b[2], doorW: 3.2, lit: true, name: b[3], empty: true });
+      for (var lv = 0; lv < 3; lv++) itemAt('vcl' + i + lv, ['rpg_ammo', 'gl_ammo', 'treasure', 'sample', 'rifle_ammo', 'spray'][(i * 3 + lv) % 6], cp2.x + b[0] - 8 + lv * 8, cp2.z + b[1] + (r() - .5) * 6, { name: (i * 3 + lv) % 6 === 2 ? 'Velgen Board Ring' : (i * 3 + lv) % 6 === 3 ? 'Velgen Sample Case' : undefined, value: 9000 });
+    });
+    for (var pk = 0; pk < 24; pk++) place({ kind: 'car', id: 'vccar' + pk, x: cp2.x - 60 + (pk % 8) * 15, z: cp2.z + (pk / 8 | 0) * 6 - 6, rot: 0 });
+    for (var cl = 0; cl < 8; cl++) T.lamps.push({ x: cp2.x - 90 + cl * 26, y: 6, z: cp2.z, c: '#cfe0ff', i: 1.2 });
+    safehouse('vcshack', cp2.x - 200, cp2.z + 40, 'Security Gatehouse');
+    crowd('vcz', cp2.x, cp2.z, 200, 45, ['zombie', 'zombie', 'skinner', 'reaper', 'zombie'], { variant: 2 });
+    spawnAt('reaper', 'r01', cp2.x, cp2.z + 10, { boss: true });
+    // ---- Copper Hills wind farm
+    var wf = poi('windfarm'); for (var tb = 0; tb < 14; tb++) { var a2 = tb / 14 * 6.28 + r() * 0.3, d2 = 80 + r() * 200; place({ kind: 'turbine', id: 'wt' + tb, x: wf.x + Math.cos(a2) * d2, z: wf.z + Math.sin(a2) * d2 }); }
+    place({ kind: 'house', id: 'wfsub', x: wf.x, z: wf.z, w: 14, d: 10, face: 0, h: 4, style: 'concrete', flatRoof: true, sign: 'SUBSTATION 4' });
+    spawnAt('burrower', 'wfworm', wf.x + 60, wf.z + 40, { boss: true }); crowd('wfz', wf.x, wf.z, 250, 14, ['crows', 'zombie', 'dogpack', 'reaper']);
+    // ---- Saltmarsh Penitentiary
+    var pr = poi('prison');
+    place({ kind: 'wall', id: 'prw1', x: pr.x, z: pr.z - 110, w: 220, d: 1.2, h: 8, gap: 16 }); place({ kind: 'wall', id: 'prw2', x: pr.x, z: pr.z + 110, w: 220, d: 1.2, h: 8 });
+    place({ kind: 'wall', id: 'prw3', x: pr.x - 110, z: pr.z, w: 1.2, d: 220, h: 8 }); place({ kind: 'wall', id: 'prw4', x: pr.x + 110, z: pr.z, w: 1.2, d: 220, h: 8 });
+    [[-50, -30], [50, -30], [-50, 40], [50, 40]].forEach(function (c2, i) { place({ kind: 'house', id: 'prcb' + i, x: pr.x + c2[0], z: pr.z + c2[1], w: 40, d: 14, face: i % 2 ? 3 : 1, h: 6, style: 'concrete', flatRoof: true, name: 'Cell Block ' + 'ABCD'[i], empty: false }); });
+    [[-105, -105], [105, -105], [-105, 105], [105, 105]].forEach(function (c2, i) { place({ kind: 'lookout', id: 'prt' + i, x: pr.x + c2[0], z: pr.z + c2[1] }); });
+    safehouse('prshack', pr.x - 30, pr.z - 150, 'Prison Visitor Centre');
+    crowd('prz', pr.x, pr.z, 95, 60, ['zombie', 'zombie', 'zombie', 'hollow'], { variant: 4 });
+    spawnAt('butcher', 'butcher2', pr.x, pr.z + 5);
+    for (var pl2 = 0; pl2 < 6; pl2++) itemAt('prl' + pl2, ['hg_ammo', 'sg_ammo', 'mag_ammo', 'grenade', 'smg_ammo', 'treasure'][pl2], pr.x - 60 + pl2 * 24, pr.z + 5, { name: pl2 === 5 ? 'Warden\'s Gold Watch' : undefined, value: 7000 });
+    // ---- Fort Halvers
+    var ft = poi('fort');
+    for (var bk = 0; bk < 8; bk++) place({ kind: 'house', id: 'ftb' + bk, x: ft.x - 120 + (bk % 4) * 70, z: ft.z - 50 + (bk / 4 | 0) * 90, w: 26, d: 9, face: bk < 4 ? 2 : 0, h: 3.6, style: 'siding', tint: '#6a7058', name: 'Barracks ' + (bk + 1) });
+    place({ kind: 'house', id: 'ftarmory', x: ft.x + 140, z: ft.z, w: 16, d: 12, face: 3, h: 4, style: 'concrete', flatRoof: true, sign: 'ARMORY', name: 'Fort Armory' });
+    for (var fa = 0; fa < 6; fa++) itemAt('ftal' + fa, ['grenade', 'gl_ammo', 'rifle_ammo', 'grenade', 'rpg_ammo', 'smg_ammo'][fa], ft.x + 134 + (fa % 3) * 4, ft.z - 3 + (fa / 3 | 0) * 6, { amount: [3, 4, 10, 3, 1, 60][fa] });
+    [[-230, -230], [230, -230], [-230, 230], [230, 230]].forEach(function (c2, i) { place({ kind: 'lookout', id: 'ftt' + i, x: ft.x + c2[0], z: ft.z + c2[1] }); });
+    for (var fs = -2; fs < 2; fs++) { place({ kind: 'fenceSeg', id: 'ffn' + fs, x0: ft.x + fs * 115, z0: ft.z + 240, x1: ft.x + (fs + 1) * 115, z1: ft.z + 240, x: ft.x + fs * 115 + 57, z: ft.z + 240 }); place({ kind: 'fenceSeg', id: 'ffs' + fs, x0: ft.x + fs * 115, z0: ft.z - 240, x1: ft.x + (fs + 1) * 115, z1: ft.z - 240, x: ft.x + fs * 115 + 57, z: ft.z - 240, gap: fs === 0 ? 20 : 0 }); }
+    for (var mv = 0; mv < 10; mv++) place({ kind: 'car', id: 'ftcar' + mv, x: ft.x - 60 + mv * 13, z: ft.z + 30, rot: 0, color: '#4a5236' });
+    place({ kind: 'helipad', id: 'fthp', x: ft.x + 60, z: ft.z - 150 });
+    safehouse('ftshack', ft.x + 40, ft.z - 270, 'Checkpoint Hut');
+    crowd('ftz', ft.x, ft.z, 230, 55, ['zombie', 'zombie', 'zombie', 'reaper', 'dogpack'], { variant: 3 });
+    // ---- Ashgrove rail yard
+    var ry = poi('railyard');
+    for (var bc = 0; bc < 22; bc++) place({ kind: 'boxcar', id: 'rybc' + bc, x: ry.x - 120 + (bc % 11) * 22, z: ry.z - 30 + (bc / 11 | 0) * 18 + (r() - .5) * 2, rot: 1.57 + (r() - .5) * 0.1 });
+    place({ kind: 'house', id: 'rystation', x: ry.x, z: ry.z + 60, w: 22, d: 10, face: 0, h: 5, style: 'brick', sign: 'ASHGROVE STATION', name: 'Ashgrove Station' });
+    place({ kind: 'watertower', id: 'rywt', x: ry.x + 120, z: ry.z + 50 });
+    safehouse('ryshack', ry.x - 140, ry.z + 70, 'Signal Box');
+    crowd('ryz', ry.x, ry.z, 160, 35, ['zombie', 'zombie', 'hollow', 'dogpack', 'bloater']);
+    // ---- Blackroot Bayou
+    var bay = poi('bayou');
+    for (var sh = 0; sh < 16; sh++) { var a3 = r() * 6.28, d3 = 60 + r() * 330, sx3 = bay.x + Math.cos(a3) * d3, sz3 = bay.z + Math.sin(a3) * d3; place({ kind: 'house', id: 'bys' + sh, x: Math.round(sx3), z: Math.round(sz3), w: 7, d: 6, face: (r() * 4) | 0, h: 2.8, style: 'old', tint: '#5a5040', wild: true }); if (r() < 0.8) loot('bys' + sh + 'l', sx3 + 0.5, sz3 + 0.5, r); }
+    safehouse('byshack', bay.x + 380, bay.z + 200, 'Bait Shop');
+    crowd('byz', bay.x, bay.z, 380, 40, ['bloom', 'spider', 'bloater', 'zombie', 'crows', 'zombie']);
+    spawnAt('spider', 'bayoubrood', bay.x - 40, bay.z + 30, { boss: true });
+    // ---- Cold Creek, a mining town in the hills
+    var cc = poi('coldcreek'); townGrid('cc', cc.x, cc.z, 140, -4600, [5200], [], 'old');
+    place({ kind: 'lookout', id: 'cchead', x: cc.x + 90, z: cc.z + 60 }); place({ kind: 'mine', id: 'ccmine', x: cc.x + 110, z: cc.z + 90 });
+    safehouse('ccshack', cc.x - 150, cc.z - 40, 'Assay Office');
+    crowd('ccz', cc.x, cc.z, 150, 40, ['hollow', 'hollow', 'zombie', 'spider']);
+    // ---- Kessler Pass Lodge, up in the snow
+    var lg = poi('lodge'); place({ kind: 'house', id: 'lodge', x: lg.x, z: lg.z, w: 26, d: 14, face: 0, h: 5, style: 'old', tint: '#6a4a30', sign: 'KESSLER PASS LODGE', lit: true, name: 'Kessler Pass Lodge' });
+    for (var lf = 0; lf < 10; lf++) place({ kind: 'pole', id: 'lift' + lf, x: lg.x + 30 + lf * 4, z: lg.z - 40 - lf * 70 });
+    for (var cb = 0; cb < 6; cb++) place({ kind: 'house', id: 'lgc' + cb, x: lg.x - 50 + cb * 20, z: lg.z + 40, w: 7, d: 6, face: 0, h: 2.8, style: 'old', tint: '#5a4030' });
+    safehouse('lgshack', lg.x + 40, lg.z + 10, 'Ski Patrol Hut');
+    crowd('lgz', lg.x, lg.z, 120, 22, ['hollow', 'reaper', 'zombie', 'dogpack']);
+    itemAt('treasure_lodge', 'treasure', lg.x, lg.z + 2, { name: 'Silver Ski Trophy', value: 5000 });
+    // ---- Echo Ridge Observatory
+    var ob = poi('observatory'); place({ kind: 'observatory', id: 'obs', x: ob.x, z: ob.z }); safehouse('obshack', ob.x + 25, ob.z, 'Observer\'s Quarters');
+    itemAt('treasure_obs', 'treasure', ob.x, ob.z, { name: 'Brass Astrolabe', value: 8000 }); crowd('obz', ob.x, ob.z, 80, 8, ['reaper', 'zombie', 'crows']);
+    // ---- Lake Halloran
+    var lh = poi('halloran'); place({ kind: 'house', id: 'lhisland', x: lh.x + 30, z: lh.z - 20, w: 8, d: 7, face: 2, h: 3, style: 'old', name: 'Island Cabin', y: lh.water + 0.5 });
+    safehouse('lhshack', lh.x - lh.r - 40, lh.z, 'Halloran Boat Rental'); crowd('lhz', lh.x, lh.z, lh.r + 120, 16, ['bloom', 'zombie', 'spider']);
+    // ---- Pine Hollow Logging Camp
+    var lc = poi('logging'); for (var lp = 0; lp < 8; lp++) place({ kind: 'logpile', id: 'lp' + lp, x: lc.x - 50 + (lp % 4) * 30, z: lc.z - 30 + (lp / 4 | 0) * 50 });
+    place({ kind: 'house', id: 'sawmill', x: lc.x + 40, z: lc.z, w: 22, d: 14, face: 3, h: 6, style: 'old', tint: '#6a5038', sign: 'PINE HOLLOW SAWMILL', doorW: 4, doorH: 4, name: 'Sawmill' });
+    safehouse('lcshack', lc.x - 70, lc.z + 60, 'Foreman\'s Cabin'); crowd('lcz', lc.x, lc.z, 100, 20, ['hollow', 'hollow', 'dogpack', 'zombie']); spawnAt('butcher', 'butcher3', lc.x + 40, lc.z);
     // story items for the longer Act 2
     var hp2 = poi('harlan'); itemAt('fuel', 'fuel', hp2.x + 23, hp2.z + 4.6, { name: 'Fuel Can' });
     // side quest: Raven Unit dog tags, lost when the helicopter went down
     [[-1600 + 6, -820 + 3], [mn.x + 1, mn.z + 9], [q.x + 40, q.z - 30], [rg.x + 3, rg.z - 4], [poi('lake').x + 240, poi('lake').z - 120], [poi('odell').x - 10, poi('odell').z + 20]].forEach(function (p, i) { itemAt('tag' + i, 'dogtag', p[0], p[1], { name: 'Raven Unit Dog Tag' }); });
     // side quest: Velgen sample cases scattered by the outbreak
-    for (var sv = 0; sv < 12; sv++) { var sx = (r() * 2 - 1) * 2500, sz = (r() * 2 - 1) * 2500; if (!clearOf(sx, sz, 20) || T.inWaterExact(sx, sz)) { sv--; continue; } itemAt('sample' + sv, 'sample', sx, sz, { name: 'Velgen Sample Case' }); place({ kind: 'crash', id: 'samplecrash' + sv, x: sx + 5, z: sz + 4, rot: r() * 6 }); }
+    for (var sv = 0; sv < 24; sv++) { var sx = (r() * 2 - 1) * (T.HALF - 900), sz = (r() * 2 - 1) * (T.HALF - 900); if (!clearOf(sx, sz, 20) || T.inWaterExact(sx, sz)) { sv--; continue; } itemAt('sample' + sv, 'sample', sx, sz, { name: 'Velgen Sample Case' }); place({ kind: 'crash', id: 'samplecrash' + sv, x: sx + 5, z: sz + 4, rot: r() * 6 }); }
     // bounty targets
     spawnAt('spider', 'broodmother', mn.x + 4, mn.z + 18, { boss: true });
     spawnAt('reaper', 'alpha', rg.x + 40, rg.z - 30, { boss: true });
@@ -296,7 +450,7 @@ NF.terrain = (function () {
     itemAt('file_ranger', 'file', rg.x + 12, rg.z + 1, { y: 0.8, file: 'ranger' });
     itemAt('file_quarry', 'file', q.x + 50, q.z + 70, { file: 'quarry' });
   }
-  T.inWaterExact = function (x, z) { var l = poi('lake'); var d = Math.hypot(x - l.x, z - l.z); return d < l.r - 20; };
+  T.inWaterExact = function (x, z) { var l = T.lakeAt(x, z, -20); return !!l && (!l.bayou || T.hExact(x, z) < l.water); };
 
   // ------------------------------------------------------------ chunk build
   function terrainMesh(c) {
@@ -306,7 +460,7 @@ NF.terrain = (function () {
     var H = new Float32Array(n * n);
     for (var iz = 0; iz < n; iz++) for (var ix = 0; ix < n; ix++) H[iz * n + ix] = T.hExact(x0 + ix * step, z0 + iz * step);
     c.hg = H;
-    var cg = new THREE.Color(), lake = poi('lake');
+    var cg = new THREE.Color(), lk;
     for (var i = 0; i < pos.count; i++) {
       var lx = pos.getX(i) + CH / 2, lz = pos.getZ(i) + CH / 2, ix2 = Math.round(lx / step), iz2 = Math.round(lz / step);
       var wx = x0 + lx, wz = z0 + lz, h = H[iz2 * n + ix2];
@@ -316,7 +470,8 @@ NF.terrain = (function () {
       var nz = fbm(wx / 60, wz / 60, 2), rd = T.roadDist(wx, wz);
       if (rd < 0.5) cg.set(rd < -1 ? '#26272a' : '#33302c');
       else if (slope > 0.75) cg.set('#4e4c48');
-      else if (h < lake.water + 1.2 && Math.hypot(wx - lake.x, wz - lake.z) < lake.r + 60) cg.set('#3a3226');
+      else if ((lk = T.lakeAt(wx, wz, 60)) && h < lk.water + 1.2) cg.set(lk.bayou ? '#2e3220' : '#3a3226');
+      else if (h > 150 + 25 * fbm(wx / 90, wz / 90, 1)) cg.set(slope > 0.6 ? '#9a9c9e' : '#d8dde2');
       else if (nz > 0.25) cg.set('#4a4230');
       else cg.set(nz < -0.3 ? '#2c3a20' : '#34402a');
       if (rd >= 0.5 && rd < 2.5) cg.lerp(new THREE.Color('#3e3528'), 0.6);
@@ -333,14 +488,13 @@ NF.terrain = (function () {
     var lists = { pine: [], dead: [], oak: [], bush: [], rock: [] };
     var dens = 0.5 + 0.5 * fbm(x0 / 500, z0 / 500, 2);
     var count = Math.floor(40 + dens * 160);
-    var lake = poi('lake');
     for (var i = 0; i < count; i++) {
       var x = x0 + r() * CH, z = z0 + r() * CH;
       var f = fbm(x / 140, z / 140, 2); if (f < -0.25 && r() < 0.7) continue;
       if (!clearOf(x, z, 4)) { if (r() < 0.97) continue; if (T.roadDist(x, z) < 6) continue; }
-      if (Math.hypot(x - lake.x, z - lake.z) < lake.r + 20) continue;
+      var lkx = T.lakeAt(x, z, 20); if (lkx && (!lkx.bayou || T.height(x, z) < lkx.water + 0.3)) continue;
       var h = T.height(x, z), t = r();
-      var kind = Math.max(Math.abs(x), Math.abs(z)) > 2500 ? (t < 0.6 ? 'pine' : 'rock') : t < 0.55 ? 'pine' : t < 0.68 ? 'oak' : t < 0.78 ? 'dead' : t < 0.93 ? 'bush' : 'rock';
+      var kind = Math.max(Math.abs(x), Math.abs(z)) > T.HALF - 700 || h > 140 ? (t < 0.6 ? 'pine' : 'rock') : T.lakeAt(x, z, 0) && T.lakeAt(x, z, 0).bayou ? (t < 0.6 ? 'dead' : 'bush') : t < 0.55 ? 'pine' : t < 0.68 ? 'oak' : t < 0.78 ? 'dead' : t < 0.93 ? 'bush' : 'rock';
       var s = kind === 'rock' ? 0.5 + r() * 2 : kind === 'bush' ? 0.7 + r() * 0.8 : 0.8 + r() * 0.7;
       lists[kind].push([x, h - (kind === 'rock' ? s * 0.4 : 0.1), z, s, r() * 6.28]);
       if (kind === 'pine' || kind === 'oak' || kind === 'dead') c.boxes.push(W.collider(x - 0.3 * s, x + 0.3 * s, z - 0.3 * s, z + 0.3 * s, h - 1, h + 6, 'tree'));
@@ -434,8 +588,9 @@ NF.terrain = (function () {
     scene = sc; W = NF.world; Mo = NF.models; std = Mo.std;
     initAssets(); initPlacements();
     // global water
-    var lake = poi('lake');
-    var water = new THREE.Mesh(new THREE.CircleGeometry(lake.r + 80, 64), mats.water); water.rotation.x = -Math.PI / 2; water.position.set(lake.x, lake.water, lake.z); scene.add(water);
+    T.lakes.forEach(function (lake) {
+      var water = new THREE.Mesh(new THREE.CircleGeometry(lake.r + (lake.bayou ? 120 : 80), 64), lake.bayou ? mats.swamp : mats.water); water.rotation.x = -Math.PI / 2; water.position.set(lake.x, lake.water, lake.z); scene.add(water);
+    });
     T.ready = true;
   };
   function buildChunk(cx, cz) {
@@ -490,7 +645,7 @@ NF.terrain = (function () {
     // unload far chunks
     Object.keys(T.chunks).forEach(function (k) { var c = T.chunks[k]; if (Math.abs(c.cx - pcx) > R + 1 || Math.abs(c.cz - pcz) > R + 1) freeChunk(c); });
     var want = [];
-    for (var dx = -R; dx <= R; dx++) for (var dz = -R; dz <= R; dz++) { var cx = pcx + dx, cz = pcz + dz; if (Math.abs(cx) > 24 || Math.abs(cz) > 24) continue; if (!T.chunks[cx + ',' + cz]) want.push([cx, cz, dx * dx + dz * dz]); }
+    for (var dx = -R; dx <= R; dx++) for (var dz = -R; dz <= R; dz++) { var cx = pcx + dx, cz = pcz + dz; if (Math.abs(cx) > T.NCH || Math.abs(cz) > T.NCH) continue; if (!T.chunks[cx + ',' + cz]) want.push([cx, cz, dx * dx + dz * dz]); }
     want.sort(function (a, b) { return a[2] - b[2]; });
     var budget = force ? 99 : 1;
     for (var i = 0; i < want.length && budget > 0; i++) { buildChunk(want[i][0], want[i][1]); budget--; }

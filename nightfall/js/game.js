@@ -62,7 +62,7 @@ NF.game = (function () {
     ['shotgun', 'smg', 'rifle', 'gl', 'rpg'].forEach(function (w) { if (!gun[w]) gun[w] = Mo.weapon(w); rig.J.chest.add(gun[w]); gun[w].visible = false; });
     var lamp = new THREE.Mesh(Mo.box(0.05, 0.05, 0.05), new THREE.MeshStandardMaterial({ color: '#fff', emissive: '#fff4d0', emissiveIntensity: 2 })); lamp.position.set(-0.1, 0.22, 0.16); rig.J.chest.add(lamp);
     makeTeo(); buildVM();
-    NF.mapui.init(function () { var r = W.roomAt(P.pos.x, P.pos.z); return { P: P, flags: flags, obj: objTarget(), heading: viewHeading(), inManor: !!(r && W.rooms.indexOf(r) >= 0), hasKey: hasKey }; });
+    NF.mapui.init(function () { var r = W.roomAt(P.pos.x, P.pos.z); return { P: P, flags: flags, obj: objTarget(), heading: viewHeading(), inManor: !!(r && W.rooms.indexOf(r) >= 0), hasKey: hasKey, canTravel: !!(flags.escaped && !P.inVeh && r && r.safe && W.rooms.indexOf(r) < 0 && !flags.holding && !E.list.some(function (e) { return !e.dead && e.alert && e.state !== 'dormant' && e.pos.distanceTo(P.pos) < 12; })), travel: fastTravel }; });
     try { cam.fps = localStorage.getItem('nf_view') === 'fps'; } catch (e) { }
     window.addEventListener('resize', function () { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); if (vmCam) { vmCam.aspect = camera.aspect; vmCam.updateProjectionMatrix(); } });
     bindInput(); bindUI();
@@ -609,7 +609,7 @@ NF.game = (function () {
     else if (t === 'money') { P.money += it.amount || 100; AU.cash(); }
     else if (t === 'treasure') { P.treasures.push({ name: it.name || 'Antique Pocket Watch', value: it.value || (800 + (Math.abs(Math.round(it.x * 13 + it.z)) % 12) * 250) }); AU.cash(); }
     else if (t === 'grenade') P.grenades += it.amount || 1;
-    else if (t === 'dogtag' || t === 'sample') { P.collect[t] = (P.collect[t] || 0) + 1; AU.cash(); var tot = t === 'dogtag' ? 6 : 12; W.takeItem(it); markTaken(it); toast((t === 'dogtag' ? 'Raven Unit dog tag ' : 'Velgen sample ') + P.collect[t] + ' / ' + tot); if (t === 'dogtag' && P.collect.dogtag === 1) hint('Dog tags of Raven Unit are scattered across the county. Find all six (Quests tab).', 6); return; }
+    else if (t === 'dogtag' || t === 'sample') { P.collect[t] = (P.collect[t] || 0) + 1; AU.cash(); var tot = t === 'dogtag' ? 6 : 24; W.takeItem(it); markTaken(it); toast((t === 'dogtag' ? 'Raven Unit dog tag ' : 'Velgen sample ') + P.collect[t] + ' / ' + tot); if (t === 'dogtag' && P.collect.dogtag === 1) hint('Dog tags of Raven Unit are scattered across the county. Find all six (Quests tab).', 6); return; }
     else P.inv[t] = (P.inv[t] || 0) + 1;
     W.takeItem(it); markTaken(it); AU.pickup();
     toast('Picked up ' + itemName(it) + (it.amount ? ' ×' + it.amount : ''));
@@ -1081,7 +1081,7 @@ NF.game = (function () {
       html += '<div style="color:' + (done ? 'var(--dim)' : cur ? 'var(--fg)' : 'rgba(255,255,255,.3)') + '">' + (done ? '✔ ' : cur ? '▶ ' : '· ') + (done || cur ? q[0] : '???') + '</div>';
     });
     html += '<div style="font-family:Cinzel,serif;letter-spacing:.2em;color:var(--gold);margin:14px 0 4px">SIDE QUESTS</div>';
-    html += '<div>🏷️ Raven Unit dog tags: ' + (P.collect.dogtag || 0) + ' / 6' + (P.claimed.tags ? ' ✔' : '') + '</div><div>🧪 Velgen sample cases: ' + (P.collect.sample || 0) + ' / 12</div>';
+    html += '<div>🏷️ Raven Unit dog tags: ' + (P.collect.dogtag || 0) + ' / 6' + (P.claimed.tags ? ' ✔' : '') + '</div><div>🧪 Velgen sample cases: ' + (P.collect.sample || 0) + ' / 24</div>';
     html += '<div style="font-family:Cinzel,serif;letter-spacing:.2em;color:var(--gold);margin:14px 0 4px">BOUNTIES</div>';
     BOUNTIES.forEach(function (b) { var done = b.ids.some(function (id) { return k[id]; }); html += '<div style="color:' + (done ? 'var(--dim)' : 'var(--fg)') + '">' + (done ? '✔ ' : '☠ ') + b.name + ' — ' + b.where + ' · $' + b.reward.toLocaleString() + (P.claimed[b.key] ? ' (paid)' : done ? ' (claim at the Peddler)' : '') + '</div>'; });
     $('invQuests').innerHTML = html + '</div>';
@@ -1095,7 +1095,12 @@ NF.game = (function () {
     { key: 'brood', name: 'The Brood Mother', where: 'Old Copper Mine', reward: 15000, ids: ['broodmother'] },
     { key: 'alpha', name: 'Reaper Alpha', where: 'near the Ranger Lookout', reward: 12000, ids: ['alpha'] },
     { key: 'worms', name: 'Farm Burrowers', where: 'Harlan and Odell farms', reward: 6000, ids: ['harlanworm', 'odellworm'] },
-    { key: 'teo', name: 'What Teo became', where: 'St. Agnes Church', reward: 5000, ids: ['teo_boss'] }
+    { key: 'teo', name: 'What Teo became', where: 'St. Agnes Church', reward: 5000, ids: ['teo_boss'] },
+    { key: 'r01', name: 'Specimen R-01', where: 'Velgen Corporate Campus', reward: 20000, ids: ['r01'] },
+    { key: 'butcher2', name: 'The Warden\'s Butcher', where: 'Saltmarsh Penitentiary', reward: 14000, ids: ['butcher2'] },
+    { key: 'bayou', name: 'The Bayou Queen', where: 'Blackroot Bayou', reward: 22000, ids: ['bayoubrood'] },
+    { key: 'wfworm', name: 'The Wind Farm Burrower', where: 'Copper Hills Wind Farm', reward: 14000, ids: ['wfworm'] },
+    { key: 'butcher3', name: 'The Sawmill Butcher', where: 'Pine Hollow logging camp', reward: 14000, ids: ['butcher3'] }
   ];
   G.openShop = function () {
     openUI('shop'); $('shopTalk').textContent = TALK[(Math.random() * TALK.length) | 0];
@@ -1253,6 +1258,16 @@ NF.game = (function () {
     P.hp = Math.max(P.hp, P.hp);
   };
   function autosave() { writeSave(snapshot()); }
+  G.fastTravel = fastTravel;
+  function fastTravel(o) {
+    closeUI(); mode = 'cine'; fade(1, 0.5);
+    later(function () {
+      P.pos.set(o.x, 0, o.z); P.vy = 0;
+      NF.terrain.update(o.x, o.z, flags, true);
+      P.pos.y = W.ground(o.x, o.z);
+      mode = 'play'; fade(0, 1.2); var rm = W.roomAt(P.pos.x, P.pos.z); toast('Travelled to ' + (o.name || (rm && rm.name) || 'safehouse')); autosave();
+    }, 650);
+  }
   function applySave(d) {
     flags = d.flags || {}; P.pos.set(d.pos[0], 0, d.pos[1]); P.yaw = d.yaw; cam.yaw = d.yaw; P.hp = d.hp; P.weapon = d.weapon; P.owned = d.owned; P.mag = d.mag; P.ammo = d.ammo; P.inv = d.inv; P.files = d.files || []; stats = d.stats || stats; P.flashOn = d.flash !== false;
     P.money = d.money || 0; P.treasures = d.treasures || []; P.upg = d.upg || {}; P.slots = d.slots || 8; P.stash = d.stash || {}; P.grenades = d.grenades || 0; P.vest = !!d.vest; P.poison = 0;
@@ -1441,6 +1456,7 @@ NF.game = (function () {
       if (frame % 2 === 0) grain();
       if (frame % 10 === 0) musicLogic();
       if (frame % 20 === 0) NF.mapui.track(P, flags);
+      NF.mapui.work();
       if (frame % 3 === 0) { var rr = W.roomAt(P.pos.x, P.pos.z), outdoors = flags.escaped && mode === 'play' && !(rr && W.rooms.indexOf(rr) >= 0); NF.mapui.mini(outdoors, P, -viewHeading(), objTarget()); }
       hud(dt);
     }

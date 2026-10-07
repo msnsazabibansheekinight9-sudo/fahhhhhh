@@ -1,7 +1,7 @@
 // The map: a hand-drawn county survey with fog of war, a manor floor plan, and the HUD minimap.
 var NF = window.NF || (window.NF = {});
 NF.mapui = (function () {
-  var M = {}, L = 3072, BS = 1536, base = null, open = false, tab = 'county';
+  var M = {}, L = 8192, BS = 2048, base = null, open = false, tab = 'county', job = null;
   var view = { x: 0, z: 0, zoom: 1 }, cv, g, drag = null, hover = null, ctxFn = null;
   var $ = function (id) { return document.getElementById(id); };
   // world <-> base-image pixels. North (+z) is up, east (-x) is right.
@@ -10,11 +10,18 @@ NF.mapui = (function () {
   var ICON = { safe: '⌂', obj: '★', truck: '▣', poi: '●' };
   function poiKind(id) { return { town: 'town', millbrook: 'town', manor: 'manor', airfield: 'air', church: 'church', relay: 'tower', ranger: 'tower', lake: 'water', dam: 'dam', quarry: 'quarry', mine: 'quarry', fieldlab: 'lab', camp: 'camp', gas1: 'gas', gas2: 'gas', harlan: 'farm', odell: 'farm' }[id] || 'poi'; }
   // ------------------------------------------------------------ the survey sheet
-  function buildBase() {
-    var T = NF.terrain, N = 256, small = document.createElement('canvas'); small.width = small.height = N;
-    var sg = small.getContext('2d'), img = sg.createImageData(N, N), H = new Float32Array((N + 1) * (N + 1));
-    for (var j = 0; j <= N; j++) for (var i = 0; i <= N; i++) H[j * (N + 1) + i] = T.hExact(L - i / N * 2 * L, L - j / N * 2 * L);
-    var lake = T.poi('lake'), step = 2 * L / N;
+  var GN = 320;
+  function startJob() { if (!job && !base) job = { row: 0, H: new Float32Array((GN + 1) * (GN + 1)) }; }
+  function work(rows) {
+    if (!job) return; var T = NF.terrain;
+    for (var k = 0; k < rows && job.row <= GN; k++, job.row++) { var j = job.row; for (var i = 0; i <= GN; i++) job.H[j * (GN + 1) + i] = T.hExact(L - i / GN * 2 * L, L - j / GN * 2 * L); }
+    if (job.row > GN) { finishBase(job.H); job = null; }
+  }
+  M.work = function () { if (job) work(3); };
+  function buildBase() { startJob(); work(GN + 2); }
+  function finishBase(H) {
+    var T = NF.terrain, N = GN, small = document.createElement('canvas'); small.width = small.height = N;
+    var sg = small.getContext('2d'), img = sg.createImageData(N, N), step = 2 * L / N;
     for (var y = 0; y < N; y++) for (var x = 0; x < N; x++) {
       var h = H[y * (N + 1) + x], hx = H[y * (N + 1) + x + 1] - h, hy = H[(y + 1) * (N + 1) + x] - h;
       var wx = L - (x + 0.5) / N * 2 * L, wz = L - (y + 0.5) / N * 2 * L;
@@ -23,14 +30,15 @@ NF.mapui = (function () {
       var slope = Math.sqrt(hx * hx + hy * hy) / step;
       var forest = T.fbm(wx / 500, wz / 500, 2) * 0.5 + 0.5, thick = T.fbm(wx / 140, wz / 140, 2);
       var r, gg, b;
-      var water = Math.hypot(wx - lake.x, wz - lake.z) < lake.r - 15 && h < lake.water;
-      if (water) { var dep = Math.min(1, (lake.water - h) / 8); r = 42 - dep * 14; gg = 70 - dep * 20; b = 86 - dep * 10; shade = 1; }
+      var lk = T.lakeAt(wx, wz, -15), water = lk && h < lk.water;
+      if (water) { var dep = Math.min(1, (lk.water - h) / 8); r = lk.bayou ? 40 : 42 - dep * 14; gg = lk.bayou ? 58 : 70 - dep * 20; b = lk.bayou ? 50 : 86 - dep * 10; shade = 1; }
+      else if (h > 155) { r = 218; gg = 222; b = 226; }
       else if (slope > 0.6 || h > 120) { r = 132; gg = 124; b = 108; }
       else if (thick > -0.25 && forest > 0.35) { r = 70 + forest * 6; gg = 92 + forest * 10; b = 58; }
       else { r = 150; gg = 146; b = 104; }
       var hl = Math.min(1, Math.max(0, (h + 10) / 160)); r += hl * 30; gg += hl * 24; b += hl * 20;
       // contour lines every 10 m, heavier every 50 m
-      var c0 = Math.floor(h / 10), c1 = Math.floor(H[y * (N + 1) + x + 1] / 10), c2 = Math.floor(H[(y + 1) * (N + 1) + x] / 10);
+      var c0 = Math.floor(h / 20), c1 = Math.floor(H[y * (N + 1) + x + 1] / 20), c2 = Math.floor(H[(y + 1) * (N + 1) + x] / 20);
       var o = (y * N + x) * 4;
       img.data[o] = r * shade; img.data[o + 1] = gg * shade; img.data[o + 2] = b * shade; img.data[o + 3] = 255;
       if (!water && (c0 !== c1 || c0 !== c2)) { var heavy = Math.floor(h / 50) !== Math.floor(H[y * (N + 1) + x + 1] / 50) || Math.floor(h / 50) !== Math.floor(H[(y + 1) * (N + 1) + x] / 50); var dk = heavy ? 0.6 : 0.82; img.data[o] *= dk; img.data[o + 1] *= dk; img.data[o + 2] *= dk; }
@@ -50,7 +58,7 @@ NF.mapui = (function () {
     roads(4.2, 'rgba(40,30,20,.85)'); roads(2.2, '#e6d6a8');
     // building footprints
     (T.placements || []).forEach(function (o) {
-      var w = o.w, d = o.d; if (o.kind === 'gas' ) { w = 14; d = 9; } if (o.kind === 'church') { w = 13; d = 28; } if (o.kind === 'shack') { w = 8; d = 7; } if (o.kind === 'farm') { w = 16; d = 12; } if (o.kind === 'bunker') { w = 14; d = 10; }
+      var w = o.w, d = o.d; if (o.kind === 'gas' ) { w = 14; d = 9; } if (o.kind === 'boxcar') { w = 3; d = 13; } if (o.kind === 'wall') { b2.fillStyle = '#8a8880'; var ww = Math.max(2, o.w / (2 * L) * BS), dd = Math.max(2, o.d / (2 * L) * BS); b2.fillRect(bx(o.x) - ww / 2, bz(o.z) - dd / 2, ww, dd); return; } if (o.kind === 'turbine') { b2.fillStyle = '#e8e8e0'; b2.fillRect(bx(o.x) - 1.5, bz(o.z) - 1.5, 3, 3); return; } if (o.kind === 'church') { w = 13; d = 28; } if (o.kind === 'shack') { w = 8; d = 7; } if (o.kind === 'farm') { w = 16; d = 12; } if (o.kind === 'bunker') { w = 14; d = 10; }
       if (!w || !d) { if (o.kind === 'relay' || o.kind === 'watertower' || o.kind === 'belltower' || o.kind === 'lookout') { b2.fillStyle = '#3a2a20'; b2.fillRect(bx(o.x) - 1.5, bz(o.z) - 1.5, 3, 3); } return; }
       var sw = w / (2 * L) * BS, sd = d / (2 * L) * BS;
       b2.fillStyle = o.safe || o.kind === 'police' || o.kind === 'shack' ? '#2e6a42' : '#5a3e2c'; b2.fillRect(bx(o.x) - sw / 2, bz(o.z) - sd / 2, Math.max(1.2, sw), Math.max(1.2, sd));
@@ -73,11 +81,11 @@ NF.mapui = (function () {
     // fog of war over chunks never seen
     var seen = flags.seen || {}, CH = T.CH, cs = CH / (2 * L) * BS * s;
     g.fillStyle = 'rgba(11,13,15,.78)';
-    for (var cx = -24; cx < 24; cx++) for (var cz = -24; cz < 24; cz++) { if (seen[cx + ',' + cz]) continue; var p = toScreen(cx * CH + CH, cz * CH + CH); if (p[0] > W || p[1] > Hh || p[0] + cs < 0 || p[1] + cs < 0) continue; g.fillRect(p[0] - 0.5, p[1] - 0.5, cs + 1, cs + 1); }
-    // survey grid every 500 m
+    var NC = NF.terrain.NCH; for (var cx = -NC; cx < NC; cx++) for (var cz = -NC; cz < NC; cz++) { if (seen[cx + ',' + cz]) continue; var p = toScreen(cx * CH + CH, cz * CH + CH); if (p[0] > W || p[1] > Hh || p[0] + cs < 0 || p[1] + cs < 0) continue; g.fillRect(p[0] - 0.5, p[1] - 0.5, cs + 1, cs + 1); }
+    // survey grid every kilometre
     g.strokeStyle = 'rgba(30,20,10,.25)'; g.lineWidth = 1; g.font = (11 * dpr) + 'px "Special Elite", monospace'; g.fillStyle = 'rgba(232,220,200,.5)';
-    for (var gx = -3000; gx <= 3000; gx += 500) { var a = toScreen(gx, L), bb = toScreen(gx, -L); g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(bb[0], bb[1]); g.stroke(); }
-    for (var gz = -3000; gz <= 3000; gz += 500) { var a2 = toScreen(L, gz), b3 = toScreen(-L, gz); g.beginPath(); g.moveTo(a2[0], a2[1]); g.lineTo(b3[0], b3[1]); g.stroke(); }
+    for (var gx = -8000; gx <= 8000; gx += 1000) { var a = toScreen(gx, L), bb = toScreen(gx, -L); g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(bb[0], bb[1]); g.stroke(); }
+    for (var gz = -8000; gz <= 8000; gz += 1000) { var a2 = toScreen(L, gz), b3 = toScreen(-L, gz); g.beginPath(); g.moveTo(a2[0], a2[1]); g.lineTo(b3[0], b3[1]); g.stroke(); }
     // places
     var disc = flags.disc || {};
     var labelSize = Math.max(11, Math.min(16, 10 + view.zoom * 2)) * dpr;
@@ -85,6 +93,7 @@ NF.mapui = (function () {
       if (p.id === 'manor' && !flags.escaped) return;
       var known = disc[p.id] || p.id === 'town' || p.id === 'manor' || (flags.radio && p.id === 'relay') || (flags.beacon && p.id === 'church') || (flags.teoDead && p.id === 'airfield');
       var q = toScreen(p.x, p.z);
+      if (view.zoom < 2.2 && p.r < 120 && p.id !== 'manor') { if (known) { g.fillStyle = '#f0e4c8'; g.beginPath(); g.arc(q[0], q[1], 3 * dpr, 0, 7); g.fill(); } return; }
       if (!known) { g.fillStyle = 'rgba(232,220,200,.35)'; g.font = (14 * dpr) + 'px Cinzel, serif'; g.textAlign = 'center'; g.fillText('?', q[0], q[1] + 5 * dpr); return; }
       var big = p.id === 'town' || p.id === 'airfield' || p.id === 'lake';
       g.font = (big ? 700 : 500) + ' ' + (big ? labelSize * 1.25 : labelSize) + 'px Cinzel, serif'; g.textAlign = 'center';
@@ -93,8 +102,7 @@ NF.mapui = (function () {
     });
     // safehouses
     (T.placements || []).forEach(function (o) {
-      if (o.kind !== 'shack' && o.kind !== 'police') return;
-      var poi = T.nearestPoi(o.x, o.z); if (poi && !disc[poi.id] && poi.id !== 'town') { var dd = Math.hypot(P.pos.x - o.x, P.pos.z - o.z); if (dd > 250) return; }
+      if ((o.kind !== 'shack' && o.kind !== 'police') || !safeKnown(o, c)) return;
       var q = toScreen(o.x, o.z); badge(q, '#2e8a52', '⌂', 13);
     });
     // trucks
@@ -115,10 +123,10 @@ NF.mapui = (function () {
     g.fillStyle = grd; g.beginPath(); g.moveTo(0, 0); g.arc(0, 0, 60 * dpr, -Math.PI / 2 - 0.5, -Math.PI / 2 + 0.5); g.closePath(); g.fill();
     g.fillStyle = '#ff4a3a'; g.strokeStyle = '#fff'; g.lineWidth = 2 * dpr; g.beginPath(); g.moveTo(0, -11 * dpr); g.lineTo(8 * dpr, 9 * dpr); g.lineTo(0, 4 * dpr); g.lineTo(-8 * dpr, 9 * dpr); g.closePath(); g.fill(); g.stroke(); g.restore();
     // scale bar and compass rose
-    var px500 = 500 / (2 * L) * BS * s, sx = W - 40 * dpr - px500, sy = Hh - 70 * dpr;
+    var px500 = (view.zoom > 4 ? 500 : 2000) / (2 * L) * BS * s, scaleLbl = view.zoom > 4 ? '500 m' : '2 km', sx = W - 40 * dpr - px500, sy = Hh - 70 * dpr;
     g.fillStyle = 'rgba(10,8,6,.8)'; g.fillRect(sx - 10 * dpr, sy - 22 * dpr, px500 + 20 * dpr, 34 * dpr);
     g.fillStyle = '#e8dcc8'; g.fillRect(sx, sy, px500 / 2, 5 * dpr); g.fillStyle = '#5a4a3a'; g.fillRect(sx + px500 / 2, sy, px500 / 2, 5 * dpr); g.strokeStyle = '#e8dcc8'; g.lineWidth = 1; g.strokeRect(sx, sy, px500, 5 * dpr);
-    g.font = (11 * dpr) + 'px "Special Elite", monospace'; g.textAlign = 'center'; g.fillStyle = '#e8dcc8'; g.fillText('0', sx, sy - 6 * dpr); g.fillText('500 m', sx + px500, sy - 6 * dpr);
+    g.font = (11 * dpr) + 'px "Special Elite", monospace'; g.textAlign = 'center'; g.fillStyle = '#e8dcc8'; g.fillText('0', sx, sy - 6 * dpr); g.fillText(scaleLbl, sx + px500, sy - 6 * dpr);
     rose(W - 70 * dpr, 150 * dpr, 30 * dpr);
     tooltip(c);
   }
@@ -136,12 +144,20 @@ NF.mapui = (function () {
   function tooltip(c) {
     var tip = $('mapTip'); if (!hover) { tip.style.display = 'none'; return; }
     var w = toWorld(hover[0] * cv.dpr, hover[1] * cv.dpr), best = null, bd = 60 / scale();
+    var sh = safeAt(hover[0] * cv.dpr, hover[1] * cv.dpr, c);
+    if (sh) { tip.innerHTML = '<b>' + (sh.name || 'Safehouse') + '</b>' + (c.canTravel ? 'Click to travel here' : 'Fast travel works from inside a safehouse'); tip.style.display = 'block'; tip.style.left = (hover[0] + 16) + 'px'; tip.style.top = (hover[1] + 12) + 'px'; return; }
     NF.terrain.pois.forEach(function (p) { var d = Math.hypot(p.x - w[0], p.z - w[1]); if (d < Math.max(bd, p.r * 0.6) && (!best || d < best.d)) best = { p: p, d: d }; });
     var disc = c.flags.disc || {};
     if (!best || !(disc[best.p.id] || best.p.id === 'town')) { tip.style.display = 'none'; return; }
     var dist = Math.round(Math.hypot(best.p.x - c.P.pos.x, best.p.z - c.P.pos.z));
     tip.innerHTML = '<b>' + best.p.name + '</b>' + (dist > 1000 ? (dist / 1000).toFixed(1) + ' km' : dist + ' m') + ' away';
     tip.style.display = 'block'; tip.style.left = (hover[0] + 16) + 'px'; tip.style.top = (hover[1] + 12) + 'px';
+  }
+  function safeKnown(o, c) { var seen = c.flags.seen || {}, CH = NF.terrain.CH; return o.kind === 'police' || seen[Math.floor(o.x / CH) + ',' + Math.floor(o.z / CH)]; }
+  function safeAt(sx, sy, c) {
+    var best = null, bd = 14 * cv.dpr;
+    (NF.terrain.placements || []).forEach(function (o) { if ((o.kind !== 'shack' && o.kind !== 'police') || !safeKnown(o, c)) return; var q = toScreen(o.x, o.z), d = Math.hypot(q[0] - sx, q[1] - sy); if (d < bd) { bd = d; best = o; } });
+    return best;
   }
   // ------------------------------------------------------------ manor plan
   function drawManor() {
@@ -181,6 +197,7 @@ NF.mapui = (function () {
     var rows = tab === 'county'
       ? [['<i style="color:#ff4a3a">▲</i>', 'You'], ['<i style="color:#ffd25a">★</i>', 'Objective'], ['<i style="color:#5ac87a">⌂</i>', 'Safehouse: typewriter, item box, Peddler'], ['<i style="color:#6a9ad8">▣</i>', 'Truck'], ['<i style="color:#e6d6a8">━</i>', 'Road'], ['<i style="color:#8a6a4a">■</i>', 'Building'], ['<i style="color:#5a7a4a">▓</i>', 'Forest'], ['<i style="color:#555">░</i>', 'Not yet explored']]
       : [['<i style="color:#ff4a3a">▲</i>', 'You'], ['<i style="color:#3cff7a">▬</i>', 'Open door'], ['<i style="color:#5aa0ff">▬</i>', 'Unlocked door'], ['<i style="color:#ff3a3a">▬</i>', 'Locked door'], ['<i style="color:#ffd25a">●</i>', 'Item you have seen'], ['<i style="color:#5ac87a">⌨</i>', 'Typewriter']];
+    if (tab === 'county') rows.splice(3, 0, ['<i style="color:#5ac87a">⇄</i>', 'In a safehouse, click another safehouse to fast travel']);
     $('mapLegend').innerHTML = rows.map(function (r) { return r[0] + '<span>' + r[1] + '</span>'; }).join('');
   }
   function sizeCanvas() { var dpr = Math.min(2, window.devicePixelRatio || 1); cv.width = innerWidth * dpr; cv.height = innerHeight * dpr; cv.dpr = dpr; }
@@ -190,26 +207,30 @@ NF.mapui = (function () {
     tab = t; document.querySelectorAll('[data-mtab]').forEach(function (b) { b.classList.toggle('on', b.dataset.mtab === t); });
     var c = ctxFn(); $('mapTitle').textContent = t === 'county' ? 'Ashgrove County' : 'Ashgrove Manor';
     var disc = Object.keys(c.flags.disc || {}).length, seenN = Object.keys(c.flags.seen || {}).length;
-    $('mapSub').textContent = t === 'county' ? 'Survey sheet · 6 km × 6 km · ' + Math.round(seenN / 2304 * 100) + '% explored · ' + disc + ' places found' : 'Floor plan · ' + Object.keys(c.flags.visited || {}).filter(function (k) { return NF.world.room(k); }).length + ' of 6 rooms explored';
+    $('mapSub').textContent = t === 'county' ? 'Survey sheet · 16 km × 16 km · ' + (seenN / (4 * NF.terrain.NCH * NF.terrain.NCH) * 100).toFixed(1) + '% explored · ' + disc + ' places found' : 'Floor plan · ' + Object.keys(c.flags.visited || {}).filter(function (k) { return NF.world.room(k); }).length + ' of 6 rooms explored';
     legend();
   }
   M.init = function (getCtx) {
     ctxFn = getCtx; cv = $('mapC'); g = cv.getContext('2d');
     window.addEventListener('resize', function () { if (open) sizeCanvas(); });
-    cv.addEventListener('mousedown', function (e) { drag = [e.clientX, e.clientY, view.x, view.z]; });
-    window.addEventListener('mouseup', function () { drag = null; });
+    cv.addEventListener('mousedown', function (e) { drag = [e.clientX, e.clientY, view.x, view.z, false]; });
+    window.addEventListener('mouseup', function (e) {
+      if (drag && !drag[4] && tab === 'county' && open) { var c = ctxFn(), sh = safeAt(e.clientX * cv.dpr, e.clientY * cv.dpr, c); if (sh && c.canTravel) { drag = null; c.travel(sh); return; } }
+      drag = null;
+    });
     cv.addEventListener('mousemove', function (e) {
       hover = [e.clientX, e.clientY];
+      if (drag && Math.hypot(e.clientX - drag[0], e.clientY - drag[1]) > 4) drag[4] = true;
       if (drag && tab === 'county') { var s = scale() / cv.dpr, k = 2 * L / BS / s; view.x = drag[2] + (e.clientX - drag[0]) * k; view.z = drag[3] + (e.clientY - drag[1]) * k; clampView(); }
     });
     cv.addEventListener('mouseleave', function () { hover = null; });
     cv.addEventListener('wheel', function (e) {
       e.preventDefault(); if (tab !== 'county') { view.zoom = Math.max(1, Math.min(3, view.zoom * (e.deltaY < 0 ? 1.15 : 0.87))); return; }
       var before = toWorld(e.clientX * cv.dpr, e.clientY * cv.dpr);
-      view.zoom = Math.max(0.9, Math.min(14, view.zoom * (e.deltaY < 0 ? 1.18 : 0.85)));
+      view.zoom = Math.max(0.9, Math.min(36, view.zoom * (e.deltaY < 0 ? 1.18 : 0.85)));
       var after = toWorld(e.clientX * cv.dpr, e.clientY * cv.dpr); view.x += before[0] - after[0]; view.z += before[1] - after[1]; clampView();
     }, { passive: false });
-    $('mzIn').onclick = function () { view.zoom = Math.min(14, view.zoom * 1.4); };
+    $('mzIn').onclick = function () { view.zoom = Math.min(36, view.zoom * 1.4); };
     $('mzOut').onclick = function () { view.zoom = Math.max(0.9, view.zoom / 1.4); clampView(); };
     $('mzMe').onclick = function () { var c = ctxFn(); view.x = c.P.pos.x; view.z = c.P.pos.z; };
     document.querySelectorAll('[data-mtab]').forEach(function (b) { b.onclick = function () { setTab(b.dataset.mtab); }; });
@@ -221,12 +242,13 @@ NF.mapui = (function () {
     var t = c.flags.escaped && !c.inManor ? 'county' : 'manor';
     $('mapTabs').style.display = c.flags.escaped ? 'flex' : 'none';
     $('mapZoom').style.display = t === 'county' ? 'flex' : 'none';
-    view.x = c.P.pos.x; view.z = c.P.pos.z; view.zoom = t === 'county' ? 3 : 1;
+    view.x = c.P.pos.x; view.z = c.P.pos.z; view.zoom = t === 'county' ? 6 : 1;
     setTab(t); requestAnimationFrame(frame);
     document.querySelectorAll('[data-mtab]').forEach(function (b) { b.addEventListener('click', function () { $('mapZoom').style.display = tab === 'county' ? 'flex' : 'none'; }); });
   };
   M.close = function () { open = false; };
-  M.prebuild = function () { if (!base && NF.terrain.ready) buildBase(); };
+  M.screenOf = function (x, z) { var q = toScreen(x, z); return [q[0] / cv.dpr, q[1] / cv.dpr]; };
+  M.prebuild = function () { if (!base && NF.terrain.ready) startJob(); };
   // ------------------------------------------------------------ exploration and the HUD minimap
   M.track = function (P, flags) {
     if (!flags.escaped) return;
@@ -238,8 +260,8 @@ NF.mapui = (function () {
     if (!mini) { mini = $('mini'); mg = mini.getContext('2d'); }
     mini.style.display = show ? 'block' : 'none';
     if (!show) return;
-    if (!base) { if (miniT++ < 2) return; buildBase(); }
-    var R = mini.width / 2, zoom = 9, s = mini.width / BS * zoom;
+    if (!base) { startJob(); return; }
+    var R = mini.width / 2, s = mini.width / (650 / (2 * L) * BS);
     mg.save(); mg.clearRect(0, 0, mini.width, mini.height); mg.beginPath(); mg.arc(R, R, R - 2, 0, 7); mg.clip();
     mg.fillStyle = '#0b0d0f'; mg.fillRect(0, 0, mini.width, mini.height);
     mg.translate(R, R); mg.rotate(heading);

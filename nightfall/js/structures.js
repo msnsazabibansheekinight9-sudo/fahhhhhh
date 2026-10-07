@@ -41,7 +41,7 @@ NF.structures = (function () {
   function car(c, o) {
     var y = T().hExact(o.x, o.z), g = new THREE.Group(); g.position.set(o.x, y, o.z); g.rotation.y = o.rot || 0;
     var cols = ['#5a2a22', '#2a3a4a', '#4a4a3a', '#6a6a62', '#2a2a2a', '#3a4a2a', '#7a6a4a'];
-    var paint = std({ color: cols[Math.abs(Math.round(o.x * 7 + o.z)) % cols.length], metalness: 0.4, roughness: 0.6, map: NF.tex.metal() });
+    var paint = std({ color: o.color || cols[Math.abs(Math.round(o.x * 7 + o.z)) % cols.length], metalness: 0.4, roughness: 0.6, map: NF.tex.metal() });
     function bx(w, h, d, x, yy, z, m) { var mm = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); mm.position.set(x, yy, z); mm.castShadow = true; mm.receiveShadow = true; g.add(mm); return mm; }
     bx(1.8, 0.6, 4.3, 0, 0.55, 0, paint); bx(1.6, 0.55, 2.0, 0, 1.12, -0.2, paint);
     bx(1.62, 0.42, 1.9, 0, 1.12, -0.2, M().window).scale.set(1.01, 0.8, 1.01);
@@ -178,6 +178,49 @@ NF.structures = (function () {
       case 'bunker': { var bk = t.building(c, { id: 'fieldlab', x: o.x, z: o.z, w: 14, d: 10, face: 0, h: 3.4, style: 'concrete', flatRoof: true, empty: true, name: 'Velgen Field Station', sign: 'VELGEN' }); b.box(o.x - 4, bk.y, o.z + 3, 3, 0.9, 1.2, m.metal, true); b.box(o.x + 3, bk.y, o.z + 2, 2.2, 0.9, 1.2, m.metal, true); b.box(o.x + 3, bk.y, o.z - 2, 2.2, 0.9, 1.2, m.metal, true); b.spot({ id: 'fieldterminal', x: o.x - 4, z: o.z + 2.2, r: 1.8, prompt: 'Use the Velgen terminal', fn: function () { NF.game.event('override'); }, y: 1 }); for (var tk = 0; tk < 3; tk++) b.mesh(new THREE.CylinderGeometry(0.6, 0.6, 2.2, 14, 1, true), std({ color: '#2a8a5a', emissive: '#0a5a2a', transparent: true, opacity: 0.6 }), o.x - 5 + tk * 1.6, bk.y + 1.1, o.z - 3.5); fence(c, o.x - 25, o.z - 25, o.x + 25, o.z - 25, 3, { at: 25, w: 6 }); fence(c, o.x - 25, o.z + 25, o.x + 25, o.z + 25, 3); fence(c, o.x - 25, o.z - 25, o.x - 25, o.z + 25, 3); fence(c, o.x + 25, o.z - 25, o.x + 25, o.z + 25, 3); break; }
       case 'lookout': { y = t.hExact(o.x, o.z); [[-2, -2], [2, -2], [-2, 2], [2, 2]].forEach(function (q) { b.box(o.x + q[0], y, o.z + q[1], 0.3, 12, 0.3, m.darkwood, true); }); b.box(o.x, y + 12, o.z, 5, 3, 5, m.wood); b.mesh(new THREE.ConeGeometry(4, 2, 4), m.shingle, o.x, y + 16, o.z, 0, Math.PI / 4, 0); break; }
       case 'mine': { y = t.hExact(o.x, o.z); b.box(o.x - 2.4, y, o.z, 0.4, 4, 0.4, m.darkwood, true); b.box(o.x + 2.4, y, o.z, 0.4, 4, 0.4, m.darkwood, true); b.box(o.x, y + 4, o.z, 5.4, 0.5, 0.5, m.darkwood); b.mesh(new THREE.PlaneGeometry(4.4, 4), std({ color: '#000', roughness: 1 }), o.x, y + 2, o.z - 0.1, 0, Math.PI, 0); b.box(o.x, y - 1, o.z - 8, 12, 9, 14, m.stone, true); for (var cart = 0; cart < 2; cart++) b.box(o.x + 3 + cart * 2, y, o.z + 4 + cart * 3, 1.2, 1, 1.8, m.rust, true); break; }
+      case 'wall': {
+        y = t.hExact(o.x, o.z);
+        var gap = o.gap || 0;
+        if (o.w > o.d) { var half = (o.w - gap) / 2; [-1, 1].forEach(function (sd) { if (!gap && sd > 0) return; var len = gap ? half : o.w, cx2 = gap ? o.x + sd * (gap / 2 + half / 2) : o.x; b.box(cx2, y - 2, o.z, len, o.h + 2, o.d, m.concrete, true); for (var k = -len / 2; k < len / 2; k += 3) b.mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.7, 4), m.rust, cx2 + k, y + o.h + 0.3, o.z, 0, 0, 0); }); }
+        else b.box(o.x, y - 2, o.z, o.w, o.h + 2, o.d, m.concrete, true);
+        break;
+      }
+      case 'fenceSeg': { fence(c, o.x0, o.z0, o.x1, o.z1, 3.2, o.gap ? { at: Math.hypot(o.x1 - o.x0, o.z1 - o.z0) / 2, w: o.gap } : null); break; }
+      case 'turbine': {
+        y = t.hExact(o.x, o.z);
+        var white = std({ color: '#d8dad6', roughness: 0.5, metalness: 0.2 });
+        b.mesh(new THREE.CylinderGeometry(1.2, 2.0, 60, 14), white, o.x, y + 30, o.z); b.col(o.x - 2, o.x + 2, o.z - 2, o.z + 2, y, y + 60);
+        var hub = new THREE.Group(); hub.position.set(o.x, y + 60, o.z + 1.6); c.group.add(hub);
+        var nac = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.4, 6), white); nac.position.z = -2.2; hub.add(nac);
+        var rot = new THREE.Group(); rot.position.z = 1; hub.add(rot);
+        for (var bl = 0; bl < 3; bl++) { var blade = new THREE.Mesh(new THREE.BoxGeometry(1.4, 26, 0.3), white); blade.position.y = 13; var arm = new THREE.Group(); arm.rotation.z = bl * 2.094; arm.add(blade); rot.add(arm); }
+        var spin = function (tt) { rot.rotation.z = tt * 0.6 + o.x; }; NF.world.anims.push(spin); (c.extra || (c.extra = [])).push(function () { var i = NF.world.anims.indexOf(spin); if (i >= 0) NF.world.anims.splice(i, 1); });
+        var blink = b.mesh(new THREE.SphereGeometry(0.4, 8, 6), m.red, o.x, y + 61.6, o.z - 1);
+        break;
+      }
+      case 'helipad': { y = t.hExact(o.x, o.z); b.mesh(new THREE.CircleGeometry(9, 32), std({ color: '#3a3a36', roughness: 0.8 }), o.x, y + 0.05, o.z, -Math.PI / 2); b.mesh(new THREE.PlaneGeometry(6, 8), std({ map: t.signTex('H', '#3a3a36', '#e8e0c0', 128) }), o.x, y + 0.07, o.z, -Math.PI / 2); break; }
+      case 'boxcar': {
+        y = t.hExact(o.x, o.z);
+        var bcm = std({ color: ['#6a2a1a', '#3a4a5a', '#5a5a3a', '#4a3a2a'][Math.abs(Math.round(o.x + o.z)) % 4], metalness: 0.4, roughness: 0.7, map: NF.tex.metal() });
+        var bc = b.mesh(new THREE.BoxGeometry(3, 3.4, 13), bcm, o.x, y + 2.6, o.z, 0, o.rot || 0, 0);
+        var ca = Math.abs(Math.cos(o.rot || 0)), sa = Math.abs(Math.sin(o.rot || 0)), hx = 1.5 * ca + 6.5 * sa, hz = 1.5 * sa + 6.5 * ca;
+        b.col(o.x - hx, o.x + hx, o.z - hz, o.z + hz, y, y + 4.3);
+        [-4, 4].forEach(function (k) { b.mesh(new THREE.BoxGeometry(2.6, 0.8, 2.4), m.rust, o.x + Math.sin(o.rot || 0) * k, y + 0.5, o.z + Math.cos(o.rot || 0) * k, 0, o.rot || 0, 0); });
+        break;
+      }
+      case 'observatory': {
+        var ob = t.building(c, { id: 'obsbld', x: o.x, z: o.z, w: 14, d: 14, face: 0, h: 5, style: 'concrete', flatRoof: true, empty: true, name: 'Echo Ridge Observatory', lit: true });
+        b.mesh(new THREE.SphereGeometry(7, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), std({ color: '#c8ccd0', metalness: 0.6, roughness: 0.3 }), o.x, ob.y + 5.2, o.z);
+        b.mesh(new THREE.BoxGeometry(1.4, 7, 0.4), std({ color: '#111' }), o.x, ob.y + 9, o.z + 4.8, -0.6, 0, 0);
+        b.mesh(new THREE.CylinderGeometry(0.5, 0.7, 5, 12), m.metal, o.x, ob.y + 2.5, o.z, 0.5, 0, 0);
+        break;
+      }
+      case 'logpile': {
+        y = t.hExact(o.x, o.z);
+        for (var lg = 0; lg < 12; lg++) { var row = lg < 5 ? 0 : lg < 9 ? 1 : lg < 11 ? 2 : 3, idx = lg - [0, 5, 9, 11][row]; b.mesh(new THREE.CylinderGeometry(0.45, 0.45, 9, 10), m.darkwood, o.x - 1.8 + row * 0.45 + idx * 0.92, y + 0.45 + row * 0.8, o.z, Math.PI / 2, 0, 0); }
+        b.col(o.x - 2.6, o.x + 2.6, o.z - 4.5, o.z + 4.5, y, y + 3.2);
+        break;
+      }
       case 'dam': {
         var L = NF.terrain.poi('lake'), top = L.water + 2;
         b.box(o.x, L.water - 30, o.z, 240, 32, 9, m.concrete, false);

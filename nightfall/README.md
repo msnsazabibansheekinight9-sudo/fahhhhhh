@@ -25,8 +25,8 @@ WASD to move, Shift to run, Space to jump (stairs and low ledges are climbed by 
 Serve this folder with any static web server and open `index.html`.
 
 ## Act 2: Ashgrove County (open world)
-Leave the lab through the emergency exit and the game opens up into a **6 km × 6 km county** that streams in around you as you move: hills, forest, roads, rain and lightning.
-- **Places**: Halverson Falls (a town of about 50 buildings with a police station), Millbrook village, Harlan and Odell farms, St. Agnes Church and its graveyard, Crow Ridge Relay, Blackwater Reservoir and its walkable dam, Ashgrove Quarry, a Velgen field station, a ranger lookout, an old copper mine, a campground, gas stations, and about 250 cabins, wrecks, ruins and camps.
+Leave the lab through the emergency exit and the game opens up into a **16 km × 16 km county** that streams in around you as you move: hills, forest, a snowy northern mountain range, swamp, lakes, highways, rain and lightning.
+- **Places**: Halverson Falls (a town of about 50 buildings with a police station), Millbrook village, Harlan and Odell farms, St. Agnes Church and its graveyard, Crow Ridge Relay, Blackwater Reservoir and its walkable dam, Ashgrove Quarry, a Velgen field station, a ranger lookout, an old copper mine, a campground and gas stations. Farther out: the town of Granite Falls, a highway truck stop, the walled Velgen Corporate Campus, Copper Hills Wind Farm, Saltmarsh Penitentiary, an old army fort, a railyard, Blackroot Bayou, the snowbound village of Cold Creek, Kessler Pass Lodge, a mountaintop observatory, Lake Halloran with its island cabin, and Pine Hollow logging camp. Between them are about 1,700 cabins, wrecks, ruins and camps.
 - **New enemies**:
   - Hollow villagers with axes, pitchforks, sickles, torches or shields. They can throw axes.
   - The Butcher, a chainsaw mini-boss.
@@ -43,7 +43,7 @@ Leave the lab through the emergency exit and the game opens up into a **6 km × 
 - **The Peddler**: a merchant in every safehouse. Buy weapons, ammo, herbs, larger pouches and a Kevlar vest. Sell treasures. Upgrade firepower, capacity, reload speed and fire rate.
 - **Survival**: crafting with gunpowder, red and blue herbs, poison, a limited pack, and item boxes that share their contents across safehouses.
 - **Driving**: pickup trucks you can drive. Ram the infected, and use the headlights.
-- **Navigation**: a full-screen survey map you can pan and zoom, with hill shading, contour lines, forests, roads, building footprints, fog of war, safehouse and truck icons, the objective route, a scale bar and a manor floor-plan tab. There is also a rotating minimap on the HUD, a compass with an objective marker, and area titles.
+- **Navigation**: a full-screen survey map you can pan and zoom, with hill shading, contour lines, forests, roads, building footprints, fog of war, safehouse and truck icons, the objective route, a scale bar and a manor floor-plan tab. **Fast travel**: from inside any safehouse, click another safehouse you have discovered on the map to travel there. There is also a rotating minimap on the HUD, a compass with an objective marker, and area titles.
 - **First or third person**: press V (or use the pause menu) to switch views at any time. First person has its own arms and weapon view, with aiming down the sights, recoil, sway, head bob, reload and knife animations. The mouse wheel cycles weapons.
 - **Story — nine chapters**:
   1. The police radio sends you to Millbrook, where you take Sheriff Doyle's armory key from the Butcher.
@@ -55,5 +55,5 @@ Leave the lab through the emergency exit and the game opens up into a **6 km × 
   7. Under the CDC quarantine, hold the Velgen Field Station while its terminal downloads the override code.
   8. Fire the flare at the airfield.
   9. Defeat the Warden, Unbound.
-- **Side quests**: six Raven Unit dog tags to collect (the reward is armour that halves damage) and twelve Velgen sample cases the Peddler buys.
-- **Bounties**: the Butcher, the Quarry Burrower, the Brood Mother (a giant spider that spawns its young), the Reaper Alpha, the farm burrowers and Teo, paid out by the Peddler. A Quests tab in the inventory tracks chapters, collectibles and bounties.
+- **Side quests**: six Raven Unit dog tags to collect (the reward is armour that halves damage) and 24 Velgen sample cases the Peddler buys.
+- **Bounties**: the Butcher, the Quarry Burrower, the Brood Mother (a giant spider that spawns its young), the Reaper Alpha, the farm burrowers, Teo, Specimen R-01 at the Velgen campus, the prison and sawmill butchers, the Bayou Queen and the Wind Farm Burrower, paid out by the Peddler. A Quests tab in the inventory tracks chapters, collectibles and bounties.
