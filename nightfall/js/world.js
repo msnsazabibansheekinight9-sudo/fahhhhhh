@@ -317,15 +317,26 @@ NF.world = (function () {
     var cm = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 19.6), floorMat('carpet', 2.6, 19.6)); cm.rotation.x = -Math.PI / 2; cm.position.set(0, 0.01, 10); cm.receiveShadow = true; scene.add(cm);
     // twin staircases up to a balcony
     var stairMat = std({ map: T.wood(), color: '#6a4a36', roughness: 0.5 });
+    // They run along the back wall, rising from the centre outward to the balcony's corners,
+    // so the dining room and library doors on the side walls stay clear.
+    var SZ0 = 14.4, SZ1 = 17.0, SW = SZ1 - SZ0, SZ = (SZ0 + SZ1) / 2, RUN = 0.55, X0 = 2.2;
     [-1, 1].forEach(function (s) {
-      var x = s * 8.6;
-      for (var i = 0; i < 14; i++) { var y = i * 0.29; addBox(x, 0, 6.5 + i * 0.75, 2.6, y + 0.29, 0.75, i % 2 ? stairMat : mats.darkwood, { uv: false }); collider(x - 1.3, x + 1.3, 6.5 + i * 0.75 - 0.375, 6.5 + i * 0.75 + 0.375, 0, y + 0.29, 'step'); }
-      addBox(x, 0, 16.83, 2.6, 4.15, 0.42, mats.darkwood, { uv: false }); collider(x - 1.3, x + 1.3, 16.6, 17.05, 0, 4.15, 'step');
-      // outer wall side and banister keep you on the stairs
-      collider(x - s * 1.32 - 0.05, x - s * 1.32 + 0.05, 6.1, 17, 0.3, 6, 'rail');
-      // banister
-      for (var b = 0; b < 14; b++) addBox(x - s * 1.25, b * 0.29 + 0.29, 6.6 + b * 0.75, 0.06, 0.9, 0.06, mats.darkwood, { uv: false });
-      var rail = addBox(x - s * 1.25, 0, 11.75, 0.1, 0.08, 10.8, mats.trim, { uv: false }); rail.position.y = 2.5; rail.rotation.x = -Math.atan2(4.06, 10.5);
+      for (var i = 0; i < 14; i++) {
+        var y = (i + 1) * 0.29, xa = X0 + i * RUN, xb = xa + RUN, xc = s * (xa + xb) / 2;
+        addBox(xc, 0, SZ, RUN, y, SW, i % 2 ? stairMat : mats.darkwood, { uv: false });
+        collider(Math.min(s * xa, s * xb), Math.max(s * xa, s * xb), SZ0, SZ1, 0, y, 'step');
+        // banister post on the open (south) side of each step
+        addBox(xc, y, SZ0 + 0.06, 0.06, 0.9, 0.06, mats.darkwood, { uv: false });
+      }
+      // handrail along the south edge, open at the bottom so you walk on from the centre aisle
+      var len = 14 * RUN, rail = addBox(s * (X0 + len / 2), 0, SZ0 + 0.06, len, 0.08, 0.1, mats.trim, { uv: false });
+      rail.position.y = 2.6; rail.rotation.z = s * Math.atan2(4.06, len);
+      collider(Math.min(s * (X0 + 0.6), s * (X0 + len)), Math.max(s * (X0 + 0.6), s * (X0 + len)), SZ0 - 0.05, SZ0 + 0.12, 0.3, 6, 'rail');
+      // back railing over the drop to the floor under the balcony, open at the top where the balcony begins
+      var xe = 7.3, len2 = xe - X0;
+      for (var p2 = 0; p2 < 9; p2++) { var px = X0 + 0.3 + p2 * (len2 - 0.3) / 8, py = Math.ceil((px - X0) / RUN) * 0.29; addBox(s * px, py, SZ1 - 0.06, 0.06, 0.9, 0.06, mats.darkwood, { uv: false }); }
+      var rail2 = addBox(s * (X0 + len2 / 2), 0, SZ1 - 0.06, len2, 0.08, 0.1, mats.trim, { uv: false }); rail2.position.y = 2.25; rail2.rotation.z = s * Math.atan2(len2 / RUN * 0.29, len2);
+      collider(Math.min(s * X0, s * xe), Math.max(s * X0, s * xe), SZ1 - 0.12, SZ1 + 0.05, 0.3, 4.15, 'rail');
     });
     addBox(0, 3.9, 18.5, 20, 0.25, 3, mats.darkwood, { uv: false });
     collider(-10, 10, 17, 20, 3.9, 4.15, 'balcony');
@@ -352,10 +363,10 @@ NF.world = (function () {
     painting(-9.83, 2.6, 4.5, Math.PI / 2, 1.2, 1.6, 1); painting(9.83, 2.6, 4.5, -Math.PI / 2, 1.2, 1.6, 2);
     painting(0, 5.6, 19.83, Math.PI, 2.2, 2.6, 7);
     // grandfather clock
-    addBox(9.5, 0, 15.2, 0.6, 2.3, 0.5, mats.darkwood, { collide: true, uv: false });
-    var face = new THREE.Mesh(new THREE.CircleGeometry(0.2, 20), std({ color: '#e8dcc0' })); face.rotation.y = -Math.PI / 2; face.position.set(9.19, 1.9, 15.2); scene.add(face);
+    addBox(9.5, 0, 12.8, 0.6, 2.3, 0.5, mats.darkwood, { collide: true, uv: false });
+    var face = new THREE.Mesh(new THREE.CircleGeometry(0.2, 20), std({ color: '#e8dcc0' })); face.rotation.y = -Math.PI / 2; face.position.set(9.19, 1.9, 12.8); scene.add(face);
     var pend = new THREE.Mesh(Mo.box(0.02, 0.6, 0.02), mats.brass); pend.geometry = new THREE.BoxGeometry(0.02, 0.6, 0.02); pend.geometry.translate(0, -0.3, 0);
-    pend.position.set(9.18, 1.5, 15.2); scene.add(pend);
+    pend.position.set(9.18, 1.5, 12.8); scene.add(pend);
     var bob = new THREE.Mesh(Mo.sphere(0.06), mats.brass); bob.position.y = -0.6; pend.add(bob);
     W.anims.push(function (t) { pend.rotation.x = Math.sin(t * 2.2) * 0.25; });
     // typewriter desk
@@ -560,7 +571,7 @@ NF.world = (function () {
     var f = W.ground(x, z); rad = rad || 0.2;
     var list = near(x - rad, z - rad, x + rad, z + rad, floorBuf);
     for (var i = 0; i < list.length; i++) {
-      var b = list[i]; if (!b.on || b.y1 <= f || b.y1 > y + 0.36) continue;
+      var b = list[i]; if (!b.on || b.y1 <= f || b.y1 > y + 0.42) continue;
       if (x < b.x0 - rad * 0.5 || x > b.x1 + rad * 0.5 || z < b.z0 - rad * 0.5 || z > b.z1 + rad * 0.5) continue;
       f = b.y1;
     }

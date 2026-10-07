@@ -207,7 +207,7 @@ NF.game = (function () {
   function spawnStage() { // event spawns that depend on story flags
     if (flags.gotRaven && !E.byId('z_f1')) E.spawn('zombie', 'z_f1', 6.5, 13.5, { variant: 5, yaw: -2, seed: 21 });
     if (flags.gotCrest && !E.byId('skinner')) E.spawn('skinner', 'skinner', 25.0, 15.6, { yaw: -2.2 });
-    if (flags.gotCrest && !E.byId('z_f2')) E.spawn('zombie', 'z_f2', -6.5, 15.5, { variant: 4, yaw: 2.5, seed: 22 });
+    if (flags.gotCrest && !E.byId('z_f2')) E.spawn('zombie', 'z_f2', -6.5, 12.2, { variant: 4, yaw: 2.5, seed: 22 });
     if (flags.hallDogs && !E.byId('dog1')) { E.spawn('dog', 'dog1', -2.0, 29, { alert: true, yaw: PI / 2, seed: 4 }); E.spawn('dog', 'dog2', -2.0, 38, { alert: true, yaw: PI / 2, seed: 7 }); }
     if (flags.teoTalked && !E.byId('z_f3')) { E.spawn('zombie', 'z_f3', -4, 6, { variant: 3, seed: 23 }); E.spawn('zombie', 'z_d3', -14, 4.5, { variant: 0, seed: 24 }); }
     if (flags.warden && !flags.labIn && !E.byId('warden')) E.spawn('warden', 'warden', -4.1, 33, { yaw: PI / 2, state: 'walk' });
@@ -353,9 +353,9 @@ NF.game = (function () {
     var targetV = input.multiplyScalar(spd);
     P.vel = P.vel || new V3(); P.vel.lerp(targetV, 1 - Math.exp(-dt * 10));
     if (P.knock) { P.vel.add(P.knock); P.knock.multiplyScalar(Math.exp(-dt * 6)); if (P.knock.length() < 0.1) P.knock = null; }
-    P.pos.addScaledVector(P.vel, dt); W.collide(P.pos, 0.3);
+    P.pos.addScaledVector(P.vel, dt); W.collide(P.pos, 0.3, 0.4);
     E.list.forEach(function (e) { if (e.dead || e.state === 'dormant') return; var dx = P.pos.x - e.pos.x, dz = P.pos.z - e.pos.z, d2 = dx * dx + dz * dz, m = 0.3 + e.rad; if (d2 < m * m && d2 > 1e-6) { var d = Math.sqrt(d2); P.pos.x += dx / d * (m - d); P.pos.z += dz / d * (m - d); } });
-    W.collide(P.pos, 0.3);
+    W.collide(P.pos, 0.3, 0.4);
     // gravity, steps and jumping
     var floorY = W.floorAt(P.pos.x, P.pos.z, P.pos.y, 0.25);
     if (P.onGround && floorY < P.pos.y && P.pos.y - floorY < 0.45 && P.vy <= 0) { P.pos.y = floorY; }

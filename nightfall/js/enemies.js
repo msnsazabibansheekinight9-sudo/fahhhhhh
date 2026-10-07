@@ -64,7 +64,7 @@ NF.enemies = (function () {
     e.pos.x += Math.sin(e.yaw) * speed * k * dt; e.pos.z += Math.cos(e.yaw) * speed * k * dt;
     // separation
     E.list.forEach(function (o) { if (o === e || o.dead || o.state === 'dormant') return; var dx = e.pos.x - o.pos.x, dz = e.pos.z - o.pos.z, d2 = dx * dx + dz * dz, m = e.rad + o.rad; if (d2 < m * m && d2 > 1e-6) { var d = Math.sqrt(d2), p = (m - d) * 0.5; e.pos.x += dx / d * p; e.pos.z += dz / d * p; } });
-    NF.world.collide(e.pos, e.rad, 0.32);
+    NF.world.collide(e.pos, e.rad, 0.4);
     var r = NF.world.roomAt(e.pos.x, e.pos.z); if (r && r.safe) { e.pos.x = ox; e.pos.z = oz; return 0; }
     var fy0 = NF.world.floorAt(e.pos.x, e.pos.z, e.pos.y, e.rad * 0.6); if (fy0 > e.pos.y - 0.4) e.pos.y = fy0;
     return speed * k;
