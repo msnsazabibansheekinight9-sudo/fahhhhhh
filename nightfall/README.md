@@ -42,5 +42,6 @@ Leave the lab through the emergency exit and the game opens up into a **6 km × 
 - **The Peddler**: a merchant in every safehouse. Buy weapons, ammo, herbs, larger pouches and a Kevlar vest. Sell treasures. Upgrade firepower, capacity, reload speed and fire rate.
 - **Survival**: crafting with gunpowder, red and blue herbs, poison, a limited pack, and item boxes that share their contents across safehouses.
 - **Driving**: pickup trucks you can drive. Ram the infected, and use the headlights.
-- **Navigation**: a county map that reveals places as you find them, a compass with an objective marker, and area titles.
+- **Navigation**: a full-screen survey map you can pan and zoom, with hill shading, contour lines, forests, roads, building footprints, fog of war, safehouse and truck icons, the objective route, a scale bar and a manor floor-plan tab. There is also a rotating minimap on the HUD, a compass with an objective marker, and area titles.
+- **First or third person**: press V (or use the pause menu) to switch views at any time. First person has its own arms and weapon view, with aiming down the sights, recoil, sway, head bob, reload and knife animations. The mouse wheel cycles weapons.
 - **Story**: the police radio, the relay defence, Teo at the church, and the airfield evac against the Warden.

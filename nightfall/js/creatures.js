@@ -226,7 +226,8 @@ NF.creatures = (function () {
       return { root: root, body: body, J: {}, hits: hits, scale: 1, kind: 'crows', birds: birds };
     },
     init: function (e) { e.flying = true; e.pos.y = NF.world.ground(e.pos.x, e.pos.z); e.home = e.pos.clone(); e.peckT = 0; },
-    damage: function (e, dmg, part, point) {
+    damage: function (e, dmg, part, point, dir, weapon) {
+      if (weapon === 'explosive' || weapon === 'vehicle') e.rig.birds.forEach(function (b) { if (b.hp > 0 && b.getWorldPosition(new V3()).distanceTo(point) < 6) { b.hp = 0; b.visible = false; b.scale.setScalar(0.001); } });
       if (part === 'bird') e.rig.birds.forEach(function (b) { if (b.hp > 0 && b.getWorldPosition(new V3()).distanceTo(point) < 0.3) { b.hp = 0; b.visible = false; b.scale.setScalar(0.001); NF.fx.feathers(point); } });
       var alive = e.rig.birds.filter(function (b) { return b.hp > 0; }).length;
       e.alert = true;
@@ -367,6 +368,7 @@ NF.creatures = (function () {
       root.traverse(function (c) { if (c.isMesh) c.castShadow = true; });
       return { root: root, body: body, J: {}, hits: hits, scale: 1, kind: 'worm', segs: segs };
     },
+    damage: function (e) { if (e.state === 'under' || e.state === 'warn') return false; },
     init: function (e, o) { e.flying = true; e.state = 'under'; e.home = e.pos.clone(); e.rig.root.visible = false; if (o.boss) { e.hp = e.maxHp = 1100; } e.eyeH = 0.5; },
     kill: function (e) { AU.roar(e.pos); NF.game.event('wormDead'); },
     update: function (e, t, dt, P) {

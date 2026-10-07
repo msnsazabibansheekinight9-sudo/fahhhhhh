@@ -172,7 +172,8 @@ NF.terrain = (function () {
   // ------------------------------------------------------------ placements
   var buckets = {};
   function key(x, z) { return Math.floor(x / CH) + ',' + Math.floor(z / CH); }
-  function place(o) { var k = key(o.x, o.z); (buckets[k] || (buckets[k] = { s: [], e: [], i: [] })).s.push(o); return o; }
+  T.placements = [];
+  function place(o) { T.placements.push(o); var k = key(o.x, o.z); (buckets[k] || (buckets[k] = { s: [], e: [], i: [] })).s.push(o); return o; }
   function spawnAt(type, id, x, z, o) { o = o || {}; o.type = type; o.id = id; o.x = x; o.z = z; var k = key(x, z); (buckets[k] || (buckets[k] = { s: [], e: [], i: [] })).e.push(o); return o; }
   function itemAt(id, type, x, z, o) { o = o || {}; o.id = id; o.type = type; o.x = x; o.z = z; var k = key(x, z); (buckets[k] || (buckets[k] = { s: [], e: [], i: [] })).i.push(o); return o; }
   T.spawnAt = spawnAt; T.itemAt = itemAt; T.place = place;

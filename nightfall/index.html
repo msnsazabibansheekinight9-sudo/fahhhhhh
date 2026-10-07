@@ -116,6 +116,25 @@ body.cine #skip { display:block; }
 .shopItem .pr { color:var(--gold); font-family:Cinzel, serif; }
 .cols { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
 @media (max-width:620px) { .cols { grid-template-columns:1fr; } }
+#map { background:#0b0d0f; }
+#mapC { position:absolute; inset:0; width:100%; height:100%; cursor:grab; display:block; }
+#mapC:active { cursor:grabbing; }
+#mapTop { position:absolute; left:24px; top:18px; pointer-events:none; }
+.mapTitle { font-family:Cinzel, serif; font-weight:700; font-size:clamp(20px, 3vw, 30px); letter-spacing:.25em; color:#e8dcc8; text-shadow:0 2px 8px #000; text-transform:uppercase; }
+.mapSub { font-family:'Special Elite', monospace; font-size:13px; color:var(--gold); margin-top:4px; text-shadow:0 1px 4px #000; }
+#mapTabs { position:absolute; top:22px; right:24px; display:flex; gap:4px; }
+#mapTabs button, #mapZoom button { font-family:Cinzel, serif; letter-spacing:.15em; font-size:13px; padding:7px 14px; background:rgba(10,8,6,.85); border:1px solid var(--line); color:var(--dim); cursor:pointer; }
+#mapTabs button.on { color:var(--fg); border-color:var(--gold); }
+#mapZoom { position:absolute; right:24px; top:72px; display:flex; flex-direction:column; gap:4px; }
+#mapZoom button { width:40px; height:40px; padding:0; font-size:18px; color:var(--fg); }
+#mapTabs button:hover, #mapZoom button:hover { border-color:var(--gold); color:#fff; }
+#mapLegend { position:absolute; left:24px; bottom:24px; background:rgba(10,8,6,.85); border:1px solid var(--line); padding:12px 16px; font-size:12px; display:grid; grid-template-columns:auto auto; gap:5px 12px; align-items:center; max-width:calc(100% - 48px); }
+#mapLegend i { display:inline-block; width:14px; text-align:center; font-style:normal; }
+#mapTip { position:absolute; pointer-events:none; background:rgba(10,8,6,.92); border:1px solid var(--gold); padding:6px 10px; font-size:13px; display:none; white-space:nowrap; }
+#mapTip b { font-family:Cinzel, serif; letter-spacing:.08em; display:block; }
+#mapHelp { position:absolute; right:24px; bottom:24px; font-size:12px; color:var(--dim); letter-spacing:.08em; text-shadow:0 1px 3px #000; }
+#mini { position:fixed; right:24px; top:48px; width:170px; height:170px; border-radius:50%; border:2px solid var(--line); box-shadow:0 0 0 1px #000, 0 6px 20px rgba(0,0,0,.6); display:none; background:#0b0d0f; }
+@media (max-width:620px) { #mini { width:110px; height:110px; } #mapLegend { display:none; } }
 input[type=range] { accent-color:var(--red); width:200px; }
 .row { display:flex; align-items:center; gap:14px; margin:8px 0; font-size:14px; }
 </style>
@@ -135,7 +154,7 @@ input[type=range] { accent-color:var(--red); width:200px; }
   <div id="health"><div class="lbl">CONDITION</div><div class="st" id="hpSt">FINE</div><canvas id="ecg" width="400" height="92"></canvas></div>
   <div id="weapon"><div class="nm" id="wName">Handgun</div><div class="am" id="wAmmo">13 <small>/ 0</small></div></div>
   <div id="timer"></div>
-  <div id="compass"></div><div id="compassD"></div><div id="money"></div><div id="status"></div><div id="veh"></div>
+  <canvas id="mini" width="340" height="340"></canvas><div id="compass"></div><div id="compassD"></div><div id="money"></div><div id="status"></div><div id="veh"></div>
   <div id="bossbar"><div class="n">THE LAZARUS FORM</div><div class="b"><div class="f" id="bossF"></div></div></div>
 </div>
 <div id="scope"></div>
@@ -165,6 +184,8 @@ input[type=range] { accent-color:var(--red); width:200px; }
     <b>Left mouse</b><span>Knife slash when not aiming</span>
     <b>R</b><span>Reload</span>
     <b>E</b><span>Interact, pick up, open doors, read</span>
+    <b>V</b><span>Switch between first-person and third-person view (also in the pause menu)</span>
+    <b>Mouse wheel</b><span>Cycle weapons</span>
     <b>Q</b><span>Quick turn 180°</span>
     <b>1 – 7</b><span>Handgun, shotgun, magnum, SMG, rifle, grenade launcher, rocket launcher</span>
     <b>G</b><span>Throw a grenade</span>
@@ -180,6 +201,7 @@ input[type=range] { accent-color:var(--red); width:200px; }
 </div></div>
 <div id="pause" class="screen" style="background:rgba(0,0,0,.6)"><div class="panel" style="text-align:center"><h3>Paused</h3>
   <div class="menu"><button id="bRes">Resume</button><button id="bCtl2">Controls</button><button id="bTitle">Quit to title</button></div>
+  <div class="row" style="justify-content:center"><span>View</span><select id="viewSel" class="small"><option value="tps">Third person</option><option value="fps">First person</option></select></div>
   <div class="row" style="justify-content:center"><span>Volume</span><input type="range" id="vol" min="0" max="1" step="0.05" value="0.9"></div>
   <div class="row" style="justify-content:center"><span>Mouse</span><input type="range" id="sens" min="0.0006" max="0.006" step="0.0002" value="0.0022"></div>
   <div class="row" style="justify-content:center"><span>Brightness</span><input type="range" id="bright" min="0.6" max="2" step="0.05" value="1"></div>
@@ -190,7 +212,15 @@ input[type=range] { accent-color:var(--red); width:200px; }
   <div id="invFiles" style="display:none"></div>
   <div style="margin-top:14px;text-align:right;font-size:12px;color:var(--dim)">TAB / ESC — CLOSE</div>
 </div></div>
-<div id="map" class="screen" style="background:rgba(0,0,0,.8)"><div class="panel" style="text-align:center"><h3>Ashgrove Manor</h3><canvas id="mapC" width="560" height="640"></canvas><div style="margin-top:10px;font-size:12px;color:var(--dim)">GREEN door: open · RED: locked · GOLD dots: items seen · M — CLOSE</div></div></div>
+<div id="map" class="screen">
+  <canvas id="mapC"></canvas>
+  <div id="mapTop"><div class="mapTitle" id="mapTitle">Ashgrove County</div><div class="mapSub" id="mapSub"></div></div>
+  <div id="mapTabs"><button data-mtab="county" class="on">County</button><button data-mtab="manor">Manor</button></div>
+  <div id="mapZoom"><button id="mzIn" aria-label="Zoom in">+</button><button id="mzOut" aria-label="Zoom out">−</button><button id="mzMe" aria-label="Centre on me">◎</button></div>
+  <div id="mapLegend"></div>
+  <div id="mapTip"></div>
+  <div id="mapHelp">Drag to pan · Scroll to zoom · M or Esc to close</div>
+</div></div>
 <div id="file" class="screen" style="background:rgba(0,0,0,.75)"><div class="paper" id="fileP"></div><div style="margin-top:14px;font-size:12px;color:var(--dim);letter-spacing:.2em">E / ESC — CLOSE</div></div>
 <div id="shop" class="screen" style="background:rgba(0,0,0,.78)"><div class="panel" style="width:min(860px, calc(100% - 32px))">
   <h3>The Peddler</h3>
@@ -221,6 +251,7 @@ input[type=range] { accent-color:var(--red); width:200px; }
 <script src="js/creatures.js"></script>
 <script src="js/vehicles.js"></script>
 <script src="js/story.js"></script>
+<script src="js/mapui.js"></script>
 <script src="js/game.js"></script>
 </body>
 </html>

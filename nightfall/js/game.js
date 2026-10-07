@@ -46,7 +46,7 @@ NF.game = (function () {
     renderer.setSize(innerWidth, innerHeight);
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputEncoding = THREE.sRGBEncoding; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.15;
-    renderer.physicallyCorrectLights = false;
+    renderer.physicallyCorrectLights = false; renderer.autoClear = false;
     scene = new THREE.Scene(); scene.background = new THREE.Color('#020203'); scene.fog = new THREE.FogExp2('#030304', 0.045);
     camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.05, 420);
     hemi = new THREE.HemisphereLight('#5a6478', '#20160e', 0.42); scene.add(hemi);
@@ -61,8 +61,10 @@ NF.game = (function () {
     [gun.handgun, gun.magnum, gun.knife].forEach(function (g) { g.rotation.x = PI / 2; g.position.set(0, -0.085, 0.01); rig.J.wrR.add(g); g.visible = false; });
     ['shotgun', 'smg', 'rifle', 'gl', 'rpg'].forEach(function (w) { if (!gun[w]) gun[w] = Mo.weapon(w); rig.J.chest.add(gun[w]); gun[w].visible = false; });
     var lamp = new THREE.Mesh(Mo.box(0.05, 0.05, 0.05), new THREE.MeshStandardMaterial({ color: '#fff', emissive: '#fff4d0', emissiveIntensity: 2 })); lamp.position.set(-0.1, 0.22, 0.16); rig.J.chest.add(lamp);
-    makeTeo();
-    window.addEventListener('resize', function () { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); });
+    makeTeo(); buildVM();
+    NF.mapui.init(function () { var r = W.roomAt(P.pos.x, P.pos.z); return { P: P, flags: flags, obj: objTarget(), heading: viewHeading(), inManor: !!(r && W.rooms.indexOf(r) >= 0), hasKey: hasKey }; });
+    try { cam.fps = localStorage.getItem('nf_view') === 'fps'; } catch (e) { }
+    window.addEventListener('resize', function () { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); if (vmCam) { vmCam.aspect = camera.aspect; vmCam.updateProjectionMatrix(); } });
     bindInput(); bindUI();
     var cont = false; try { cont = sessionStorage.getItem('nf_continue') === '1'; sessionStorage.removeItem('nf_continue'); } catch (e) { }
     $('bCont').disabled = !loadData();
@@ -91,6 +93,11 @@ NF.game = (function () {
       cam.yaw -= e.movementX * sens; cam.pitch = Math.max(-1.1, Math.min(1.0, cam.pitch - e.movementY * sens));
     });
     document.addEventListener('pointerlockchange', function () { mouse.free = false; });
+    document.addEventListener('wheel', function (e) {
+      if (mode !== 'play' || P.inVeh || !P.alive) return;
+      var owned = WORDER.filter(function (w) { return P.owned[w]; }); if (owned.length < 2) return;
+      var i = owned.indexOf(P.weapon); equip(owned[(i + (e.deltaY > 0 ? 1 : -1) + owned.length) % owned.length]);
+    }, { passive: true });
     cv.addEventListener('contextmenu', function (e) { e.preventDefault(); });
     document.addEventListener('mousedown', function (e) {
       AU.init();
@@ -107,7 +114,7 @@ NF.game = (function () {
       if (mode === 'cine' && (k === ' ' || k === 'enter' || k === 'escape')) { skipCine(); return; }
       if (mode === 'ui') { if (k === 'escape' || k === 'tab' || k === 'i' || k === 'm' || (k === 'e' && G.ui === 'file') || (k === 'p' && G.ui === 'pause')) closeUI(); return; }
       if (mode !== 'play') return;
-      if (P.inVeh) { if (k === 'e') G.exitVehicle(); else if (k === 'escape' || k === 'p') openUI('pause'); else if (k === 'm') openUI('map'); else if (k === 'tab' || k === 'i') openUI('inv'); else if (k === 'f') { P.flashOn = !P.flashOn; } return; }
+      if (P.inVeh) { if (k === 'v') toggleView(); else if (k === 'e') G.exitVehicle(); else if (k === 'escape' || k === 'p') openUI('pause'); else if (k === 'm') openUI('map'); else if (k === 'tab' || k === 'i') openUI('inv'); else if (k === 'f') { P.flashOn = !P.flashOn; } return; }
       if (k === 'escape' || k === 'p') openUI('pause');
       else if (k === 'tab' || k === 'i') openUI('inv');
       else if (k === 'm') openUI('map');
@@ -115,6 +122,7 @@ NF.game = (function () {
       else if (k === 'r') startReload();
       else if (k === 'q' && !mouse.aim) { cam.quick = PI; }
       else if (k === 'f') { P.flashOn = !P.flashOn; AU.click(); }
+      else if (k === 'v') toggleView();
       else if (k === 'h') quickHeal();
       else if (k === 'g') throwGrenade();
       else if (k >= '1' && k <= '7') equip(WORDER[+k - 1]);
@@ -132,9 +140,10 @@ NF.game = (function () {
     $('bTitle').onclick = $('bTitle2').onclick = $('bTitle3').onclick = function () { location.reload(); };
     $('bRetry').onclick = function () { try { sessionStorage.setItem('nf_continue', '1'); } catch (e) { } location.reload(); };
     $('vol').oninput = function () { AU.setVolume(+this.value); };
+    $('viewSel').onchange = function () { G.setView(this.value); };
     $('sens').oninput = function () { sens = +this.value; };
     $('bright').oninput = function () { renderer.toneMappingExposure = 1.15 * this.value; };
-    document.querySelectorAll('.tabs button').forEach(function (b) { b.onclick = function () { document.querySelectorAll('.tabs button').forEach(function (x) { x.classList.toggle('on', x === b); }); $('invItems').style.display = b.dataset.tab === 'items' ? '' : 'none'; $('invFiles').style.display = b.dataset.tab === 'files' ? '' : 'none'; }; });
+    document.querySelectorAll('[data-tab]').forEach(function (b) { b.onclick = function () { document.querySelectorAll('[data-tab]').forEach(function (x) { x.classList.toggle('on', x === b); }); $('invItems').style.display = b.dataset.tab === 'items' ? '' : 'none'; $('invFiles').style.display = b.dataset.tab === 'files' ? '' : 'none'; }; });
     try { var st = JSON.parse(localStorage.getItem('nf_settings') || '{}'); if (st.sens) { sens = st.sens; $('sens').value = st.sens; } } catch (e) { }
   }
   function showScreen(id) { document.querySelectorAll('.screen').forEach(function (s) { s.classList.toggle('on', s.id === id); }); }
@@ -219,7 +228,7 @@ NF.game = (function () {
   }
   function equip(w) {
     if (!P.owned[w] || P.weapon === w || P.reloadT > 0) return;
-    P.weapon = w; P.reloadT = 0; AU.reload('x'); toast(WEAP[w].name);
+    P.weapon = w; P.reloadT = 0; P.switchT = 0.35; AU.reload('x'); toast(WEAP[w].name);
   }
   function startReload() {
     var w = P.weapon, d = WS(w);
@@ -253,8 +262,7 @@ NF.game = (function () {
       } else if (wd < 60) { var pt = o2.clone().addScaledVector(dir, wd - 0.02); FX.sparks(pt, dir.clone().negate()); if (i < 2) AU.impact(pt, false); }
     }
     if (anyHit) stats.hits++;
-    var gm = gun[w]; gm.updateMatrixWorld(true);
-    var mz = gm.localToWorld(gm.userData.muzzle.clone());
+    var mz = muzzleOf(w);
     FX.muzzle(mz, fwd, w !== 'handgun');
     var rr = new V3(-Math.cos(P.yaw), 0, Math.sin(P.yaw)).multiplyScalar(-1);
     if (w === 'handgun') FX.shell(mz.clone().addScaledVector(fwd, -0.12), rr, false);
@@ -262,7 +270,7 @@ NF.game = (function () {
     if (w === 'smg' || w === 'rifle') FX.shell(mz.clone().addScaledVector(fwd, -0.3), rr, false);
     AU.gun(w === 'smg' ? 'handgun' : w === 'rifle' ? 'magnum' : w); E.noise(P.pos, w === 'handgun' || w === 'smg' ? 22 : 34);
     cam.pitch = Math.min(1.0, cam.pitch + d.recoil * (0.7 + Math.random() * 0.5)); cam.yaw += (Math.random() - .5) * d.recoil * 0.4;
-    P.recoil = 1; P.focus *= w === 'handgun' ? 0.35 : 0.1; G.shake(d.recoil * 2);
+    P.recoil = 1; P.focus *= w === 'handgun' ? 0.35 : 0.1; G.shake(d.recoil * (cam.fps ? 0.8 : 2)); vmKick(w);
   }
   function knife() {
     if (P.knifeT > 0 || P.reloadT > 0) return;
@@ -273,13 +281,16 @@ NF.game = (function () {
       if (best) { var pt = best.pos.clone().setY(best.pos.y + (best.type === 'dog' ? 0.6 : best.state === 'down' ? 0.3 : 1.25)); E.damage(best, best.state === 'down' ? 16 : 10, 'body', pt, fwd, 'knife'); AU.impact(pt, true); }
     }, 160);
   }
-  function muzzleOf(w) { var gm = gun[w]; gm.updateMatrixWorld(true); return gm.localToWorld(gm.userData.muzzle.clone()); }
+  function muzzleOf(w) {
+    if (vmActive() && vmGuns[w]) { var vg = vmGuns[w]; vm.updateMatrixWorld(true); var lp = vg.localToWorld(vg.userData.muzzle.clone()); camera.updateMatrixWorld(true); return camera.localToWorld(lp); }
+    var gm = gun[w]; rig.root.updateMatrixWorld(true); return gm.localToWorld(gm.userData.muzzle.clone());
+  }
   function aimPoint() { var o = camera.position.clone(), f = new V3(); camera.getWorldDirection(f); var skip = Math.max(0.2, camera.position.distanceTo(P.chest()) - 0.3); var o2 = o.clone().addScaledVector(f, skip); var t = W.ray(o2, f, 200); var h = E.raycast(o2, f, t); return o2.addScaledVector(f, h ? h.t : t); }
   function launch(w, d) {
     var mz = muzzleOf(w), tgt = aimPoint(), dir = tgt.clone().sub(mz).normalize(), m;
     if (w === 'gl') { m = new THREE.Mesh(Mo.sphere(0.05, 8, 6), new THREE.MeshStandardMaterial({ color: '#3a4a2a' })); var v = dir.multiplyScalar(32); v.y += 2.2; NF.creatures.shoot({ pos: mz, vel: v, g: 9.8, mesh: m, explode: { r: 6, dmg: 160 }, life: 5, trail: '#999' }); AU.gun('shotgun'); }
     else { m = new THREE.Group(); var b = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.5, 8), new THREE.MeshStandardMaterial({ color: '#4a5a3a' })); b.rotation.x = PI / 2; m.add(b); m.lookAt(dir); NF.creatures.shoot({ pos: mz, vel: dir.multiplyScalar(55), g: 0.4, mesh: m, explode: { r: 8, dmg: 650 }, life: 6, trail: '#ccc' }); AU.boom(mz, 2); FX.puff(mz.clone().addScaledVector(dir, -1.2), '#bbb'); }
-    FX.muzzle(mz, dir, true); E.noise(P.pos, 30); P.recoil = 1; cam.pitch = Math.min(1, cam.pitch + d.recoil); G.shake(0.3);
+    FX.muzzle(mz, dir, true); E.noise(P.pos, 30); P.recoil = 1; vmKick(w); cam.pitch = Math.min(1, cam.pitch + d.recoil); G.shake(0.3);
     if (P.ammo[w] > 0) setTimeout(function () { if (P.weapon === w && P.mag[w] === 0) startReload(); }, 400);
   }
   function throwGrenade() {
@@ -347,6 +358,7 @@ NF.game = (function () {
     W.collide(P.pos, 0.3);
     P.pos.y = W.ground(P.pos.x, P.pos.z);
     var sp = Math.hypot(P.vel.x, P.vel.z); P.speed = sp;
+    if (cam.fps) P.yaw = cam.yaw;
     if (aiming) { P.yaw = cam.yaw; P.focus = Math.min(1, P.focus + dt * (sp > 0.3 ? 0.25 : 0.9)); }
     else { P.focus = Math.max(0, P.focus - dt * 2); if (sp > 0.2) { var ty = Math.atan2(P.vel.x, P.vel.z), dy = ty - P.yaw; while (dy > PI) dy -= 2 * PI; while (dy < -PI) dy += 2 * PI; P.yaw += dy * (1 - Math.exp(-dt * 10)); } }
     if (P.grabbedBy) { P.grabT -= dt; if (P.grabT <= 0 || P.grabbedBy.dead) { var z = P.grabbedBy; if (!z.dead) { var push = z.pos.clone().sub(P.pos).setY(0).normalize(); z.pos.addScaledVector(push, 0.8); z.state = 'stagger'; z.t = 0; W.collide(z.pos, z.rad); } P.grabbedBy = null; } }
@@ -394,6 +406,7 @@ NF.game = (function () {
     if (scoped) { tDist = 0.25; tSh = 0.1; }
     $('scope').style.display = scoped && cam.fov < 30 ? 'block' : 'none';
     if (P.inVeh && mode === 'play') { vehicleCamera(dt); return; }
+    if (cam.fps && P.alive && mode !== 'title') { fpsCamera(dt, aiming, scoped); return; }
     if (mode === 'title') { var a = Math.sin(T * 0.06) * 0.9; camera.position.set(Math.sin(a) * 3.5, 1.9 + Math.sin(T * 0.2) * 0.25, 4.5 - Math.abs(Math.sin(a)) * 1.5); camera.lookAt(Math.sin(a) * 1.2, 3.2, 16); return; }
     if (!P.alive) tDist = 3.6;
     var k = 1 - Math.exp(-dt * 10);
@@ -434,6 +447,100 @@ NF.game = (function () {
     if (forced) { P.hp -= 25; if (P.hp <= 0) hurtPlayer(10, null, 'blast'); }
   };
   G.shake = function (a) { cam.shake = Math.min(1.5, cam.shake + a); };
+  // ------------------------------------------------------------------ first person
+  var vmScene, vmCam, vm, vmGuns = {}, vmArmR, vmArmL, vmKnife, vmFlash, vmState = { x: 0.15, y: -0.3, z: -0.3, rx: 0, ry: 0, rz: 0, kick: 0, swayX: 0, swayY: 0, lastYaw: 0, lastPitch: 0, flashT: 0 };
+  var VM_POSE = { // weapon position at the hip and aiming down the sights, and where each hand grips it (weapon space)
+    handgun: { hip: [0.17, -0.18, -0.4], aim: [0, -0.088, -0.44], gripR: [0, -0.04, -0.02], gripL: [-0.03, -0.06, 0.02] },
+    magnum: { hip: [0.17, -0.19, -0.42], aim: [0, -0.088, -0.46], gripR: [0, -0.04, -0.03], gripL: [-0.03, -0.06, 0.0] },
+    shotgun: { hip: [0.16, -0.2, -0.36], aim: [0, -0.11, -0.4], gripR: [0, 0, -0.02], gripL: [0, 0.0, 0.42] },
+    smg: { hip: [0.16, -0.19, -0.36], aim: [0, -0.105, -0.44], gripR: [0, -0.03, -0.02], gripL: [0, -0.05, 0.13] },
+    rifle: { hip: [0.16, -0.2, -0.36], aim: [0, -0.15, -0.3], gripR: [0, -0.01, -0.12], gripL: [0, 0.0, 0.32] },
+    gl: { hip: [0.16, -0.2, -0.36], aim: [0, -0.115, -0.42], gripR: [0, -0.02, 0.0], gripL: [0, 0.0, 0.26] },
+    rpg: { hip: [0.2, -0.15, -0.36], aim: [0.1, -0.16, -0.34], gripR: [0, -0.04, 0.05], gripL: [0, -0.04, 0.25] }
+  };
+  function vmActive() { return !!(vmScene && cam.fps && P.alive && mode !== 'title' && mode !== 'cine' && mode !== 'intro' && mode !== 'end' && mode !== 'dead' && !P.inVeh && !(WEAP[P.weapon].scope && mouse.aim && camera.fov < 30)); }
+  function buildVM() {
+    vmScene = new THREE.Scene();
+    vmCam = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.01, 10);
+    var hemiV = new THREE.HemisphereLight('#9aa4c0', '#2a2018', 0.9); vmScene.add(hemiV); vmScene.userData.hemi = hemiV;
+    var key = new THREE.DirectionalLight('#fff1d8', 0.8); key.position.set(0.5, 1, 0.6); vmScene.add(key); vmScene.userData.key = key;
+    vm = new THREE.Group(); vmScene.add(vm);
+    var sleeve = Mo.std({ map: NF.tex.cloth('#263240', false, 3), roughness: 0.9 }), glove = Mo.std({ color: '#1b1b1b', roughness: 0.6 }), cuff = Mo.std({ color: '#3c4330', roughness: 0.9 });
+    function arm() {
+      var g = new THREE.Group();
+      var m1 = new THREE.Mesh(Mo.limb(0.042, 0.05, 0.45), sleeve); m1.position.y = -0.05; g.add(m1);
+      var m2 = new THREE.Mesh(Mo.limb(0.047, 0.047, 0.07), cuff); m2.position.y = -0.04; g.add(m2);
+      var h = new THREE.Mesh(Mo.limb(0.036, 0.03, 0.1), glove); h.scale.set(1, 1, 0.6); h.position.y = 0.05; g.add(h);
+      var th = new THREE.Mesh(Mo.limb(0.013, 0.011, 0.05), glove); th.position.set(0.025, 0.04, 0.02); g.add(th);
+      return g;
+    }
+    vmArmR = arm(); vmArmL = arm(); vm.add(vmArmR); vm.add(vmArmL);
+    WORDER.forEach(function (w) { var g = Mo.weapon(w); g.visible = false; g.matrixAutoUpdate = true; vm.add(g); vmGuns[w] = g; });
+    vmKnife = Mo.weapon('knife'); vmKnife.visible = false; vm.add(vmKnife);
+    vmFlash = new THREE.Sprite(new THREE.SpriteMaterial({ map: NF.tex.spark(), color: '#ffcf7a', blending: THREE.AdditiveBlending, transparent: true, depthWrite: false })); vmFlash.scale.setScalar(0.18); vmFlash.visible = false; vm.add(vmFlash);
+    vm.traverse(function (o) { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false; } });
+  }
+  // an arm reaches from below the screen edge to the hand position
+  function placeArm(a, handPos, dir) { a.position.copy(handPos); a.quaternion.setFromUnitVectors(new V3(0, -1, 0), dir.clone().normalize()); }
+  function vmKick(w) { if (!vmScene) return; vmState.kick = Math.min(1.5, vmState.kick + (w === 'smg' ? 0.35 : w === 'handgun' ? 0.7 : 1)); vmState.flashT = 0.05; }
+  function toggleView() {
+    cam.fps = !cam.fps; try { localStorage.setItem('nf_view', cam.fps ? 'fps' : 'tps'); } catch (e) { }
+    toast(cam.fps ? 'First-person view (V to switch)' : 'Third-person view (V to switch)');
+    var sel = $('viewSel'); if (sel) sel.value = cam.fps ? 'fps' : 'tps';
+    if (!cam.fps) { rig.root.visible = true; rig.J.headMesh.visible = true; }
+  }
+  G.setView = function (v) { if ((v === 'fps') !== !!cam.fps) toggleView(); };
+  function fpsCamera(dt, aiming, scoped) {
+    var tFov = scoped ? 16 : aiming ? 52 : 72;
+    cam.fov += (tFov - cam.fov) * (1 - Math.exp(-dt * 12));
+    var f = camForward(), flat = new V3(f.x, 0, f.z).normalize();
+    var bob = P.speed > 0.3 ? Math.sin(P.ph * 2) * 0.03 * Math.min(1, P.speed / 3) : 0;
+    camPos.set(P.pos.x, P.pos.y + 1.6 + bob - (P.healT > 0 ? 0.1 : 0), P.pos.z).addScaledVector(flat, 0.1);
+    if (cam.shake > 0) { camPos.x += (Math.random() - .5) * cam.shake * 0.08; camPos.y += (Math.random() - .5) * cam.shake * 0.08; cam.shake = Math.max(0, cam.shake - dt * 2.4); }
+    if (P.grabbedBy) camPos.x += Math.sin(T * 30) * 0.02;
+    camera.position.copy(camPos); lookAt.copy(camPos).add(f); camera.lookAt(lookAt);
+    if (P.speed > 0.3) camera.rotateZ(Math.sin(P.ph) * 0.006 * Math.min(1, P.speed / 2));
+    if (Math.abs(camera.fov - cam.fov) > 0.01) { camera.fov = cam.fov; camera.updateProjectionMatrix(); }
+    rig.root.visible = false;
+    $('scope').style.display = scoped && cam.fov < 30 ? 'block' : 'none';
+    updateVM(dt, aiming);
+  }
+  function updateVM(dt, aiming) {
+    var w = P.weapon, cfg = VM_POSE[w], S2 = vmState, k = 1 - Math.exp(-dt * 14);
+    var dyaw = cam.yaw - S2.lastYaw, dp = cam.pitch - S2.lastPitch; S2.lastYaw = cam.yaw; S2.lastPitch = cam.pitch;
+    if (Math.abs(dyaw) > 1) dyaw = 0;
+    S2.swayX += (Math.max(-0.04, Math.min(0.04, dyaw * 0.5)) - S2.swayX) * k; S2.swayY += (Math.max(-0.04, Math.min(0.04, -dp * 0.5)) - S2.swayY) * k;
+    var moving = P.speed > 0.3, ph = P.ph, runK = P.speed > 3 ? 1 : 0, damp = aiming ? 0.25 : 1 + runK;
+    var bx = moving ? Math.sin(ph) * 0.012 * damp : Math.sin(T * 1.6) * 0.002;
+    var by = moving ? -Math.abs(Math.cos(ph)) * 0.012 * damp : Math.sin(T * 1.9) * 0.002;
+    var base = aiming ? cfg.aim : cfg.hip;
+    var tx = base[0] + bx + S2.swayX * (aiming ? 0.3 : 1), ty = base[1] + by + S2.swayY * (aiming ? 0.3 : 1), tz = base[2], trx = 0, try2 = 0, trz = 0;
+    if (runK && !aiming) { tx += 0.03; ty -= 0.05; trz = -0.35; try2 = 0.3; trx = -0.15; }
+    if (P.reloadT > 0) { var rk = Math.sin(Math.min(1, 1 - P.reloadT / P.reloadMax) * PI); ty -= 0.1 * rk; trx += 0.5 * rk; trz += 0.4 * rk; }
+    if (P.healT > 0 || (P.switchT || 0) > 0) { ty -= 0.25; trx += 0.6; }
+    if (P.grabbedBy) { ty -= 0.2; trz = 0.5; }
+    S2.kick = Math.max(0, S2.kick - dt * 8);
+    tz += S2.kick * 0.05; trx += S2.kick * (w === 'rpg' ? 0.05 : 0.12);
+    S2.x += (tx - S2.x) * k; S2.y += (ty - S2.y) * k; S2.z += (tz - S2.z) * k; S2.rx += (trx - S2.rx) * k; S2.ry += (try2 - S2.ry) * k; S2.rz += (trz - S2.rz) * k;
+    if (P.switchT > 0) P.switchT -= dt;
+    WORDER.forEach(function (x) { vmGuns[x].visible = false; });
+    var g = vmGuns[w];
+    if (P.knifeT > 0) {
+      var kp = 1 - P.knifeT / 0.5, sw = Math.sin(Math.min(1, kp * 1.6) * PI);
+      vmKnife.visible = true; vmKnife.position.set(0.22 - kp * 0.45, -0.15 + sw * 0.05, -0.36 - sw * 0.1); vmKnife.rotation.set(0.2, -0.5 + kp * 1.2, -0.6 + kp * 0.8);
+      placeArm(vmArmR, vmKnife.position.clone(), new V3(0.4, -0.6, 0.7)); vmArmL.visible = false; vmArmR.visible = true; vmFlash.visible = false;
+      return;
+    }
+    vmKnife.visible = false; vmArmL.visible = true; vmArmR.visible = true;
+    // weapons are modelled pointing +Z; the camera looks down -Z
+    g.visible = true; g.position.set(S2.x, S2.y, S2.z); g.rotation.set(S2.rx, PI + S2.ry, S2.rz); g.updateMatrix();
+    var gr = new V3().fromArray(cfg.gripR).applyMatrix4(g.matrix), gl = new V3().fromArray(cfg.gripL).applyMatrix4(g.matrix);
+    var pistol = w === 'handgun' || w === 'magnum';
+    placeArm(vmArmR, gr, new V3(0.3, -0.6, 0.75)); placeArm(vmArmL, gl, pistol ? new V3(-0.35, -0.6, 0.75) : new V3(-0.35, -0.7, 0.55));
+    if (S2.flashT > 0 && !WEAP[w].proj) { S2.flashT -= dt; vmFlash.visible = true; vmFlash.position.copy(g.userData.muzzle.clone().applyMatrix4(g.matrix)); vmFlash.material.rotation = Math.random() * 6; } else { S2.flashT -= dt; vmFlash.visible = false; }
+    vmScene.userData.key.intensity = 0.2 + (P.flashOn ? 0.6 : 0.15); vmScene.userData.hemi.intensity = 0.3 + 0.45 * (env.out || 0);
+  }
+
   function updateFlash() {
     var f = mode === 'cine' || mode === 'title' ? new V3(Math.sin(P.yaw), -0.1, Math.cos(P.yaw)) : camForward();
     var base = new V3(P.pos.x, P.pos.y + 1.5, P.pos.z).add(new V3(-Math.cos(P.yaw) * 0.1, 0, Math.sin(P.yaw) * 0.1));
@@ -503,6 +610,7 @@ NF.game = (function () {
   // ------------------------------------------------------------------ story events
   function checkTriggers() {
     var room = W.roomAt(P.pos.x, P.pos.z), id = room && room.id;
+    if (!room) G.lastRoom = null;
     if (room && G.lastRoom !== id) {
       G.lastRoom = id; flags.visited = flags.visited || {}; flags.visited[id] = true;
       $('roomName').textContent = room.name; $('roomName').style.opacity = 1; clearTimeout(G.rnT); G.rnT = setTimeout(function () { $('roomName').style.opacity = 0; }, 3500);
@@ -535,7 +643,7 @@ NF.game = (function () {
     W.spot('helipad', af.x - 80, af.z + 120, 6, 'Fire the flare', function () { flareEvent(); }, 0.5);
   }
   function outsideScene() {
-    flags.escaped = true; G.escapeT = undefined; $('timer').style.display = 'none'; act2Spots();
+    flags.escaped = true; G.escapeT = undefined; $('timer').style.display = 'none'; act2Spots(); NF.mapui.prebuild();
     var behind = new V3(0, 3, 64);
     cine([
       { pos: [6, 2.2, 88], look: [0, 3, 70], pos2: [7, 3.2, 92], look2: [0, 5, 66], dur: 4.2, at: function () { [0, 400, 900, 1500].forEach(function (d, i) { setTimeout(function () { NF.creatures.explode(new V3((i - 1.5) * 6, 4 + i, 60 - i * 4), 9, 0, false); }, d); }); AU.music(null); }, lines: [['', '(Behind her, Velgen\'s laboratory tears itself apart.)', 3.6]] },
@@ -823,10 +931,12 @@ NF.game = (function () {
     mode = 'ui'; G.ui = which; mouse.aim = mouse.fire = false; keys = {};
     if (document.exitPointerLock && which !== 'file') document.exitPointerLock();
     if (which === 'inv') buildInv();
-    if (which === 'map') drawMap();
+    if (which === 'map') NF.mapui.open();
+    if (which === 'pause') $('viewSel').value = cam.fps ? 'fps' : 'tps';
     showScreen(which);
   }
-  function closeUI() { hideScreens(); mode = 'play'; G.ui = null; }
+  function viewHeading() { var f = new V3(); camera.getWorldDirection(f); return P.inVeh || !cam.fps ? Math.atan2(-Math.sin(cam.yaw), Math.cos(cam.yaw)) : Math.atan2(-f.x, f.z); }
+  function closeUI() { NF.mapui.close(); hideScreens(); mode = 'play'; G.ui = null; }
   var invSel = null;
   function buildInv() {
     var g = $('invGrid'); g.innerHTML = '';
@@ -1066,7 +1176,8 @@ NF.game = (function () {
     $('wAmmo').innerHTML = P.mag[P.weapon] + ' <small>/ ' + P.ammo[P.weapon] + '</small>';
     $('wAmmo').style.color = P.mag[P.weapon] === 0 ? 'var(--red2)' : '';
     var aiming = mouse.aim && mode === 'play' && P.alive && P.reloadT <= 0;
-    var cr = $('cross'); cr.style.opacity = aiming ? 1 : 0;
+    var cr = $('cross'); cr.style.opacity = aiming ? 1 : (cam.fps && mode === 'play' && P.alive && !P.inVeh ? 0.45 : 0);
+    if (!aiming) { $('chL').style.left = '-14px'; $('chR').style.left = '4px'; $('chU').style.top = '-14px'; $('chD').style.top = '4px'; }
     if (aiming) { var sp = wd.spread[0] + (wd.spread[1] - wd.spread[0]) * P.focus; var px = Math.max(3, sp / Math.tan(camera.fov * PI / 360) * innerHeight / 2); $('chL').style.left = (-px - 10) + 'px'; $('chR').style.left = px + 'px'; $('chU').style.top = (-px - 10) + 'px'; $('chD').style.top = px + 'px'; cr.querySelector('.c').style.background = P.focus > 0.95 ? '#ff2a2a' : '#fff'; }
     var b = G.bossRef || (flags.boss && !flags.bossDead ? E.byId('boss') : null); if (b && !b.dead) $('bossF').style.width = Math.max(0, b.hp / b.maxHp * 100) + '%';
     if (P.grenades > 0) $('wName').textContent += '  ·  ' + P.grenades + ' GRENADE' + (P.grenades > 1 ? 'S' : '');
@@ -1160,7 +1271,9 @@ NF.game = (function () {
     requestAnimationFrame(loop);
     tick(Math.min(0.05, clock.getDelta()));
     AU.setListener(camera); AU.update();
+    renderer.clear();
     renderer.render(scene, camera);
+    if (vmActive()) { renderer.clearDepth(); renderer.render(vmScene, vmCam); }
   }
   function tick(dt) {
     T += dt; frame++;
@@ -1186,6 +1299,8 @@ NF.game = (function () {
       updateSay(dt);
       if (frame % 2 === 0) grain();
       if (frame % 10 === 0) musicLogic();
+      if (frame % 20 === 0) NF.mapui.track(P, flags);
+      if (frame % 3 === 0) { var rr = W.roomAt(P.pos.x, P.pos.z), outdoors = flags.escaped && mode === 'play' && !(rr && W.rooms.indexOf(rr) >= 0); NF.mapui.mini(outdoors, P, -viewHeading(), objTarget()); }
       hud(dt);
     }
   }
