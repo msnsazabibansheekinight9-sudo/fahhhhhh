@@ -6,32 +6,37 @@ Open `grimdark/index.html` (serve the repo folder, e.g. `python3 -m http.server`
 
 ## What's in it
 
-- **You**: an armoured legionary with five weapons, each with its own first-person model, armoured gauntlets and animation set:
-  - **Bolt Rifle**: automatic, explosive bolts, sickle magazine, brass casings, ammo counter. Full reload choreography: the left hand pulls the magazine, fetches a new one and seats it, then the bolt is racked.
-  - **Plasma Incinerator**: hold to charge a big shot. Builds heat, overheats (burns you), **R** vents with sliding vents and steam. Coils glow with heat and charge.
-  - **Purgation Flamer**: a continuous stream of burning promethium that sets enemies alight. Pilot light.
-  - **Melta Gun**: a short wind-up, then a piercing heat beam that goes through every enemy in line.
-  - **Chainsword**: three-swing combo with moving teeth, a revving engine sound, and an **RMB** lunge into an overhead strike.
-  - Frag grenades (**G/Q**). **Rite of Fury** (**F**, charged by kills) slows every enemy for nine seconds.
-- **Viewmodel animation**: mouse sway, walk and sprint bob, a sprint pose, aim-down-sights, spring recoil, landing dip, weapon switching, grenade throw, reloads, vents and swings.
-- **Four factions, 12 enemy types and 4 bosses**, all articulated rigs with procedural walk cycles, aiming, melee swings, hit flinches, staggers, crumple-and-topple deaths and gibbing:
-  - *The Swarm*: Rippers that leap, Spitters, four-armed Hive Warriors, and **the Hive Tyrant** (winged; slams, acid barrages, summons the brood). They burrow up out of the ground.
-  - *Greenskins*: charging Brutes, Shootas, and **Warlord Gruskar** in smoking mega-armour with a power claw.
-  - *Undying Machines*: Husks with telegraphed gauss beams, Flayed Stalkers, and **the Overlord** (teleports, volleys, raises the fallen). Machines reassemble after death unless you obliterate them.
-  - *Traitors & Daemons*: Cultists in rebreathers, Bloodfiends, and **Kharzul the Blood-Crowned** (winged greater daemon; ring-of-fire slam, fireball fans).
-- **Six worlds** with their own sky shader, light, fog, ground, props and ambient particles: a burning hive city, an ice world, a jungle death-world, a tomb world, a forge world and a warp rift. Layouts are seeded and procedural (gothic ruins with climbable floors, statues, tank wrecks, crystals, giant trees, pyramids and pylons, chimneys and lava, obsidian spikes and altars).
-- **Enemy AI**: flow-field pathfinding around buildings, skirmishers that keep range and strafe, chargers, leapers, line-of-sight checks, separation, and hunting down the last stragglers.
-- **Campaign** of six missions (unlocked in order, with best scores saved) and **Endless Crusade** on any world, with a boss every fifth wave.
-- **HUD**: armour (regenerates) and vitality, fury meter, ammo/heat, grenades, an auspex motion tracker, damage direction arcs, hit and headshot markers, kill feed, boss bar and banners.
-- **Audio**: everything is synthesised with WebAudio, positional and with reverb.
+- **Seven playable classes**, each with its own weapons and an **E** ability:
+  - *Tactical Legionary*: bolt rifle, plasma, melta, chainsword. Calls an **orbital lance**.
+  - *Assault Legionary*: bolt pistol, plasma pistol, chainsword, thunder hammer. **Jump pack** leap and slam.
+  - *Terminator*: storm bolter, spin-up assault cannon, thunder hammer, lightning claws. Huge armour, **teleport strike**.
+  - *Devastator*: heavy bolter, lascannon, missile launcher, bolt pistol. **Brace** for no recoil and extra damage.
+  - *Librarian*: Smite (chain lightning; hold for a psychic blast; overuse brings Perils of the Warp), force staff, pistols. **Psychic storm**.
+  - *Battle Sister*: bolter, flamer, melta, chainsword. **Act of faith** makes her untouchable for a few seconds.
+  - *Guardsman*: lasgun, scoped long-las, plasma pistol, knife. Only human, but can **call a squad** in by gunship.
+- **19 first-person weapons**, each with its own model and animation: reloads where the hand handles the magazine, plasma charge and vent, assault cannon spin-up, beam wind-up, sword/hammer/claw/staff combos with heavy attacks, and a sniper scope.
+- **Eight enemy factions, 40 unit types, 8 bosses**, all procedurally rigged and animated:
+  - *The Swarm*: rippers, spitters, flying gargoyles, warriors, cloaked lictors, carnifexes, **Hive Tyrant**
+  - *Greenskins*: gretchin, brutes, shootas, burnas, nobs, junk dreadnoughts, **Warlord Gruskar**
+  - *Undying Machines*: kamikaze scarabs, husks, flayed stalkers, canoptek wraiths, **the Overlord**. Machines reassemble after death.
+  - *Traitors & Daemons*: cultists, bloodfiends, daemonettes, plaguebearers (poison clouds), pink horrors (homing warpfire), **Kharzul the Blood-Crowned**
+  - *Traitor Legions*: traitor legionaries, possessed, **Voraxis the Unbound**
+  - *The Ascendancy*: pulse warriors, shielded gun drones, jet-hopping battlesuits, **the Etherium Colossus** (shield, ion cannon, missile barrage)
+  - *The Starborn*: guardians, cloaked sniper pathstalkers, wailing dancers, wraith constructs, **the Burning Avatar**
+  - *The Brood Cult*: hybrids, purestrains, aberrants, **the Patriarch**
+- **Allies** fight beside you: guardsmen, battle-brothers, battle sisters and dreadnoughts arrive by **drop pod** (or by gunship). In some missions the Starborn or the Ascendancy fight with you. Allies and enemies pick targets and fight each other.
+- **13 worlds**: hive city, ice world, jungle death-world, tomb world, forge world, warp rift, cathedral shrine world, ash wastes, greenskin scrap-town, craftworld under the stars, tau-style sept city, agri world, and a space hulk interior. Titans stride on the horizon of some, and gunships fly overhead.
+- **17-mission campaign** across five mission types: purge, **hold** a beacon, **defend** an objective, **assassinate** a boss, and **survive & extract** to a landing gunship. Plus **Endless Crusade** on any world against any faction, with reinforcements every 4th wave and a boss every 5th.
+- Flow-field pathfinding, cover-keeping skirmishers, chargers, leapers, flyers, cloaking, shields and line-of-sight checks. HUD with auspex radar, objective and boss bars, ability cooldown and damage arcs. All sound is synthesised.
 
 ## Controls
 
 | | |
 |---|---|
 | Move / sprint / jump / crouch | WASD / Shift / Space / C |
-| Fire / aim | LMB / RMB |
-| Weapons | 1–5, mouse wheel |
+| Fire / aim (melee: heavy) | LMB / RMB |
+| Weapons | 1–4, mouse wheel |
+| Class ability | E |
 | Reload, vent plasma | R |
 | Grenade | G or Q |
 | Rite of Fury | F |

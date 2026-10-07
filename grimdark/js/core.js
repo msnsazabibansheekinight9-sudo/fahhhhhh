@@ -246,7 +246,16 @@ G.audio = {
       case 'ui': T('sine', 800, 900, 0.06, 0.15); break;
       case 'fury': T('sawtooth', 60, 120, 1.2, 0.4); N(1.4, 'lowpass', 300, 2000, 1, 0.6); T('sine', 400, 800, 1, 0.15); break;
       case 'spawnWarp': T('sine', 900, 60, 0.9, 0.2); N(0.8, 'bandpass', 2000, 200, 4, 0.3); break;
-      case 'bell': T('sine', 196, 194, 3, 0.35); T('sine', 392, 390, 2.5, 0.15); T('sine', 588, 585, 2, 0.08); break;
+      case 'pulse': T('sine', 1800, 400, 0.12, 0.2); N(0.1, 'bandpass', 3000, 1500, 3, 0.35); break;
+      case 'shuriken': N(0.05, 'highpass', 5000, 4000, 2, 0.35); T('triangle', 2400, 1800, 0.04, 0.08); break;
+      case 'sniper': N(0.25, 'bandpass', 2400, 600, 2, 0.8); T('sawtooth', 900, 120, 0.3, 0.3); T('sine', 3200, 2800, 0.15, 0.08); break;
+      case 'missile': N(0.9, 'lowpass', 2500, 300, 1, 0.9); T('sawtooth', 160, 60, 0.6, 0.15); break;
+      case 'warpbolt': T('sine', 300, 1400, 0.25, 0.18); T('sawtooth', 120, 600, 0.3, 0.1); N(0.3, 'bandpass', 1200, 4000, 5, 0.25); break;
+      case 'lightning': N(0.35, 'highpass', 1500, 6000, 1, 0.8); T('square', 60, 40, 0.3, 0.3); N(0.15, 'bandpass', 4000, 1500, 2, 0.5); break;
+      case 'pod': T('sawtooth', 300, 40, 1.6, 0.3); N(1.6, 'lowpass', 4000, 300, 1, 0.6); break;
+      case 'engine': N(2.5, 'lowpass', 900, 300, 1, 0.5); T('sawtooth', 70, 90, 2.5, 0.15); break;
+      case 'vox': T('square', 900, 900, 0.05, 0.05); N(0.15, 'bandpass', 2000, 2000, 6, 0.15); T('square', 700, 700, 0.05, 0.05, 0.1); break;
+      case 'bell':T('sine', 196, 194, 3, 0.35); T('sine', 392, 390, 2.5, 0.15); T('sine', 588, 585, 2, 0.08); break;
     }
   },
   // continuous sounds; returns {set(level), stop()}

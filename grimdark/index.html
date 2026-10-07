@@ -119,6 +119,30 @@
   @keyframes ddfade { to { opacity: 0; } }
   body.fury #furyfx { opacity: 1; }
   #furyfx { position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity .4s; background: radial-gradient(ellipse at center, rgba(255,60,0,.0) 40%, rgba(255,60,0,.35)); mix-blend-mode: screen; z-index: 9; }
+  #classes { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .ccard { text-align: left; background: linear-gradient(#1e1812, #110d0a); border: 1px solid rgba(212,168,74,.3); color: var(--text); padding: 10px; display: flex; flex-direction: column; gap: 4px; min-height: 130px; }
+  .ccard b { font-family: 'Cinzel', serif; color: var(--gold); font-size: 14px; }
+  .ccard span { font-size: 12px; color: #cbbfa8; line-height: 1.3; }
+  .ccard i { font-style: normal; font-size: 11px; color: var(--muted); margin-top: auto; }
+  .ccard em { font-style: normal; font-size: 11px; color: #ffb060; }
+  .ccard.on { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset, 0 0 18px rgba(212,168,74,.3); background: linear-gradient(#3a2a14, #1a120a); }
+  #slots { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; margin-top: 6px; font-size: 11px; color: var(--muted); letter-spacing: .05em; }
+  #slots .slot.on { color: var(--gold); }
+  #ability { position: absolute; left: 50%; bottom: 172px; transform: translateX(-50%); width: 170px; text-align: center; font-size: 12px; letter-spacing: .15em; color: var(--muted); }
+  #ability.ready { color: #ffd080; }
+  #ability .bar { height: 5px; margin-top: 3px; }
+  #abbar { background: linear-gradient(90deg, #6a4a10, #ffc040); }
+  #obj { display: none; margin-top: 8px; }
+  #objname { font-size: 13px; letter-spacing: .2em; color: #d8e8ff; }
+  #obj .bar { height: 9px; }
+  .shieldbar { height: 5px !important; border-color: #60b0ff !important; margin-top: 2px; }
+  #bossshield { background: #60b0ff; }
+  #faithfx { position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity .3s; background: radial-gradient(ellipse at center, transparent 50%, rgba(255,200,60,.35)); z-index: 9; }
+  #scope { position: fixed; inset: 0; pointer-events: none; display: none; z-index: 8; background: radial-gradient(circle at center, transparent 0 32vh, #000 32.3vh); }
+  #scope div { position: absolute; left: 50%; top: 50%; width: 64vh; height: 64vh; transform: translate(-50%, -50%); background: linear-gradient(#000, #000) center/2px 100% no-repeat, linear-gradient(#000, #000) center/100% 2px no-repeat; }
+  #scope div::after { content: ''; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: #ff3020; }
+  body.scoped #scope { display: block; }
+  body.scoped #cross, body.scoped #adsdot { display: none; }
   #helpline { position: absolute; left: 22px; top: 14px; font-size: 12px; color: rgba(255,255,255,.45); letter-spacing: .08em; }
 
   @media (max-width: 1150px) { #helpline { display: none; } }
@@ -134,10 +158,17 @@
 <div id="view"></div>
 <div id="loading">FORGING THE CRUSADE…</div>
 <div id="furyfx"></div>
+<div id="faithfx"></div>
+<div id="scope"><div></div></div>
 
 <div id="menu">
   <h1 class="title">IRONCLAD</h1>
   <div class="subtitle">CRUSADE OF THE ASHEN LEGION</div>
+
+  <div class="section">
+    <h2>CHOOSE YOUR WARRIOR</h2>
+    <div id="classes"></div>
+  </div>
 
   <div class="section">
     <h2>CAMPAIGN</h2>
@@ -147,7 +178,7 @@
   <div class="section">
     <h2>ENDLESS CRUSADE</h2>
     <div class="panel row">
-      <span>Every faction, escalating waves, a boss every fifth wave.</span>
+      <span>Escalating waves, reinforcements every fourth wave, a boss every fifth.</span>
       <select id="endlessWorld">
         <option value="hive">Hive Spire Tertius</option>
         <option value="ice">Frostgrave</option>
@@ -155,6 +186,24 @@
         <option value="tomb">Necropolis Kher</option>
         <option value="forge">Forge Anvilheim</option>
         <option value="warp">The Screaming Rift</option>
+        <option value="shrine">Sanctum Ecclesiarch</option>
+        <option value="ash">Ash Wastes of Gorgonne</option>
+        <option value="scrap">Scrap-Town Gorkaz</option>
+        <option value="craftworld">Craftworld Ilanthe</option>
+        <option value="sept">Sept Vash'ya</option>
+        <option value="agri">Agri-World Messor</option>
+        <option value="hulk">Space Hulk</option>
+      </select>
+      <select id="endlessFac">
+        <option value="all">Every faction</option>
+        <option value="swarm">The Swarm</option>
+        <option value="green">Greenskins</option>
+        <option value="machine">Undying Machines</option>
+        <option value="chaos">Traitors &amp; Daemons</option>
+        <option value="traitor">Traitor Legions</option>
+        <option value="tau">The Ascendancy</option>
+        <option value="eldar">The Starborn</option>
+        <option value="cult">The Brood Cult</option>
       </select>
       <button class="btn" id="endlessGo">DEPLOY</button>
       <span id="endlessBest" class="note"></span>
@@ -184,11 +233,12 @@
       <div><span>Crouch</span><kbd>C / Ctrl</kbd></div>
       <div><span>Fire / Aim</span><kbd>LMB / RMB</kbd></div>
       <div><span>Reload · Vent plasma</span><kbd>R</kbd></div>
-      <div><span>Weapons</span><kbd>1 – 5 / Wheel</kbd></div>
+      <div><span>Weapons</span><kbd>1 – 4 / Wheel</kbd></div>
       <div><span>Frag grenade</span><kbd>G / Q</kbd></div>
       <div><span>Rite of Fury</span><kbd>F</kbd></div>
+      <div><span>Class ability</span><kbd>E</kbd></div>
       <div><span>Plasma charge shot</span><kbd>hold LMB</kbd></div>
-      <div><span>Chainsword lunge</span><kbd>RMB</kbd></div>
+      <div><span>Melee lunge / heavy strike</span><kbd>RMB</kbd></div>
       <div><span>Pause</span><kbd>Esc</kbd></div>
     </div>
     <div class="note">Headshots deal double damage. Undying machines rise again unless you obliterate them. Kills fill your Fury — unleash it to slow time. <button class="btn ghost" id="unlockall" style="padding:2px 8px;font-size:11px">unlock all missions</button></div>
@@ -199,6 +249,7 @@
   <div class="sub" id="bworld"></div>
   <h1 id="btitle"></h1>
   <p id="btext"></p>
+  <div class="sub" id="bclass"></div>
   <div class="row"><button class="btn ghost" id="bback">BACK</button><button class="btn" id="bgo">DEPLOY</button></div>
 </div></div>
 
@@ -217,9 +268,10 @@
 <div id="hud">
   <div id="vignette"></div>
   <div id="dmgdirs"></div>
-  <div id="helpline">1–5 weapons · G grenade · F fury · R reload</div>
+  <div id="helpline">1–4 weapons · E ability · G grenade · F fury · R reload/vent</div>
   <div id="top"><div id="objective"></div><div id="wave"></div>
-    <div id="boss"><div id="bossname"></div><div class="bar"><div id="bossbar"></div></div></div>
+    <div id="boss"><div id="bossname"></div><div class="bar"><div id="bossbar"></div></div><div class="bar shieldbar"><div id="bossshield"></div></div></div>
+    <div id="obj"><div id="objname"></div><div class="bar"><div id="objbar"></div></div></div>
   </div>
   <div id="score">0</div>
   <div id="feed"></div>
@@ -242,13 +294,17 @@
     <div id="ammo"></div>
     <div id="heat"><div class="bar"><div id="heatbar"></div></div></div>
     <div id="nades"></div>
+    <div id="slots"></div>
   </div>
   <canvas id="radar" width="150" height="150"></canvas>
+  <div id="ability"><div id="abname"></div><div class="bar"><div id="abbar"></div></div></div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="js/core.js"></script>
 <script src="js/models.js"></script>
+<script src="js/models2.js"></script>
+<script src="js/vmodels.js"></script>
 <script src="js/worlds.js"></script>
 <script src="js/weapons.js"></script>
 <script src="js/enemies.js"></script>
