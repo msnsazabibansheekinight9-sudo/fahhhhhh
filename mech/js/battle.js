@@ -15,7 +15,7 @@ const SOUND_FOR = { mg: 'mg', ac5: 'ac', ac20: 'ac20', rac: 'rac', gauss: 'gauss
 function derive(build) {
   const c = build.cdef; const e = {}; for (const k in build.equip) e[k] = MW.equipEffect(build.equip[k]);
   const ar = e.armor, re = e.reactor, ac = e.actuator, je = e.jets, ta = e.targeting, mo = e.module;
-  const hpK = ar.hp * (re.hp || 1);
+  const hpK = ar.hp * (re.hp || 1) * 1.7; // tuned for ~10-20 s focused time-to-kill
   const st = {
     hp: { core: c.hp.core * hpK, armL: c.hp.arm * hpK, armR: c.hp.arm * hpK, legs: c.hp.leg * hpK * (ac.legHp || 1) },
     speed: c.speed * ar.speed * re.speed * ac.speed, accel: c.accel * ac.accel, turn: c.turn * ac.turn, twistMax: c.twist * DEG, twistRate: 2.2 * ac.turn,
@@ -611,7 +611,7 @@ function setupMode() {
   const mode = B.mode, W = B.world; const n = B.teamSize;
   B.score = [0, 0]; B.respawnTime = 7; B.maxTime = 600; B.target = 0;
   B.canRespawn = () => true;
-  if (mode === 'tdm') { B.target = Math.min(60, n * 3); B.respawnTime = 6; }
+  if (mode === 'tdm') { B.target = Math.min(60, n * 4); B.respawnTime = 6; }
   if (mode === 'dom') { B.target = 300; B.points = W.points.map(p => ({ x: p.x, z: p.z, name: p.name, owner: -1, prog: 0, r: 17, h: W.heightAt(p.x, p.z) })); B.points.forEach(p => { p.mesh = pointMesh(p); }); }
   if (mode === 'att') { B.respawnTime = -1; B.maxTime = 720; }
   if (mode === 'heist') { B.target = 3; const c = { x: 0, z: 0 }; B.core = { pos: new THREE.Vector3(c.x, W.heightAt(c.x, c.z) + 2, c.z), carrier: null, dropT: 0, home: new THREE.Vector3(c.x, W.heightAt(c.x, c.z) + 2, c.z) }; B.core.mesh = coreMesh(); B.scene.add(B.core.mesh); W.bases.forEach((b, i) => { const r = new THREE.Mesh(new THREE.RingGeometry(16, 18, 40), new THREE.MeshBasicMaterial({ color: TEAM_COL[i], transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false })); r.rotation.x = -Math.PI / 2; r.position.set(b.x, W.heightAt(b.x, b.z) + 0.3, b.z); B.scene.add(r); }); }
@@ -633,7 +633,7 @@ function pointMesh(p) {
 }
 function coreMesh() { const g = new THREE.Group(); const c = new THREE.Mesh(new THREE.IcosahedronGeometry(1.4, 0), new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffd02a, emissiveIntensity: 2.5, flatShading: true })); g.add(c); const h = new THREE.Mesh(new THREE.TorusGeometry(2.2, 0.12, 6, 30), new THREE.MeshBasicMaterial({ color: 0xffd02a })); g.add(h); const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 100, 8, 1, true), new THREE.MeshBasicMaterial({ color: 0xffd02a, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false })); beam.position.y = 50; g.add(beam); g.userData.c = c; g.userData.h = h; return g; }
 function makeGen(x, z, team) {
-  const W = B.world; const y = W.heightAt(x, z); const g = { isGen: true, team, alive: true, hp: 2600 * (1 + 0.45 * B.tier), maxHp: 0, c: new THREE.Vector3(x, y + 7, z), r: 6.5, x, z, name: 'Generator' }; g.maxHp = g.hp;
+  const W = B.world; const y = W.heightAt(x, z); const g = { isGen: true, team, alive: true, hp: 7000 * (1 + 0.7 * B.tier), maxHp: 0, c: new THREE.Vector3(x, y + 7, z), r: 6.5, x, z, name: 'Generator' }; g.maxHp = g.hp;
   const mesh = new THREE.Group(); mesh.position.set(x, y, z);
   const base = new THREE.Mesh(MW.mechs.geo.bbox(10, 3, 10, 0.5), new THREE.MeshStandardMaterial({ color: 0x4a4e54, metalness: 0.7, roughness: 0.4 })); base.position.y = 1.5; mesh.add(base);
   const col = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 3, 10, 12), new THREE.MeshStandardMaterial({ color: 0x2a2e34, metalness: 0.7, roughness: 0.4 })); col.position.y = 8; mesh.add(col);
@@ -899,7 +899,7 @@ MW.battle = {
       if (P.alive && !P.lowWarned && P.hp.core < P.st.hp.core * 0.3) { P.lowWarned = true; announce('CRITICAL DAMAGE', 'bad'); }
       if (!P.alive) P.lowWarned = false;
       MW.audio.loop('jetP', 'jet', P.alive && P.jet > 0.05, 0.25 * P.jet);
-      if (B.hudTargetT > 0) { B.hudTargetT -= dt; if (B.hudTargetT <= 0 || !B.hudTarget.alive) B.hudTarget = null; }
+      if (B.hudTargetT > 0) { B.hudTargetT -= dt; if (B.hudTargetT <= 0 || !B.hudTarget || !B.hudTarget.alive) B.hudTarget = null; }
     }
     updateCamera(dt);
     // listener for 3D audio

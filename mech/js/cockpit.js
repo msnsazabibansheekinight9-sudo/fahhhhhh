@@ -104,7 +104,7 @@ MW.cockpit = {
     const hmesh = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.06), new THREE.MeshBasicMaterial({ map: htex, toneMapped: false })); hmesh.position.set(0, 0.045, 0.06); hmesh.rotation.x = -0.6; hmesh.userData.keep = true; gs.add(hmesh);
     // HUD combiner glass on its mount
     add(gs, G.box(0.04, 0.12, 0.04), blackMat, -0.24, 0.08, -0.05); add(gs, G.box(0.04, 0.12, 0.04), blackMat, 0.24, 0.08, -0.05);
-    const comb = new THREE.Mesh(new THREE.PlaneGeometry(0.46, 0.3), new THREE.MeshStandardMaterial({ color: new THREE.Color(theme.hud).multiplyScalar(0.3), transparent: true, opacity: 0.12, roughness: 0.02, metalness: 1, depthWrite: false }));
+    const comb = new THREE.Mesh(new THREE.PlaneGeometry(0.46, 0.3), new THREE.MeshBasicMaterial({ color: new THREE.Color(theme.hud), transparent: true, opacity: 0.035, blending: THREE.AdditiveBlending, depthWrite: false }));
     comb.position.set(0, 0.25, -0.1); comb.rotation.x = -0.18; comb.userData.keep = true; gs.add(comb);
     add(gs, G.box(0.48, 0.012, 0.012), blackMat, 0, 0.4, -0.13);
 

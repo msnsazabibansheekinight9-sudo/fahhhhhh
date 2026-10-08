@@ -404,8 +404,8 @@ const UI = MW.ui = {
     if (it.colors) { const cv = body.querySelector('.patPrev'); const c = cv.getContext('2d'); const t = MW.tex.canvas(256); MW.tex.drawPattern(t.getContext('2d'), 256, it.pattern, it.colors); c.fillStyle = c.createPattern(t, 'repeat'); c.fillRect(0, 0, 200, 80); }
     if (it.cat !== 'title') MW.thumbs.showPreview(it, $('prevBox'));
     const bb = $('buyBtn'); if (bb) bb.onclick = () => {
-      if (it.cat === 'class' && !confirm(`Unlock ${MW.CLASS[it.cls].name} for ${MW.fmt(price)} credits?`)) return;
       if (!P().canAfford(price)) { MW.audio.play('deny'); this.toast('Not enough credits', 'bad'); return; }
+      if (it.cat === 'class' && !bb.dataset.armed) { bb.dataset.armed = '1'; bb.textContent = 'CONFIRM UNLOCK'; MW.audio.play('warn'); return; }
       P().spend(price); P().grant(it); MW.audio.play('buy'); this.toast('Purchased ' + it.name, 'good'); this.closeModal(); this.refreshTop();
       if (this.tab === 'shop') this.fillShop(); if (it.cat === 'class') { this.garageCls = it.cls; this.openTab('garage'); }
     };
@@ -506,7 +506,7 @@ const UI = MW.ui = {
     $('sQ').onchange = e => { s.quality = e.target.value; sv(); this.toast('Reload the page to apply', ''); };
     $('sVol').oninput = e => { s.volume = +e.target.value; sv(); };
     $('sMus').oninput = e => { s.music = +e.target.value; sv(); };
-    $('sReset').onclick = () => { if (confirm('Erase all credits, items, mechs and pass progress?')) { P().reset(); this.garageCls = P().data.cur; this.refreshTop(); this.openTab('play'); this.toast('Progress reset', ''); } };
+    $('sReset').onclick = e => { const btn = e.currentTarget; if (!btn.dataset.armed) { btn.dataset.armed = '1'; btn.textContent = 'Click again to erase everything'; btn.classList.add('danger'); return; } { P().reset(); this.garageCls = P().data.cur; this.refreshTop(); this.openTab('play'); this.toast('Progress reset', ''); } };
   },
 };
 
