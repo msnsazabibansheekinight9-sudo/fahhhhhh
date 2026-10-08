@@ -100,6 +100,17 @@ body.cine #skip { display:block; }
 #compass .obj { position:absolute; top:0; transform:translateX(-50%); color:var(--gold); font-size:15px; text-shadow:0 0 6px #000; }
 #compassD { position:fixed; top:42px; left:50%; transform:translateX(-50%); font-size:12px; color:var(--gold); letter-spacing:.15em; font-family:Cinzel, serif; display:none; text-shadow:0 1px 3px #000; }
 #money { position:fixed; right:24px; bottom:118px; font-family:Cinzel, serif; color:var(--gold); font-size:16px; letter-spacing:.1em; text-shadow:0 1px 4px #000; }
+#danger { position:fixed; right:24px; top:224px; width:170px; text-align:center; font-family:Cinzel, serif; font-size:11px; letter-spacing:.14em; color:var(--dim); text-shadow:0 1px 4px #000; opacity:0; transition:opacity .4s; pointer-events:none; }
+@media (max-width:620px) { #danger { top:164px; width:110px; font-size:9px; } }
+#elev .panel { width:min(560px, calc(100% - 32px)); }
+.elevBtn { display:grid; grid-template-columns:90px 1fr auto; grid-template-rows:auto auto; gap:2px 12px; width:100%; text-align:left; margin:6px 0; padding:12px 14px; background:rgba(20,22,24,.92); border:1px solid var(--line); color:var(--fg); cursor:pointer; font-family:Inter, sans-serif; }
+.elevBtn b { grid-row:1 / 3; font-family:Cinzel, serif; font-size:20px; letter-spacing:.1em; color:var(--gold); align-self:center; }
+.elevBtn span { font-size:13px; color:var(--dim); }
+.elevBtn i { grid-column:3; grid-row:1 / 3; align-self:center; font-style:normal; font-size:12px; letter-spacing:.1em; color:#9ad0ff; }
+.elevBtn:hover { border-color:var(--gold); }
+.elevBtn.here { border-color:var(--gold); background:rgba(60,50,20,.5); }
+.elevBtn.off { opacity:.55; }
+.elevBtn.off i { color:#ff6a5a; }
 #status { position:fixed; left:24px; bottom:128px; font-family:Cinzel, serif; font-size:13px; letter-spacing:.2em; color:#b080ff; text-shadow:0 1px 4px #000; }
 #veh { position:fixed; right:24px; bottom:150px; font-family:Cinzel, serif; font-size:14px; letter-spacing:.15em; color:var(--fg); display:none; }
 #scope { position:fixed; inset:0; pointer-events:none; display:none; background:radial-gradient(circle at center, transparent 0, transparent 34vmin, #000 34.4vmin); }
@@ -154,7 +165,7 @@ input[type=range] { accent-color:var(--red); width:200px; }
   <div id="health"><div class="lbl">CONDITION</div><div class="st" id="hpSt">FINE</div><canvas id="ecg" width="400" height="92"></canvas></div>
   <div id="weapon"><div class="nm" id="wName">Handgun</div><div class="am" id="wAmmo">13 <small>/ 0</small></div></div>
   <div id="timer"></div>
-  <canvas id="mini" width="340" height="340"></canvas><div id="compass"></div><div id="compassD"></div><div id="money"></div><div id="status"></div><div id="veh"></div>
+  <canvas id="mini" width="340" height="340"></canvas><div id="danger"></div><div id="compass"></div><div id="compassD"></div><div id="money"></div><div id="status"></div><div id="veh"></div>
   <div id="bossbar"><div class="n">THE LAZARUS FORM</div><div class="b"><div class="f" id="bossF"></div></div></div>
 </div>
 <div id="scope"></div>
@@ -217,7 +228,7 @@ input[type=range] { accent-color:var(--red); width:200px; }
 <div id="map" class="screen">
   <canvas id="mapC"></canvas>
   <div id="mapTop"><div class="mapTitle" id="mapTitle">Ashgrove County</div><div class="mapSub" id="mapSub"></div></div>
-  <div id="mapTabs"><button data-mtab="county" class="on">County</button><button data-mtab="manor">Manor</button></div>
+  <div id="mapTabs"><button data-mtab="county" class="on">County</button><button data-mtab="manor">Manor</button><button data-mtab="nadir" style="display:none">Site NADIR</button></div>
   <div id="mapZoom"><button id="mzIn" aria-label="Zoom in">+</button><button id="mzOut" aria-label="Zoom out">−</button><button id="mzMe" aria-label="Centre on me">◎</button></div>
   <div id="mapLegend"></div>
   <div id="mapTip"></div>
@@ -236,6 +247,11 @@ input[type=range] { accent-color:var(--red); width:200px; }
   <div class="cols"><div><div style="font-family:Cinzel,serif;letter-spacing:.2em;margin-bottom:8px" id="stashCarry">CARRYING</div><div id="stashInv"></div></div><div><div style="font-family:Cinzel,serif;letter-spacing:.2em;margin-bottom:8px">IN THE BOX</div><div id="stashBox"></div></div></div>
   <div style="margin-top:14px;text-align:right;font-size:12px;color:var(--dim)">ESC — CLOSE</div>
 </div></div>
+<div id="elev" class="screen" style="background:rgba(0,0,0,.78)"><div class="panel">
+  <h3>Freight Elevator</h3><div style="color:var(--dim);font-size:13px;margin:-6px 0 10px">SITE NADIR · JOINT U.S. ARMY / VELGEN BIOMEDICAL FACILITY</div>
+  <div id="elevList"></div>
+  <div style="margin-top:12px;text-align:right;font-size:12px;color:var(--dim)">ESC — CLOSE</div>
+</div></div>
 <div id="death" class="screen"><h1>YOU DIED</h1><div class="menu"><button id="bRetry">Continue from last save</button><button id="bTitle2">Title</button></div></div>
 <div id="end" class="screen"><div class="txt" id="endT"></div><div class="stats" id="endS"></div><div class="rank" id="endR"></div><div class="menu" style="margin-top:20px"><button id="bTitle3">Return to title</button></div></div>
 <div id="loading">ENTERING THE MANOR…</div>
@@ -251,8 +267,10 @@ input[type=range] { accent-color:var(--red); width:200px; }
 <script src="js/fx.js"></script>
 <script src="js/enemies.js"></script>
 <script src="js/creatures.js"></script>
+<script src="js/mutants.js"></script>
 <script src="js/vehicles.js"></script>
 <script src="js/story.js"></script>
+<script src="js/bunker.js"></script>
 <script src="js/mapui.js"></script>
 <script src="js/game.js"></script>
 </body>

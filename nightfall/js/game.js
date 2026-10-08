@@ -15,11 +15,12 @@ NF.game = (function () {
     smg: { name: 'MP5-K', cap: 32, dmg: 9, rate: 0.075, reload: 1.9, spread: [0.075, 0.025], recoil: 0.014, long: true, auto: true },
     rifle: { name: 'Remington 700', cap: 5, dmg: 110, rate: 1.15, reload: 2.6, spread: [0.03, 0.0004], recoil: 0.12, long: true, scope: true },
     gl: { name: 'M79 Launcher', cap: 1, dmg: 0, rate: 1.0, reload: 1.6, spread: [0.02, 0.01], recoil: 0.1, long: true, proj: 'gl' },
-    rpg: { name: 'M72 Rocket', cap: 1, dmg: 0, rate: 1.0, reload: 3.0, spread: [0.01, 0.005], recoil: 0.14, long: true, proj: 'rpg' }
+    rpg: { name: 'M72 Rocket', cap: 1, dmg: 0, rate: 1.0, reload: 3.0, spread: [0.01, 0.005], recoil: 0.14, long: true, proj: 'rpg' },
+    rail: { name: 'XR-9 Railgun', cap: 4, dmg: 520, rate: 1.25, reload: 2.8, spread: [0.012, 0.0005], recoil: 0.18, long: true, rail: true }
   };
-  var WORDER = ['handgun', 'shotgun', 'magnum', 'smg', 'rifle', 'gl', 'rpg'];
-  var AMMO_OF = { hg_ammo: 'handgun', sg_ammo: 'shotgun', mag_ammo: 'magnum', smg_ammo: 'smg', rifle_ammo: 'rifle', gl_ammo: 'gl', rpg_ammo: 'rpg' };
-  var AMMO_NAME = { handgun: 'Handgun Ammo', shotgun: 'Shotgun Shells', magnum: 'Magnum Rounds', smg: 'SMG Ammo', rifle: 'Rifle Rounds', gl: 'Launcher Grenades', rpg: 'Rocket' };
+  var WORDER = ['handgun', 'shotgun', 'magnum', 'smg', 'rifle', 'gl', 'rpg', 'rail'];
+  var AMMO_OF = { hg_ammo: 'handgun', sg_ammo: 'shotgun', mag_ammo: 'magnum', smg_ammo: 'smg', rifle_ammo: 'rifle', gl_ammo: 'gl', rpg_ammo: 'rpg', rail_ammo: 'rail' };
+  var AMMO_NAME = { handgun: 'Handgun Ammo', shotgun: 'Shotgun Shells', magnum: 'Magnum Rounds', smg: 'SMG Ammo', rifle: 'Rifle Rounds', gl: 'Launcher Grenades', rpg: 'Rocket', rail: 'Rail Slugs' };
   var CONSUMABLE = ['herb', 'red_herb', 'blue_herb', 'mixed', 'mixed_gr', 'spray', 'powder'];
   // weapon stats with the player's upgrades applied
   function WS(w) {
@@ -30,7 +31,7 @@ NF.game = (function () {
   }
   var P = G.player = {
     pos: new V3(0, 0, 2.2), yaw: 0, hp: 100, alive: true, invuln: 0, ph: 0, speed: 0, grabbedBy: null, grabT: 0, flinch: 0,
-    weapon: 'handgun', owned: { handgun: true, shotgun: false, magnum: false, smg: false, rifle: false, gl: false, rpg: false }, mag: { handgun: 13, shotgun: 0, magnum: 0, smg: 0, rifle: 0, gl: 0, rpg: 0 }, ammo: { handgun: 18, shotgun: 0, magnum: 0, smg: 0, rifle: 0, gl: 0, rpg: 0 },
+    weapon: 'handgun', owned: { handgun: true, shotgun: false, magnum: false, smg: false, rifle: false, gl: false, rpg: false, rail: false }, mag: { handgun: 13, shotgun: 0, magnum: 0, smg: 0, rifle: 0, gl: 0, rpg: 0, rail: 0 }, ammo: { handgun: 18, shotgun: 0, magnum: 0, smg: 0, rifle: 0, gl: 0, rpg: 0, rail: 0 },
     inv: { herb: 0, mixed: 0, spray: 0, key_raven: 0, crest: 0, keycard: 0, red_herb: 0, blue_herb: 0, mixed_gr: 0, powder: 0, fuse: 0, flare: 0, armory_key: 0, fuel: 0 }, files: [], collect: { dogtag: 0, sample: 0 }, claimed: {},
     money: 0, treasures: [], upg: {}, slots: 8, stash: {}, poison: 0, grenades: 0, vest: false, inVeh: null,
     fireCd: 0, reloadT: 0, knifeT: 0, healT: 0, recoil: 0, focus: 0, flashOn: true, deadT: 0, stepPh: 0,
@@ -54,15 +55,15 @@ NF.game = (function () {
     flash.shadow.mapSize.set(1024, 1024); flash.shadow.camera.near = 0.3; flash.shadow.camera.far = 24; flash.shadow.bias = -0.0005;
     scene.add(flash); scene.add(flash.target);
     W.build(scene); FX.init(scene); E.init(scene);
-    NF.terrain.init(scene); NF.creatures.init(scene); NF.vehicles.init(scene);
+    NF.terrain.init(scene); NF.creatures.init(scene); NF.vehicles.init(scene); NF.bunker.init(scene);
     initEnv();
     rig = Mo.mara(); rig.root.rotation.order = 'YXZ'; scene.add(rig.root);
     gun.handgun = Mo.weapon('handgun'); gun.magnum = Mo.weapon('magnum'); gun.shotgun = Mo.weapon('shotgun'); gun.knife = Mo.weapon('knife');
     [gun.handgun, gun.magnum, gun.knife].forEach(function (g) { g.rotation.x = PI / 2; g.position.set(0, -0.085, 0.01); rig.J.wrR.add(g); g.visible = false; });
-    ['shotgun', 'smg', 'rifle', 'gl', 'rpg'].forEach(function (w) { if (!gun[w]) gun[w] = Mo.weapon(w); rig.J.chest.add(gun[w]); gun[w].visible = false; });
+    ['shotgun', 'smg', 'rifle', 'gl', 'rpg', 'rail'].forEach(function (w) { if (!gun[w]) gun[w] = Mo.weapon(w); rig.J.chest.add(gun[w]); gun[w].visible = false; });
     var lamp = new THREE.Mesh(Mo.box(0.05, 0.05, 0.05), new THREE.MeshStandardMaterial({ color: '#fff', emissive: '#fff4d0', emissiveIntensity: 2 })); lamp.position.set(-0.1, 0.22, 0.16); rig.J.chest.add(lamp);
     makeTeo(); buildVM();
-    NF.mapui.init(function () { var r = W.roomAt(P.pos.x, P.pos.z); return { P: P, flags: flags, obj: objTarget(), heading: viewHeading(), inManor: !!(r && W.rooms.indexOf(r) >= 0), hasKey: hasKey, canTravel: !!(flags.escaped && !P.inVeh && r && r.safe && W.rooms.indexOf(r) < 0 && !flags.holding && !E.list.some(function (e) { return !e.dead && e.alert && e.state !== 'dormant' && e.pos.distanceTo(P.pos) < 12; })), travel: fastTravel }; });
+    NF.mapui.init(function () { var r = W.roomAt(P.pos.x, P.pos.z); return { P: P, flags: flags, obj: objTarget(), heading: viewHeading(), inManor: !!(r && W.rooms.indexOf(r) >= 0), inBunker: NF.bunker.active, hasKey: hasKey, canTravel: !!(flags.escaped && !P.inVeh && r && r.safe && W.rooms.indexOf(r) < 0 && !flags.holding && !E.list.some(function (e) { return !e.dead && e.alert && e.state !== 'dormant' && e.pos.distanceTo(P.pos) < 12; })), travel: fastTravel }; });
     try { cam.fps = localStorage.getItem('nf_view') === 'fps'; } catch (e) { }
     window.addEventListener('resize', function () { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); if (vmCam) { vmCam.aspect = camera.aspect; vmCam.updateProjectionMatrix(); } });
     bindInput(); bindUI();
@@ -125,7 +126,7 @@ NF.game = (function () {
       else if (k === 'v') toggleView();
       else if (k === 'h') quickHeal();
       else if (k === 'g') throwGrenade();
-      else if (k >= '1' && k <= '7') equip(WORDER[+k - 1]);
+      else if (k >= '1' && k <= '8') equip(WORDER[+k - 1]);
     });
     document.addEventListener('keyup', function (e) { keys[e.key.toLowerCase()] = false; });
     window.addEventListener('blur', function () { keys = {}; mouse.aim = mouse.fire = false; if (mode === 'play') openUI('pause'); });
@@ -216,6 +217,7 @@ NF.game = (function () {
   // ------------------------------------------------------------------ player
   function hurtPlayer(dmg, src, kind) {
     if (!P.alive || P.invuln > 0 || mode !== 'play') return;
+    if (src && src.dmgMul) dmg *= src.dmgMul;
     if (P.vest) dmg *= P.vest === 'raven' ? 0.5 : 0.75;
     if (P.inVeh) { dmg *= 0.4; kind = 'hit'; }
     P.hp -= dmg; P.flinch = 1; P.invuln = kind === 'grab' ? 1.6 : 0.8; P.reloadT = 0; P.healT = 0;
@@ -248,6 +250,7 @@ NF.game = (function () {
     var o = camera.position.clone(), fwd = new V3(); camera.getWorldDirection(fwd);
     var skip = Math.max(0.2, camera.position.distanceTo(P.pos.clone().setY(P.pos.y + 1.5)) - 0.4);
     var right = new V3().crossVectors(fwd, camera.up).normalize(), up = new V3().crossVectors(right, fwd).normalize();
+    if (d.rail) { railShot(o, fwd, skip, d); P.recoil = 1; vmKick(w); cam.pitch = Math.min(1.0, cam.pitch + d.recoil); G.shake(0.5); return; }
     var n = d.pellets || 1, anyHit = false, crit = w === 'handgun' && P.focus > 0.95 && Math.random() < 0.25;
     for (var i = 0; i < n; i++) {
       var a = Math.random() * PI * 2, r = Math.sqrt(Math.random()) * spread;
@@ -271,6 +274,20 @@ NF.game = (function () {
     AU.gun(w === 'smg' ? 'handgun' : w === 'rifle' ? 'magnum' : w); E.noise(P.pos, w === 'handgun' || w === 'smg' ? 22 : 34);
     cam.pitch = Math.min(1.0, cam.pitch + d.recoil * (0.7 + Math.random() * 0.5)); cam.yaw += (Math.random() - .5) * d.recoil * 0.4;
     P.recoil = 1; P.focus *= w === 'handgun' ? 0.35 : 0.1; G.shake(d.recoil * (cam.fps ? 0.8 : 2)); vmKick(w);
+  }
+  // the XR-9: one slug through every body in a line
+  function railShot(o, fwd, skip, d) {
+    var start = o.clone().addScaledVector(fwd, skip), wd = W.ray(start, fwd, 120), left = wd, hitSet = [], pos = start.clone(), n = 0;
+    for (var g = 0; g < 12 && left > 0.2; g++) {
+      var h = E.raycast(pos, fwd, left); if (!h) break;
+      if (hitSet.indexOf(h.e) < 0) { hitSet.push(h.e); E.damage(h.e, d.dmg * Math.pow(0.85, n), h.part, h.point, fwd, 'rail'); FX.blood(h.point, fwd.clone(), 24); n++; }
+      var adv = h.t + 0.5; pos.addScaledVector(fwd, adv); left -= adv;
+    }
+    if (n) stats.hits++;
+    var mz = muzzleOf('rail'), end = start.clone().addScaledVector(fwd, wd);
+    NF.mutants.tracer(mz, end, '#70d8ff', 320); NF.mutants.tracer(mz.clone().add(new V3(0, 0.01, 0)), end, '#ffffff', 120);
+    FX.muzzle(mz, fwd, true); FX.sparks(end, fwd.clone().negate()); AU.gun('magnum'); AU.boom(end, 1); E.noise(P.pos, 40);
+    if (n > 1) toast(n + ' TARGETS PIERCED');
   }
   function knife() {
     if (P.knifeT > 0 || P.reloadT > 0) return;
@@ -352,7 +369,9 @@ NF.game = (function () {
     if (moving) input.normalize();
     var targetV = input.multiplyScalar(spd);
     P.vel = P.vel || new V3(); P.vel.lerp(targetV, 1 - Math.exp(-dt * 10));
-    if (P.knock) { P.vel.add(P.knock); P.knock.multiplyScalar(Math.exp(-dt * 6)); if (P.knock.length() < 0.1) P.knock = null; }
+    // knockback is a short shove applied to position; it never feeds into velocity, so it can't build up into a slide
+    if (P.knock) { P.pos.addScaledVector(P.knock, dt); P.knock.multiplyScalar(Math.exp(-dt * 8)); if (P.knock.lengthSq() < 0.04) P.knock = null; }
+    if (P.vel.lengthSq() > 36) P.vel.setLength(6);
     P.pos.addScaledVector(P.vel, dt); W.collide(P.pos, 0.3, 0.4);
     E.list.forEach(function (e) { if (e.dead || e.state === 'dormant') return; var dx = P.pos.x - e.pos.x, dz = P.pos.z - e.pos.z, d2 = dx * dx + dz * dz, m = 0.3 + e.rad; if (d2 < m * m && d2 > 1e-6) { var d = Math.sqrt(d2); P.pos.x += dx / d * (m - d); P.pos.z += dz / d * (m - d); } });
     W.collide(P.pos, 0.3, 0.4);
@@ -473,7 +492,8 @@ NF.game = (function () {
     smg: { hip: [0.16, -0.19, -0.36], aim: [0, -0.105, -0.44], gripR: [0, -0.03, -0.02], gripL: [0, -0.05, 0.13] },
     rifle: { hip: [0.16, -0.2, -0.36], aim: [0, -0.15, -0.3], gripR: [0, -0.01, -0.12], gripL: [0, 0.0, 0.32] },
     gl: { hip: [0.16, -0.2, -0.36], aim: [0, -0.115, -0.42], gripR: [0, -0.02, 0.0], gripL: [0, 0.0, 0.26] },
-    rpg: { hip: [0.2, -0.15, -0.36], aim: [0.1, -0.16, -0.34], gripR: [0, -0.04, 0.05], gripL: [0, -0.04, 0.25] }
+    rpg: { hip: [0.2, -0.15, -0.36], aim: [0.1, -0.16, -0.34], gripR: [0, -0.04, 0.05], gripL: [0, -0.04, 0.25] },
+    rail: { hip: [0.16, -0.2, -0.36], aim: [0, -0.12, -0.38], gripR: [0, -0.03, -0.02], gripL: [0, -0.01, 0.3] }
   };
   function vmActive() { return !!(vmScene && cam.fps && P.alive && mode !== 'title' && mode !== 'cine' && mode !== 'intro' && mode !== 'end' && mode !== 'dead' && !P.inVeh && !(WEAP[P.weapon].scope && mouse.aim && camera.fov < 30)); }
   function buildVM() {
@@ -647,13 +667,16 @@ NF.game = (function () {
     if (!flags.escaped) return;
     // ---- Act 2: Ashgrove County
     var poi = NF.terrain.nearestPoi(P.pos.x, P.pos.z);
-    if (poi && G.lastPoi !== poi.id) { G.lastPoi = poi.id; if (poi.id !== 'manor') areaTitle(poi.name, poi.id === 'town' ? 'Pop. 2,140' : poi.id === 'airfield' ? 'Evac point' : 'Ashgrove County'); flags.disc = flags.disc || {}; flags.disc[poi.id] = true; }
+    if (poi && G.lastPoi !== poi.id) { G.lastPoi = poi.id; if (poi.id !== 'manor') areaTitle(poi.name, (poi.id === 'town' ? 'Pop. 2,140' : poi.id === 'airfield' ? 'Evac point' : poi.id === 'nadir' ? 'U.S. Army · Restricted' : 'Ashgrove County') + ' · ' + dangerTag(poi.danger)); if (poi.id === 'nadir' && !flags.greavesSeen) { flags.greavesSeen = true; say([['HOLLIS (radio)', 'Camp Greaves? Voss, that post went dark in August. Velgen trucks went in and never came out.', 4.2], ['HOLLIS (radio)', 'Whatever is under that camp, it is worse than anything up top. Do not go down there unless you are loaded for it.', 4.4]]); } flags.disc = flags.disc || {}; flags.disc[poi.id] = true; }
     if (!poi) G.lastPoi = null;
     NF.terrain.pois.forEach(function (p) { if (Math.hypot(P.pos.x - p.x, P.pos.z - p.z) < p.r + 160) { flags.disc = flags.disc || {}; flags.disc[p.id] = true; } });
     if (id === 'room_church' && flags.damPower && !flags.teoFight) teoScene();
+    if (NF.bunker.active) nadirTriggers(id);
     if (G.hold) holdTick();
     if (flags.defend && !flags.beacon) defendTick();
   }
+  function dangerTag(dg) { var T2 = NF.terrain; return '<span style="color:' + T2.DANGER_COLS[dg] + '">' + '☠'.repeat(Math.min(5, dg)) + ' ' + T2.DANGER_NAMES[dg] + '</span>'; }
+  G.dangerTag = dangerTag;
   function areaTitle(name, sub) { var el = $('areaName'); el.innerHTML = name + '<small>' + (sub || '') + '</small>'; el.style.opacity = 1; clearTimeout(G.atT); G.atT = setTimeout(function () { el.style.opacity = 0; }, 3800); }
   // ------------------------------------------------------------------ act 2
   var heli = null;
@@ -827,7 +850,8 @@ NF.game = (function () {
       { pos: [-2.5, 0.5, 56.5], look: [0, 3.4, 61.5], dur: 3.0, lines: [['MARA', 'You did this to yourself...', 2.4]] }
     ], function () { b.state = 'walk'; b.alert = true; $('bossbar').style.display = 'block'; AU.music('boss'); objective('boss'); hint('Shoot the glowing eyes and the exposed heart.', 6); });
   }
-  G.event = function (name) {
+  G.event = function (name, arg) {
+    if (nadirEvent(name, arg)) return;
     if (act2Event(name)) return;
     if (name === 'bossPhase2') {
       say([['CRANE', 'MORE... I need MORE!', 2.2]]);
@@ -841,6 +865,120 @@ NF.game = (function () {
     }
     if (name === 'bossDead') { flags.bossDead = true; $('bossbar').style.display = 'none'; later(function () { startEscape(); autosave(); }, 2800); }
   };
+  // ------------------------------------------------------------------ Site NADIR
+  function nadirObjKey() {
+    if (!hasK('pass_b2')) return 'nadir';
+    if (!flags.nadirPower) return flags.holding === 'nadir' ? 'nadirHold' : 'nadirB2';
+    if (!hasK('omega')) return 'nadirB3';
+    if (!flags.nadirDead) return 'nadirB4';
+    return null;
+  }
+  function showNadirObj() {
+    if (!NF.bunker.active) return;
+    var k = nadirObjKey(); if (!k) { objective(flags.obj); return; }
+    $('objT').textContent = S.objectives[k]; var o = $('obj'); o.style.opacity = 1; clearTimeout(G.objT); G.objT = setTimeout(function () { o.style.opacity = 0.35; }, 6000);
+  }
+  G.showNadirObj = showNadirObj;
+  var LIFT_REQ = [null, 'pass_b2', 'power', 'omega'];
+  function liftBlock(i) {
+    if (i < 0 || i === 0) return null;
+    if (i === 1 && !hasK('pass_b2')) return 'Needs Level 2 clearance';
+    if (i === 2 && !flags.nadirPower) return 'No power below B2 — restart the reactor';
+    if (i === 3 && !hasK('omega')) return 'Needs the Omega key card';
+    return null;
+  }
+  function openElevator() {
+    openUI('elev');
+    var here = NF.bunker.active ? NF.bunker.level : -1, list = $('elevList'); list.innerHTML = '';
+    var rows = [[-1, 'SURFACE', 'Camp Greaves', 5]].concat(NF.bunker.LEVEL_DEFS.map(function (d, i) { return [i, d.short, d.name.split('· ')[1], NF.bunker.DANGER[i]]; }));
+    rows.forEach(function (r) {
+      var block = liftBlock(r[0]), b = document.createElement('button'); b.className = 'elevBtn' + (r[0] === here ? ' here' : '') + (block ? ' off' : '');
+      var depth = r[0] < 0 ? 'ground level' : '−' + NF.bunker.LEVEL_DEFS[r[0]].depth + ' m';
+      b.innerHTML = '<b>' + r[1] + '</b><span>' + r[2] + ' · ' + depth + '</span><span>' + dangerTag(r[3]) + '</span><i>' + (r[0] === here ? 'YOU ARE HERE' : block || 'Go') + '</i>';
+      b.onclick = function () { if (r[0] === here) { closeUI(); return; } if (block) { AU.click(); toast(block); return; } travelLevel(r[0]); };
+      list.appendChild(b);
+    });
+  }
+  function travelLevel(i) {
+    closeUI(); mode = 'cine'; fade(1, 0.6); AU.rumble(P.pos); AU.thud(P.pos, 0.8);
+    later(function () {
+      if (i < 0) {
+        NF.bunker.leave();
+        var gt = NF.terrain.placements.filter(function (o) { return o.kind === 'nadirgate'; })[0];
+        P.pos.set(gt.x, 0, gt.z - 2.5); NF.terrain.update(P.pos.x, P.pos.z, flags, true); P.pos.y = W.ground(P.pos.x, P.pos.z);
+        P.yaw = 0; cam.yaw = 0; objective(flags.obj); areaTitle('Camp Greaves', 'U.S. Army · Restricted · ' + dangerTag(5));
+      } else {
+        if (NF.bunker.active && NF.bunker.level !== i) NF.bunker.leave();
+        NF.bunker.enter(i, flags); var a = NF.bunker.arrival(i);
+        P.pos.set(a.x, 0, a.z); P.yaw = 0; cam.yaw = 0; cam.pitch = -0.05;
+        var def = NF.bunker.LEVEL_DEFS[i]; areaTitle(def.name, 'Site NADIR · −' + def.depth + ' m · ' + dangerTag(NF.bunker.DANGER[i]));
+        if (!flags.nadirIn) { flags.nadirIn = true; later(function () { say([['MARA', 'Dead soldiers. Dozens of them. Whatever happened down here, it happened fast.', 3.6], ['MARA', 'Hollis said this was the Army\'s. The badges say Velgen too.', 3]]); }, 1600); }
+        if (i === 3 && !flags.nadirB4) { flags.nadirB4 = true; later(function () { say([['', '(The floor is warm. Something below breathes, slow and enormous.)', 3.6]]); }, 1600); }
+        later(showNadirObj, 2200);
+      }
+      P.vy = 0; mode = 'play'; fade(0, 1.4); autosave();
+    }, 1500);
+  }
+  function nadirTriggers(id) {
+    if (id === 'nx2_arena' && !flags.goliathAwake) { var g = E.byId('nx_goliath'); if (g && !g.dead && g.state === 'sleep') { g.state = 'roar'; g.t = 0; nadirEvent('goliathWake', g); } }
+    if (id === 'nx3_core' && !flags.nadirFight && !flags.nadirDead) { var n = E.byId('nx_nadir'); if (n && !n.dead) nadirEvent('nadirWake', n); }
+  }
+  function nadirDrop(id, type, pos) { flags.ndrop = flags.ndrop || {}; flags.ndrop[id] = { t: type, x: pos.x, z: pos.z }; NF.bunker.addItem(id, type, pos.x, pos.z); }
+  function nadirEvent(name, arg) {
+    if (name === 'nadirLift') { openElevator(); return true; }
+    if (name === 'nadirDoor') {
+      var d = arg; if (d.open) return true;
+      if (d.lock === 'arena') { say([['', '(CONTAINMENT SEAL — SUBJECT G-7. OVERRIDE ACCEPTED.)', 2.6], ['MARA', 'Whatever G-7 is, it has the Omega card.', 2.6]]); }
+      else if (d.lock === 'core') { say([['', '(BLAST DOOR — BIOLOGICAL HAZARD BEYOND. OVERRIDE ACCEPTED.)', 2.6]]); }
+      else if (d.lock.indexOf('flag:') === 0) { if (!flags[d.lock.slice(5)]) { AU.door(P.pos, true); toast(d.msg); return true; } }
+      else if (!P.inv[d.lock] && !flags['used_' + d.lock]) { AU.door(P.pos, true); toast(d.msg); return true; }
+      else { flags['used_' + d.lock] = true; toast('Access granted.'); }
+      NF.bunker.openDoor(d); flags.ndoors = flags.ndoors || {}; flags.ndoors[d.id] = 1; return true;
+    }
+    if (name === 'nadirReactor') {
+      if (flags.nadirPower) { toast('The reactor hums. The elevator has power.'); return true; }
+      if (flags.holding) return true;
+      var L = NF.bunker.current(), rs = L.reactorSpot;
+      say([['', '(REACTOR START SEQUENCE INITIATED. COOLANT PRESSURE RISING.)', 3], ['MARA', 'And everything on this floor just heard that.', 2.6]]);
+      startHold('nadir', new V3(rs.x, 0, rs.z - 6), 75, ['zombie', 'zombie', 'lasher', 'spawnling', 'bloater', 'skinner'], null, function () {
+        flags.nadirPower = true; L.powered = true; AU.music(null); toast('REACTOR ONLINE'); say([['', '(POWER RESTORED. ELEVATOR SERVICE TO B3 AVAILABLE.)', 3]]); showNadirObj(); autosave();
+      });
+      G.hold.spawn = function () { return NF.bunker.spawnPoint(P.pos, 9, 24); };
+      showNadirObj(); return true;
+    }
+    if (name === 'captainDead') { nadirDrop('nx_pass_b2', 'pass_b2', arg.pos); toast('Captain Holt dropped something.'); later(function () { say([['MARA', 'Holt. "Level 2 clearance". That\'s my ticket down.', 3]]); }, 1200); return true; }
+    if (name === 'goliathWake') {
+      if (flags.goliathAwake) return true; flags.goliathAwake = true; var g2 = arg; g2.alert = true; G.bossRef = g2;
+      $('bossbar').querySelector('.n').textContent = 'GOLIATH — SUBJECT G-7'; $('bossbar').style.display = 'block'; AU.music('boss'); G.shake(1);
+      hint('The plating stops bullets from the front. Shoot the glowing heart on its back, or make it charge into a wall.', 8); return true;
+    }
+    if (name === 'goliathDead') {
+      flags.goliathDead = true; G.bossRef = null; $('bossbar').style.display = 'none'; AU.music(null);
+      nadirDrop('nx_omega', 'omega', arg.pos.clone().add(new V3(1, 0, 1))); toast('Bounty target down. GOLIATH dropped the Omega key card.'); autosave(); return true;
+    }
+    if (name === 'nadirWake') {
+      if (flags.nadirFight) return true; flags.nadirFight = true; var n = arg; n.state = 'hurt'; n.t = 0; n.alert = true; G.bossRef = n;
+      $('bossbar').querySelector('.n').textContent = 'NADIR'; $('bossbar').style.display = 'block'; AU.music('boss'); AU.roar(n.pos.clone().setY(6)); G.shake(1.4);
+      say([['MARA', 'That\'s it. That\'s what\'s been calling them.', 2.6]]);
+      hint('Watch for red rings — that is where an arm will land. Shoot the three eyes to break the ribs open, then the heart.', 9); return true;
+    }
+    if (name === 'nadirPhase2') { say([['', '(The ribcage splits open. The heart is exposed.)', 3]]); hint('The heart is open. Hit it with everything.', 6); return true; }
+    if (name === 'nadirDead') {
+      flags.nadirDead = true; G.bossRef = null; $('bossbar').style.display = 'none'; AU.music(null);
+      E.list.forEach(function (x) { if (x.type === 'spawnling' && !x.dead) E.damage(x, 999, 'body', x.pos.clone().setY(0.4), new V3(0, 1, 0), 'explosive'); });
+      var L2 = NF.bunker.current(); if (L2) L2.doors.forEach(function (d2) { if (d2.lock === 'flag:nadirDead' && !d2.open) NF.bunker.openDoor(d2); });
+      later(function () { say([['', '(Across the county, every one of them stops. Just for a moment. Then they keep coming — slower now. Alone.)', 5], ['MARA', 'The vault opened. Holt said there was something in there for me.', 3]]); }, 2500);
+      toast('NADIR destroyed — claim the bounty from the Peddler'); autosave(); return true;
+    }
+    return false;
+  }
+  function dangerHud() {
+    var el = $('danger'); if (!el) return;
+    if (!flags.escaped || mode === 'title' || mode === 'end') { el.style.opacity = 0; return; }
+    var room = W.roomAt(P.pos.x, P.pos.z), dg = room && W.rooms.indexOf(room) >= 0 ? 3 : NF.terrain.dangerAt(P.pos.x, P.pos.z);
+    if (G.lastDanger !== dg) { G.lastDanger = dg; el.innerHTML = 'DANGER ' + dangerTag(dg); }
+    el.style.opacity = mode === 'play' ? 1 : 0.4;
+  }
   function startEscape() {
     if (G.escapeT !== undefined) return;
     G.escapeT = 150; $('timer').style.display = 'block'; objective('escape'); AU.music('chase');
@@ -871,20 +1009,22 @@ NF.game = (function () {
   var RADIO_HINT = { millbrook: 'Millbrook, Voss. West of town. Find Doyle.', armory: 'Armory locker is at the back of the station.', fuel: 'Diesel at Harlan Farm, in the barn.', relay: 'Fuse and fuel into the relay generator. Crow Ridge, east of town.', dam: 'Blackwater Dam. The turbine controls are on top of the dam.', church: 'St. Agnes Church. The flare gun.', override: 'The Velgen Field Station, far south-east. Get that override.', airfield: 'Airfield helipad. Fire the flare.' };
   function startHold(id, center, secs, mix, objKey, done) {
     G.hold = { id: id, c: center, t: secs, wave: 2, n: 0, mix: mix, done: done }; flags.holding = id;
-    objective(objKey); $('timer').style.display = 'block'; AU.music('chase'); AU.thud(P.pos, 1);
+    if (objKey) objective(objKey); $('timer').style.display = 'block'; AU.music('chase'); AU.thud(P.pos, 1);
   }
   function holdTick() {
     var h = G.hold, dt = G.lastDt || 1 / 60, dist = Math.hypot(P.pos.x - h.c.x, P.pos.z - h.c.z);
     if (dist < 50) h.t -= dt; else if (Math.random() < 0.01) toast('Get back — the timer only runs while you hold the area!');
-    h.wave -= dt; $('timer').textContent = (h.id === 'dam' ? 'TURBINES ' : 'DOWNLOAD ') + Math.max(0, Math.ceil(h.t)) + 's';
+    h.wave -= dt; $('timer').textContent = (h.id === 'dam' ? 'TURBINES ' : h.id === 'nadir' ? 'REACTOR ' : 'DOWNLOAD ') + Math.max(0, Math.ceil(h.t)) + 's';
     if (h.wave <= 0 && E.list.filter(function (e) { return !e.dead && e.alert; }).length < 20) {
       h.wave = 7; h.n++;
       for (var i = 0; i < 3 + Math.min(4, h.n); i++) {
         var a = Math.random() * PI * 2, rr = 26 + Math.random() * 10, x = h.c.x + Math.cos(a) * rr, z = h.c.z + Math.sin(a) * rr;
+        if (h.spawn) { var sp2 = h.spawn(); if (!sp2) continue; x = sp2.x; z = sp2.z; }
         var ty = h.mix[(Math.random() * h.mix.length) | 0];
         if (NF.terrain.inWater && NF.terrain.inWater(x, z)) continue;
         var e = E.spawn(ty, h.id + 'w' + h.n + '_' + i, x, z, { alert: true, weapon: 'axe', variant: (Math.random() * 8) | 0, revenant: Math.random() < 0.2 });
         e.alert = true; e.noDrop = Math.random() < 0.6; if (e.type === 'skinner') e.lastHeard = P.pos.clone();
+        if (h.spawn) { e.far = true; e.bunker = NF.bunker.level; }
       }
     }
     if (h.t <= 0) { G.hold = null; flags.holding = null; $('timer').style.display = 'none'; AU.music(null); h.done(); }
@@ -963,7 +1103,7 @@ NF.game = (function () {
     var r = Math.random();
     later(function () {
       if (r < 0.35) dropAt(e.pos, 'money', 50 * (1 + (Math.random() * (e.type === 'zombie' ? 4 : 12) | 0)));
-      else if (r < 0.6) { var owned = WORDER.filter(function (w) { return P.owned[w] && w !== 'rpg' && w !== 'gl'; }); var w = owned[(Math.random() * owned.length) | 0]; var t = { handgun: 'hg_ammo', shotgun: 'sg_ammo', magnum: 'mag_ammo', smg: 'smg_ammo', rifle: 'rifle_ammo' }[w]; dropAt(e.pos, t, NF.terrain.defaultAmount(t)); }
+      else if (r < 0.6) { var owned = WORDER.filter(function (w) { return P.owned[w] && w !== 'rpg' && w !== 'gl' && w !== 'rail'; }); var w = owned[(Math.random() * owned.length) | 0]; var t = { handgun: 'hg_ammo', shotgun: 'sg_ammo', magnum: 'mag_ammo', smg: 'smg_ammo', rifle: 'rifle_ammo' }[w]; dropAt(e.pos, t, NF.terrain.defaultAmount(t)); }
       else if (r < 0.66) dropAt(e.pos, 'powder', 1);
       else if (r < 0.7) dropAt(e.pos, 'herb', 1);
     }, 900);
@@ -1064,6 +1204,7 @@ NF.game = (function () {
     var fl = $('invFiles'); fl.innerHTML = P.files.length ? '' : '<div style="color:var(--dim)">No files found yet.</div>';
     P.files.forEach(function (id) { var bb = document.createElement('button'); bb.className = 'small'; bb.style.display = 'block'; bb.style.margin = '0 0 8px'; bb.textContent = S.files[id].title; bb.onclick = function () { readFile(id); }; fl.appendChild(bb); });
   }
+  function hasK(k) { return P.inv[k] > 0 || !!flags['used_' + k]; }
   function buildQuests() {
     var f = flags, k = f.killed || {};
     var story = [
@@ -1082,6 +1223,11 @@ NF.game = (function () {
     });
     html += '<div style="font-family:Cinzel,serif;letter-spacing:.2em;color:var(--gold);margin:14px 0 4px">SIDE QUESTS</div>';
     html += '<div>🏷️ Raven Unit dog tags: ' + (P.collect.dogtag || 0) + ' / 6' + (P.claimed.tags ? ' ✔' : '') + '</div><div>🧪 Velgen sample cases: ' + (P.collect.sample || 0) + ' / 24</div>';
+    if (flags.disc && flags.disc.nadir) {
+      html += '<div style="font-family:Cinzel,serif;letter-spacing:.2em;color:var(--gold);margin:14px 0 4px">SITE NADIR <span style="color:#ff2a6a;font-family:Inter,sans-serif;letter-spacing:0;font-size:12px">☠☠☠☠☠ LETHAL</span></div>';
+      var nq = [['Ride the freight elevator under Camp Greaves', flags.nadirIn], ['B1 — take Captain Holt\'s Level 2 clearance', hasK('pass_b2')], ['B2 — restore reactor power', flags.nadirPower], ['B3 — take the Omega card from GOLIATH', hasK('omega')], ['B4 — destroy NADIR', flags.nadirDead], ['Open the Prototype Vault', P.owned.rail]], ncur = false;
+      nq.forEach(function (q) { var done = !!q[1], cur = !done && !ncur; if (cur) ncur = true; html += '<div style="color:' + (done ? 'var(--dim)' : cur ? 'var(--fg)' : 'rgba(255,255,255,.3)') + '">' + (done ? '✔ ' : cur ? '▶ ' : '· ') + (done || cur ? q[0] : '???') + '</div>'; });
+    }
     html += '<div style="font-family:Cinzel,serif;letter-spacing:.2em;color:var(--gold);margin:14px 0 4px">BOUNTIES</div>';
     BOUNTIES.forEach(function (b) { var done = b.ids.some(function (id) { return k[id]; }); html += '<div style="color:' + (done ? 'var(--dim)' : 'var(--fg)') + '">' + (done ? '✔ ' : '☠ ') + b.name + ' — ' + b.where + ' · $' + b.reward.toLocaleString() + (P.claimed[b.key] ? ' (paid)' : done ? ' (claim at the Peddler)' : '') + '</div>'; });
     $('invQuests').innerHTML = html + '</div>';
@@ -1096,6 +1242,9 @@ NF.game = (function () {
     { key: 'alpha', name: 'Reaper Alpha', where: 'near the Ranger Lookout', reward: 12000, ids: ['alpha'] },
     { key: 'worms', name: 'Farm Burrowers', where: 'Harlan and Odell farms', reward: 6000, ids: ['harlanworm', 'odellworm'] },
     { key: 'teo', name: 'What Teo became', where: 'St. Agnes Church', reward: 5000, ids: ['teo_boss'] },
+    { key: 'holt', name: 'Captain Holt, turned', where: 'Site NADIR, B1', reward: 15000, ids: ['nx_captain'] },
+    { key: 'goliath', name: 'GOLIATH (Subject G-7)', where: 'Site NADIR, B3', reward: 30000, ids: ['nx_goliath'] },
+    { key: 'nadir', name: 'NADIR', where: 'Site NADIR, B4', reward: 60000, ids: ['nx_nadir'] },
     { key: 'r01', name: 'Specimen R-01', where: 'Velgen Corporate Campus', reward: 20000, ids: ['r01'] },
     { key: 'butcher2', name: 'The Warden\'s Butcher', where: 'Saltmarsh Penitentiary', reward: 14000, ids: ['butcher2'] },
     { key: 'bayou', name: 'The Bayou Queen', where: 'Blackroot Bayou', reward: 22000, ids: ['bayoubrood'] },
@@ -1118,7 +1267,7 @@ NF.game = (function () {
     if (shopTab === 'buy') {
       var WP = { shotgun: 3500, magnum: 12000, smg: 7000, rifle: 9000, gl: 16000, rpg: 28000 };
       Object.keys(WP).forEach(function (w) { if (!P.owned[w]) card(WEAP[w].name, S.items[w].desc, WP[w], function () { P.owned[w] = true; P.mag[w] = WS(w).cap; if (w === 'rpg') P.ammo.rpg += 1; toast('Bought the ' + WEAP[w].name); }); });
-      var AM = [['handgun', 15, 400], ['shotgun', 6, 600], ['smg', 40, 700], ['rifle', 6, 900], ['magnum', 4, 1500], ['gl', 3, 1800], ['rpg', 1, 7000]];
+      var AM = [['handgun', 15, 400], ['shotgun', 6, 600], ['smg', 40, 700], ['rifle', 6, 900], ['magnum', 4, 1500], ['gl', 3, 1800], ['rpg', 1, 7000], ['rail', 4, 3000]];
       AM.forEach(function (a) { if (P.owned[a[0]]) card(AMMO_NAME[a[0]] + ' ×' + a[1], 'For the ' + WEAP[a[0]].name + '. You carry ' + P.ammo[a[0]] + '.', a[2], function () { P.ammo[a[0]] += a[1]; }); });
       [['herb', 500], ['red_herb', 1000], ['blue_herb', 700], ['spray', 2500], ['powder', 300]].forEach(function (h) { card(S.items[h[0]].name, S.items[h[0]].desc, h[1], function () { P.inv[h[0]]++; }, usedSlots() >= P.slots, usedSlots() >= P.slots ? 'Pack full' : null); });
       card('Hand Grenade', 'Press G to throw. You carry ' + P.grenades + '.', 1200, function () { P.grenades++; });
@@ -1199,6 +1348,7 @@ NF.game = (function () {
     g.fillText('N ↑', w - 40, 20);
   }
   function objTarget() {
+    if (NF.bunker.active) return NF.bunker.goal(flags, P);
     var T2 = NF.terrain, o = flags.obj;
     if (!flags.escaped || !T2) return null;
     if (o === 'town') return { x: 436, z: 862 };
@@ -1262,6 +1412,7 @@ NF.game = (function () {
   function fastTravel(o) {
     closeUI(); mode = 'cine'; fade(1, 0.5);
     later(function () {
+      if (NF.bunker.active) { NF.bunker.leave(); objective(flags.obj); }
       P.pos.set(o.x, 0, o.z); P.vy = 0;
       NF.terrain.update(o.x, o.z, flags, true);
       P.pos.y = W.ground(o.x, o.z);
@@ -1271,7 +1422,7 @@ NF.game = (function () {
   function applySave(d) {
     flags = d.flags || {}; P.pos.set(d.pos[0], 0, d.pos[1]); P.yaw = d.yaw; cam.yaw = d.yaw; P.hp = d.hp; P.weapon = d.weapon; P.owned = d.owned; P.mag = d.mag; P.ammo = d.ammo; P.inv = d.inv; P.files = d.files || []; stats = d.stats || stats; P.flashOn = d.flash !== false;
     P.money = d.money || 0; P.treasures = d.treasures || []; P.upg = d.upg || {}; P.slots = d.slots || 8; P.stash = d.stash || {}; P.grenades = d.grenades || 0; P.vest = !!d.vest; P.poison = 0;
-    ['smg', 'rifle', 'gl', 'rpg'].forEach(function (w) { if (P.owned[w] === undefined) { P.owned[w] = false; P.mag[w] = 0; P.ammo[w] = 0; } });
+    ['smg', 'rifle', 'gl', 'rpg', 'rail'].forEach(function (w) { if (P.owned[w] === undefined) { P.owned[w] = false; P.mag[w] = 0; P.ammo[w] = 0; } });
     ['red_herb', 'blue_herb', 'mixed_gr', 'powder', 'fuse', 'flare', 'armory_key', 'fuel'].forEach(function (k) { if (P.inv[k] === undefined) P.inv[k] = 0; });
     P.collect = d.collect || { dogtag: 0, sample: 0 }; P.claimed = d.claimed || {};
     if (flags.holding) flags.holding = null;
@@ -1282,6 +1433,7 @@ NF.game = (function () {
       if (flags.teoFight && !flags.teoDead) flags.teoFight = false;
       if (flags.flared && !flags.unboundDead) { flags.flared = false; P.inv.flare = 1; }
       NF.terrain.update(P.pos.x, P.pos.z, flags, true);
+      if (NF.bunker.levelAt(P.pos.x, P.pos.z) >= 0) { NF.bunker.enter(NF.bunker.levelAt(P.pos.x, P.pos.z), flags); later(showNadirObj, 300); }
       P.pos.y = W.ground(P.pos.x, P.pos.z);
     }
     var taken = flags.taken || {};
@@ -1371,16 +1523,18 @@ NF.game = (function () {
   }
   var fogIn = new THREE.Color('#030304'), fogOut = new THREE.Color('#141c28');
   function updateEnv(dt) {
-    var room = W.roomAt(P.pos.x, P.pos.z), inManor = room && W.rooms.indexOf(room) >= 0;
+    var room = W.roomAt(P.pos.x, P.pos.z), under = NF.bunker.active, inManor = room && W.rooms.indexOf(room) >= 0 || under;
     var target = mode === 'title' || inManor ? 0 : room ? 0.5 : 1;
     if (mode === 'cine' && !flags.escaped) target = 0;
     env.out += (target - env.out) * (1 - Math.exp(-dt * 2));
     var o = env.out;
-    scene.fog.density = 0.045 + (0.0095 - 0.045) * Math.min(1, o * 1.5);
+    var bigHall = under && room && (room.key === 'core' || room.key === 'arena' || room.key === 'atr');
+    scene.fog.density = (bigHall ? 0.013 : under ? 0.03 : 0.045) + (0.0095 - 0.045) * Math.min(1, o * 1.5);
     scene.fog.color.copy(fogIn).lerp(fogOut, o); scene.background.copy(scene.fog.color);
     moon.intensity = 0.95 * o; moon.position.set(P.pos.x - 300, 400, P.pos.z + 200); moon.target.position.copy(P.pos);
     hemi.intensity = 0.42 + 0.33 * o; hemi.color.set(o > 0.5 ? '#6a7ca0' : '#5a6478');
     stars.material.opacity = o * 0.9; stars.position.copy(camera.position); moonSprite.material.opacity = o; moonSprite.position.set(camera.position.x - 160, camera.position.y + 220, camera.position.z + 120);
+    if (G.poolVis !== !under) { G.poolVis = !under; pool.forEach(function (l) { l.visible = !under; }); }
     var chunksVisible = !inManor || !flags.escaped && false; if (G.chunksVis !== !inManor) { G.chunksVis = !inManor; for (var k in NF.terrain.chunks) NF.terrain.chunks[k].group.visible = G.chunksVis; }
     // rain outdoors
     var raining = !!(flags.escaped && o > 0.6 && !room);
@@ -1410,6 +1564,7 @@ NF.game = (function () {
     var room = W.roomAt(P.pos.x, P.pos.z);
     if (G.escapeT !== undefined) { AU.music('chase'); return; }
     if (flags.boss && !flags.bossDead) { AU.music('boss'); return; }
+    if (G.bossRef && !G.bossRef.dead) { AU.music('boss'); return; }
     if (room && room.safe) { AU.music('safe'); return; }
     var w = E.byId('warden'); if (w && !w.dead && w.state !== 'stunned' && w.pos.distanceTo(P.pos) < 22) { AU.music('chase'); return; }
     var danger = E.list.some(function (e) { return !e.dead && e.alert && e.state !== 'dormant' && e.pos.distanceTo(P.pos) < 9; });
@@ -1457,7 +1612,9 @@ NF.game = (function () {
       if (frame % 10 === 0) musicLogic();
       if (frame % 20 === 0) NF.mapui.track(P, flags);
       NF.mapui.work();
-      if (frame % 3 === 0) { var rr = W.roomAt(P.pos.x, P.pos.z), outdoors = flags.escaped && mode === 'play' && !(rr && W.rooms.indexOf(rr) >= 0); NF.mapui.mini(outdoors, P, -viewHeading(), objTarget()); }
+      NF.bunker.update(dt, T, P);
+      if (frame % 3 === 0) { var rr = W.roomAt(P.pos.x, P.pos.z), outdoors = flags.escaped && mode === 'play' && !(rr && W.rooms.indexOf(rr) >= 0); if (NF.bunker.active && mode === 'play') NF.mapui.miniBunker(P, -viewHeading()); else NF.mapui.mini(outdoors, P, -viewHeading(), objTarget()); }
+      if (frame % 20 === 0) dangerHud();
       hud(dt);
     }
   }

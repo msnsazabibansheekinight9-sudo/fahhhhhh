@@ -258,6 +258,9 @@ NF.world = (function () {
     else if (type === 'fuel') { m = new THREE.Mesh(Mo.box(0.3, 0.42, 0.18), std({ color: '#a01a10', metalness: 0.5, roughness: 0.4 })); m.position.y = 0.21; g.add(m); var sp2 = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.1, 8), std({ color: '#222' })); sp2.position.set(0.1, 0.46, 0); g.add(sp2); }
     else if (type === 'dogtag') { for (var dt2 = 0; dt2 < 2; dt2++) { var tg = new THREE.Mesh(Mo.box(0.05, 0.004, 0.03), std({ color: '#c8c8c0', metalness: 0.95, roughness: 0.25 })); tg.position.set(dt2 * 0.02, 0.005 + dt2 * 0.004, dt2 * 0.01); tg.rotation.y = dt2 * 0.5; g.add(tg); } }
     else if (type === 'sample') { m = new THREE.Mesh(Mo.box(0.3, 0.14, 0.2), std({ color: '#d8d8d0', metalness: 0.6, roughness: 0.3 })); m.position.y = 0.07; g.add(m); var vial = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.12, 10), std({ color: '#30ff90', emissive: '#10a040', emissiveIntensity: 1.5 })); vial.position.set(0, 0.2, 0); g.add(vial); }
+    else if (type === 'b1key' || type === 'pass_b2' || type === 'b2key' || type === 'b3key' || type === 'omega') { var kc = { b1key: '#c08020', pass_b2: '#2060c0', b2key: '#20a060', b3key: '#a02080', omega: '#e0e0e0' }[type]; m = new THREE.Mesh(Mo.box(0.09, 0.004, 0.055), std({ color: '#d8d8d0', emissive: '#203040' })); m.position.y = 0.01; g.add(m); var st = new THREE.Mesh(Mo.box(0.091, 0.005, 0.016), std({ color: kc, emissive: kc, emissiveIntensity: 0.5 })); st.position.set(0, 0.011, 0.01); g.add(st); g.scale.setScalar(1.6); }
+    else if (type === 'rail') { var rw = Mo.weapon('rail'); rw.rotation.set(0, 0, Math.PI / 2); rw.position.y = 0.06; g.add(rw); }
+    else if (type === 'rail_ammo') { m = new THREE.Mesh(Mo.box(0.2, 0.08, 0.12), std({ color: '#203a4a', metalness: 0.6, roughness: 0.4 })); m.position.y = 0.04; g.add(m); var gl2 = new THREE.Mesh(Mo.box(0.16, 0.02, 0.08), std({ color: '#40c0ff', emissive: '#2080ff', emissiveIntensity: 1.2 })); gl2.position.y = 0.085; g.add(gl2); }
     else if (type === 'file') { m = new THREE.Mesh(Mo.box(0.22, 0.01, 0.3), std({ map: T.paper(), roughness: 0.9 })); m.position.y = 0.006; m.rotation.y = 0.3; g.add(m); }
     g.traverse(function (c) { if (c.isMesh) c.castShadow = true; });
     return g;
@@ -596,6 +599,7 @@ NF.world = (function () {
         }
       }
     }
+    if (p.x > 9000) return; // Site Nadir lives east of the map edge
     var lim = NF.terrain ? NF.terrain.LIMIT : 1e9; p.x = Math.max(-lim, Math.min(lim, p.x)); p.z = Math.max(-lim, Math.min(lim, p.z));
   };
   // ray vs boxes, floors, ceilings and terrain. returns hit distance or max

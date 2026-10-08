@@ -185,6 +185,26 @@ NF.structures = (function () {
         else b.box(o.x, y - 2, o.z, o.w, o.h + 2, o.d, m.concrete, true);
         break;
       }
+      case 'nadirgate': { // the blockhouse over the Site NADIR freight elevator
+        y = t.hExact(o.x, o.z);
+        var con = m.concrete, steel = std({ map: NF.tex.metal(), color: '#6a6e72', metalness: 0.8, roughness: 0.4 }), haz = std({ color: '#d8a820', roughness: 0.6 });
+        b.box(o.x, y - 2, o.z - 9, 24, 10, 8, con, true);
+        b.box(o.x - 11, y - 2, o.z + 1, 2, 9, 12, con, true); b.box(o.x + 11, y - 2, o.z + 1, 2, 9, 12, con, true);
+        b.box(o.x, y + 6.4, o.z + 1, 24, 0.8, 12, con, false);
+        b.box(o.x, y - 0.5, o.z + 1, 20, 0.55, 12, con, true);
+        b.box(o.x, y + 0.05, o.z - 2.5, 7, 0.08, 5, steel, false); b.box(o.x, y + 0.06, o.z + 0.4, 7, 0.02, 0.6, haz, false);
+        for (var cb = -3.3; cb <= 3.3; cb += 0.55) b.box(o.x + cb, y, o.z - 5, 0.06, 4.5, 0.06, steel, false);
+        b.box(o.x - 3.6, y, o.z - 2.5, 0.2, 4.5, 5, steel, false); b.box(o.x + 3.6, y, o.z - 2.5, 0.2, 4.5, 5, steel, false);
+        b.box(o.x - 7.5, y, o.z + 7.2, 5.6, 6, 0.8, steel, true); b.box(o.x + 7.5, y, o.z + 7.2, 5.6, 6, 0.8, steel, true);
+        b.box(o.x - 7.5, y + 0.6, o.z + 7.65, 5.4, 0.5, 0.05, haz, false); b.box(o.x + 7.5, y + 0.6, o.z + 7.65, 5.4, 0.5, 0.05, haz, false);
+        var nsg = t.signTex('SITE NADIR · AUTHORISED PERSONNEL ONLY', '#14161a', '#e0c060');
+        b.mesh(new THREE.PlaneGeometry(14, 1.4), std({ map: nsg, emissive: '#ffffff', emissiveMap: nsg, emissiveIntensity: 0.35 }), o.x, y + 5.4, o.z + 7.25);
+        b.mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshBasicMaterial({ color: '#ff3020' }), o.x - 3, y + 4.8, o.z - 0.2); b.mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshBasicMaterial({ color: '#ff3020' }), o.x + 3, y + 4.8, o.z - 0.2);
+        b.box(o.x + 4.6, y, o.z - 0.5, 0.6, 1.3, 0.4, steel, true); b.mesh(new THREE.BoxGeometry(0.2, 0.2, 0.05), new THREE.MeshBasicMaterial({ color: '#40ff80' }), o.x + 4.6, y + 1.15, o.z - 0.28);
+        NF.terrain.lamps.push({ x: o.x, y: 5, z: o.z - 1, c: '#ff4030', i: 1.6, flick: true, chunk: c.k });
+        b.spot({ id: 'nadir_lift', x: o.x + 3.6, z: o.z - 0.2, r: 2.6, prompt: 'Use the freight elevator', fn: function () { NF.game.event('nadirLift'); }, y: 1 });
+        break;
+      }
       case 'fenceSeg': { fence(c, o.x0, o.z0, o.x1, o.z1, 3.2, o.gap ? { at: Math.hypot(o.x1 - o.x0, o.z1 - o.z0) / 2, w: o.gap } : null); break; }
       case 'turbine': {
         y = t.hExact(o.x, o.z);

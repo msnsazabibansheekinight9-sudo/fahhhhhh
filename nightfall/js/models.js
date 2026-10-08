@@ -307,6 +307,12 @@ NF.models = (function () {
     } else if (kind === 'rpg') {
       mesh(g, new THREE.CylinderGeometry(0.045, 0.045, 0.95, 12), std({ color: '#3a4a2a', roughness: 0.7 }), 0, 0.09, 0.1, 1, 1, 1, Math.PI / 2); mesh(g, box(0.03, 0.12, 0.05), dark, 0, -0.01, 0.05);
       g.userData.muzzle = new THREE.Vector3(0, 0.09, 0.6);
+    } else if (kind === 'rail') {
+      var coil = std({ color: '#2a3a48', metalness: 0.85, roughness: 0.3 }), glow = std({ color: '#60d0ff', emissive: '#30a0ff', emissiveIntensity: 1.6 });
+      mesh(g, box(0.05, 0.08, 0.5), coil, 0, 0.05, 0.12); mesh(g, box(0.012, 0.03, 0.62), dark, 0.022, 0.07, 0.42); mesh(g, box(0.012, 0.03, 0.62), dark, -0.022, 0.07, 0.42);
+      for (var rc = 0; rc < 5; rc++) mesh(g, new THREE.TorusGeometry(0.035, 0.008, 6, 12), glow, 0, 0.07, 0.2 + rc * 0.09);
+      mesh(g, box(0.035, 0.11, 0.05), grip, 0, -0.03, -0.02, 1, 1, 1, -0.25); mesh(g, box(0.04, 0.09, 0.24), coil, 0, 0.02, -0.25); mesh(g, box(0.02, 0.05, 0.08), glow, 0, 0.11, 0.0);
+      g.userData.muzzle = new THREE.Vector3(0, 0.07, 0.74);
     } else if (kind === 'knife') {
       mesh(g, box(0.025, 0.025, 0.11), grip, 0, 0, -0.02);
       mesh(g, box(0.004, 0.03, 0.17), steel, 0, 0.004, 0.12);

@@ -1,4 +1,4 @@
-// Ashgrove County: a 6 km x 6 km open world streamed in 128 m chunks around the player.
+// Ashgrove County: a 16 km x 16 km open world streamed in 128 m chunks around the player.
 var NF = window.NF || (window.NF = {});
 NF.terrain = (function () {
   var T = { ready: false, CH: 128, S: 40, HALF: 8192, LIMIT: 8150, chunks: {}, lamps: [], pois: [], roads: [] };
@@ -51,8 +51,23 @@ NF.terrain = (function () {
     P('lodge', 'Kessler Pass Lodge', 1200, 6600, 75, { flat: true, hill: 150 }),
     P('observatory', 'Echo Ridge Observatory', -6400, 1600, 45, { flat: true, hill: 130 }),
     P('halloran', 'Lake Halloran', 3200, 5400, 460, { lake: true }),
-    P('logging', 'Pine Hollow Logging Camp', -2400, 7000, 90, { flat: true })
+    P('logging', 'Pine Hollow Logging Camp', -2400, 7000, 90, { flat: true }),
+    P('nadir', 'Camp Greaves', -6200, -6300, 260, { flat: true })
   ];
+  // how dangerous each place is, 1 (low) to 5 (extreme); the black site under Camp Greaves is 6 (lethal)
+  var DANGER = { manor: 3, gas1: 1, town: 2, relay: 2, church: 3, gas2: 1, airfield: 4, millbrook: 3, harlan: 2, odell: 2, camp: 2, quarry: 3, lake: 2, dam: 3, fieldlab: 4, ranger: 3, mine: 4,
+    granite: 3, truckstop: 2, campus: 5, windfarm: 3, prison: 4, fort: 4, railyard: 3, bayou: 5, coldcreek: 3, lodge: 3, observatory: 4, halloran: 2, logging: 4, nadir: 5 };
+  T.pois.forEach(function (p) { p.danger = DANGER[p.id] || 2; });
+  T.DANGER_NAMES = ['', 'LOW', 'MODERATE', 'HIGH', 'SEVERE', 'EXTREME', 'LETHAL'];
+  T.DANGER_COLS = ['', '#7ac87a', '#c8c86a', '#e0a040', '#e06a30', '#e03a30', '#ff2a6a'];
+  T.DANGER_HP = [1, 0.8, 1, 1.2, 1.45, 1.75, 2.1];
+  T.DANGER_DMG = [1, 0.8, 1, 1.1, 1.25, 1.4, 1.6];
+  T.dangerAt = function (x, z) {
+    if (x > 9000) { var lv = NF.bunker ? NF.bunker.levelAt(x, z) : -1; return lv >= 0 ? NF.bunker.DANGER[lv] : 6; }
+    var best = null, bd = 1e9; T.pois.forEach(function (p) { var d = Math.hypot(x - p.x, z - p.z) - p.r; if (d < bd) { bd = d; best = p; } });
+    if (best && bd < 160) return best.danger;
+    var rr = Math.hypot(x, z - 36); return rr < 1600 ? 1 : rr < 4200 ? 2 : 3;
+  };
   T.lakes = T.pois.filter(function (p) { return p.lake; });
   function poi(id) { for (var i = 0; i < T.pois.length; i++) if (T.pois[i].id === id) return T.pois[i]; }
   T.poi = poi;
@@ -90,7 +105,8 @@ NF.terrain = (function () {
     [[-2970, -1800], [-4200, -2500], [-4800, -2900]],
     [[-5600, -2900], [-5900, -800], [-6400, 1550]],
     [[-2050, 640], [-4000, 1100], [-6350, 1600]],
-    [[-2800, -1800], [0, -2600], [2800, -2700], [6000, -2050]]
+    [[-2800, -1800], [0, -2600], [2800, -2700], [6000, -2050]],
+    [[-1750, -5200], [-3400, -5700], [-5000, -6050], [-5940, -6300]]
   ];
   // town streets
   var STREETS = [[[300, 740], [540, 740]], [[300, 820], [560, 820]], [[300, 900], [540, 900]], [[340, 700], [340, 960]], [[500, 700], [500, 960]],
@@ -428,6 +444,21 @@ NF.terrain = (function () {
     var lc = poi('logging'); for (var lp = 0; lp < 8; lp++) place({ kind: 'logpile', id: 'lp' + lp, x: lc.x - 50 + (lp % 4) * 30, z: lc.z - 30 + (lp / 4 | 0) * 50 });
     place({ kind: 'house', id: 'sawmill', x: lc.x + 40, z: lc.z, w: 22, d: 14, face: 3, h: 6, style: 'old', tint: '#6a5038', sign: 'PINE HOLLOW SAWMILL', doorW: 4, doorH: 4, name: 'Sawmill' });
     safehouse('lcshack', lc.x - 70, lc.z + 60, 'Foreman\'s Cabin'); crowd('lcz', lc.x, lc.z, 100, 20, ['hollow', 'hollow', 'dogpack', 'zombie']); spawnAt('butcher', 'butcher3', lc.x + 40, lc.z);
+    // ---- Camp Greaves: the army post over Site NADIR
+    var ng = poi('nadir'), NW = 230;
+    place({ kind: 'wall', id: 'ngwn', x: ng.x, z: ng.z + NW, w: NW * 2, d: 1.2, h: 5 }); place({ kind: 'wall', id: 'ngws', x: ng.x, z: ng.z - NW, w: NW * 2, d: 1.2, h: 5 });
+    place({ kind: 'wall', id: 'ngww', x: ng.x - NW, z: ng.z, w: 1.2, d: NW * 2, h: 5 });
+    place({ kind: 'wall', id: 'ngwe1', x: ng.x + NW, z: ng.z + NW / 2 + 6, w: 1.2, d: NW - 12, h: 5 }); place({ kind: 'wall', id: 'ngwe2', x: ng.x + NW, z: ng.z - NW / 2 - 6, w: 1.2, d: NW - 12, h: 5 });
+    [[-NW, -NW], [NW, -NW], [-NW, NW], [NW, NW], [NW, 24], [NW, -24]].forEach(function (c2, i) { place({ kind: 'lookout', id: 'ngt' + i, x: ng.x + c2[0] - Math.sign(c2[0]) * 6, z: ng.z + c2[1] - (Math.abs(c2[1]) > 30 ? Math.sign(c2[1]) * 6 : 0) }); });
+    for (var nb = 0; nb < 6; nb++) place({ kind: 'house', id: 'ngb' + nb, x: ng.x - 150 + (nb % 3) * 60, z: ng.z + 90 + (nb / 3 | 0) * 50, w: 30, d: 10, face: 2, h: 3.6, style: 'concrete', flatRoof: true, name: 'Barracks ' + 'ABCDEF'.charAt(nb) });
+    place({ kind: 'house', id: 'nghq', x: ng.x + 120, z: ng.z + 110, w: 24, d: 16, face: 3, h: 5, style: 'concrete', flatRoof: true, sign: 'CAMP GREAVES HQ', name: 'Camp HQ' });
+    for (var nh2 = 0; nh2 < 2; nh2++) place({ kind: 'house', id: 'nghg' + nh2, x: ng.x - 120 + nh2 * 70, z: ng.z - 130, w: 40, d: 28, face: 0, h: 9, style: 'siding', tint: '#6a705a', doorW: 10, doorH: 7, name: 'Hangar ' + (nh2 + 1) });
+    place({ kind: 'nadirgate', id: 'nadirgate', x: ng.x + 40, z: ng.z - 20 });
+    place({ kind: 'helipad', id: 'nghp', x: ng.x + 150, z: ng.z - 120 }); place({ kind: 'crash', id: 'ngcrash', x: ng.x + 170, z: ng.z - 90, rot: 2.2 });
+    for (var nv = 0; nv < 12; nv++) place({ kind: 'car', id: 'ngcar' + nv, x: ng.x - 40 + (nv % 6) * 13, z: ng.z + 40 + (nv / 6 | 0) * 14, rot: 1.57, color: '#4a5236' });
+    for (var ns = 0; ns < 8; ns++) itemAt('ngl' + ns, ['grenade', 'smg_ammo', 'rifle_ammo', 'hg_ammo', 'sg_ammo', 'herb', 'money', 'gl_ammo'][ns], ng.x - 150 + (ns % 3) * 60 + 4, ng.z + 92 + (ns / 3 | 0) * 50, { amount: [2, 50, 8, 20, 8, 1, 1500, 3][ns] });
+    safehouse('ngshack', ng.x + NW + 30, ng.z + 40, 'Greaves Gatehouse');
+    crowd('ngz', ng.x, ng.z, 200, 46, ['zombie', 'zombie', 'trooper', 'trooper', 'dogpack', 'reaper'], { variant: 3 });
     // story items for the longer Act 2
     var hp2 = poi('harlan'); itemAt('fuel', 'fuel', hp2.x + 23, hp2.z + 4.6, { name: 'Fuel Can' });
     // side quest: Raven Unit dog tags, lost when the helicopter went down
@@ -632,7 +663,10 @@ NF.terrain = (function () {
       if (killed[o.id]) return;
       var gate = NF.game.spawnGate ? NF.game.spawnGate(o) : true; if (!gate) return;
       var e = NF.enemies.spawn(o.type, o.id, o.x, o.z, { variant: o.variant, weapon: o.weapon, revenant: o.revenant, boss: o.boss, chunk: c.k, yaw: Math.random() * 6.28, seed: hash(Math.round(o.x), Math.round(o.z)) * 1e5 | 0 });
-      if (e) { c.enemies.push(e); e.far = true; }
+      if (e) {
+        c.enemies.push(e); e.far = true;
+        if (!o.boss && e.type !== 'boss') { var dg = T.dangerAt(o.x, o.z); e.hp *= T.DANGER_HP[dg]; e.maxHp = e.hp; e.dmgMul = T.DANGER_DMG[dg]; }
+      }
     });
   }
   T.groundY = function (x, z) { return W.ground(x, z); };

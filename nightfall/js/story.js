@@ -19,6 +19,12 @@ NF.story = {
     quarry: { title: 'Quarry Foreman\'s Note', text: "Shut down blasting after the Velgen trucks dumped their 'waste' in pit four. Two weeks later the pit floor started breathing.\n\nWe left the M72 rocket launcher the army lent us for clearing the rock face in the site office. If that thing in the pit ever comes up, use it. All of it." },
     doyle: { title: 'Sheriff Doyle\'s Notebook', text: "They took my deputies at the bell. Smiling. Humming. Asked me to stay for supper.\n\nThe one with the sack over his head and the saw keeps my key ring on his belt like a trophy. The armory key is on it. Whoever finds this: the station armory has everything you'll need. Fuses for the relay, too.\n\nI'm hiding in the tower. They don't climb. Yet." },
     quarantine: { title: 'CDC Directive 7-Delta', text: "PRIORITY — ASHGROVE COUNTY, OREGON\n\nEffective immediately the county is under federal quarantine. No vehicle or aircraft may leave the containment zone.\n\nAircraft departing the zone without a valid Velgen biohazard override transponder code will be intercepted and destroyed.\n\nOverride codes are held on the secure terminal at the Velgen Field Station." },
+    nadir1: { title: 'Site NADIR — Orientation Card', text: "WELCOME TO SITE NADIR\nJoint U.S. Army / Velgen Biomedical facility. You were never here.\n\nB1 — Security, barracks, motor pool.\nB2 — Research wing. Level 2 clearance.\nB3 — Containment. Level 3 clearance. Do not feed the subjects.\nB4 — THE CORE. Omega clearance only.\n\nThe elevator will not descend past B2 without reactor power. If you hear the reactor alarm, report to your muster point and do not run. They hear running." },
+    nadir2: { title: 'Private Okafor\'s Letter', text: "Mom,\n\nThey say we're guarding a water treatment plant. Water treatment plants don't have four floors underground and a freight elevator big enough for a tank.\n\nSomething screams on B3 every night at 0300. Captain Holt says it's the pipes. Captain Holt sleeps with his sidearm under his pillow.\n\nThree of the lab people didn't come up for chow today. We're on lockdown. I love you. Don't let Dad sell the truck." },
+    nadir3: { title: 'Project NADIR — Summary for the Board', text: "VELGEN BIOMEDICAL — EYES ONLY\n\nLazarus edits a host. NADIR edits a population.\n\nThe NADIR organism is a single colonial mass grown from Lazarus-saturated tissue in the B4 Core. It does not need to bite. It seeds. Every Lazarus carrier in Ashgrove County is, in effect, one of its fingers.\n\nThe Army's interest is obvious. Ours is the patent.\n\nThreat level: contained. Containment budget: approved." },
+    nadir4: { title: 'Surgical Log — Dr. Ilse Brandt', text: "Subject G-7 accepted the dermal plating. Twenty-two kilos of hardened steel bolted to living bone and it walked out of recovery on its own.\n\nThe heart had to move to the back to make room for the chest plate. I told Holt that is its only weakness. He said good, then it has one more than his men.\n\nThe Lashers in pen 4 have started answering each other through the wall. They have no eyes. They do not need them." },
+    nadir5: { title: 'Containment Incident — 0317 hrs', text: "Reactor fluctuation on B2. Cell locks on B3 failed open for nine seconds.\n\nNine seconds.\n\nStalkers are loose on the block. You will not see them. Look for the eyes and the ripple when they move. Shoot the ripple.\n\nG-7 is still in the arena. The arena seal is holding. Whoever reads this: DO NOT override the arena seal. If you need the Omega card, God help you, it's on G-7's harness." },
+    nadir6: { title: 'Holt\'s Last Order', text: "To whoever gets this far.\n\nThe Core thing is what's been calling them. The bell in Millbrook, the crowds on the roads, all of it. It's the conductor.\n\nI sealed the XR-9 prototype in the vault behind me. It throws a slug at eight kilometres a second through anything in the way. Velgen wanted it to kill what they made. Use it.\n\nAnd if you see me upstairs — I'm sorry. Don't hesitate.\n\n— Capt. R. Holt, 2nd Bn, Site NADIR" },
     crane: { title: "Crane's Final Entry", text: "Day 41.\n\nThe board has ordered the program terminated and the subjects incinerated. Forty-one days, and they want me to burn the only thing in this century that ever truly worked.\n\nNo.\n\nI have prepared the full-strength agent. Not the diluted strain we gave the staff. The pure Lazarus line.\n\nIf it edits the weak, then I will give it nothing weak to edit. I will step into the central tank and let it keep what is best of me.\n\nWhoever reads this: the emergency exit opens when containment is resolved. That is, when there is nothing left alive in this laboratory to contain.\n\nI do not intend to make that easy." }
   },
   files2: {},
@@ -47,6 +53,13 @@ NF.story = {
     fuel: { name: 'Fuel Can', icon: '⛽', desc: 'Twenty litres of diesel for the relay generator.' },
     dogtag: { name: 'Raven Unit Dog Tag', icon: '🏷️', desc: 'Stamped with a name from Raven Unit.' },
     sample: { name: 'Velgen Sample Case', icon: '🧪', desc: 'A sealed Lazarus sample. The Peddler pays well for these.' },
+    b1key: { name: 'Armory Key Card', icon: '🟧', desc: 'SITE NADIR — B1 ARMORY. Taped inside a dead private\'s helmet.' },
+    pass_b2: { name: 'Level 2 Clearance', icon: '🟦', desc: 'Captain Holt\'s clearance badge. Sends the Site NADIR elevator down to B2.' },
+    b2key: { name: 'Reactor Access Card', icon: '🟩', desc: 'Opens Reactor Control on B2.' },
+    b3key: { name: 'Handler\'s Key Card', icon: '🟪', desc: 'Opens the Stalker Pens on B3. Whatever you think is in there, it is worse.' },
+    omega: { name: 'Omega Key Card', icon: '⬜', desc: 'Pried from GOLIATH\'s harness. Sends the elevator to B4: the Core.' },
+    rail: { name: 'XR-9 Railgun', icon: '⚡', desc: 'Velgen\'s prototype. Each slug punches through every body in a line. Four-round magazine.' },
+    rail_ammo: { name: 'Rail Slugs', icon: '🔷', desc: 'Tungsten slugs for the XR-9.' },
     knife: { name: 'Combat Knife', icon: '🔪', desc: 'Always with you. Left mouse while not aiming.' }
   },
   objectives: {
@@ -71,6 +84,11 @@ NF.story = {
     church: 'Find the flare gun at St. Agnes Church.',
     airfield: 'Get to the Halverson County Airfield helipad and fire the flare.',
     final: 'Survive until the helicopter can land.',
+    nadir: 'Find Captain Holt\'s Level 2 clearance on B1 of Site NADIR.',
+    nadirB2: 'Restore reactor power on B2 so the elevator can reach B3.',
+    nadirHold: 'Hold Reactor Control while the reactor spins up.',
+    nadirB3: 'Get the Omega key card from Subject G-7 in the B3 Holding Arena.',
+    nadirB4: 'Destroy NADIR in the Core.',
     free: 'Explore Ashgrove County.'
   }
 };

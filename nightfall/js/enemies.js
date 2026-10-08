@@ -47,6 +47,7 @@ NF.enemies = (function () {
   function steerTarget(e, P, canOpen) {
     var W = NF.world, ra = W.roomAt(e.pos.x, e.pos.z), rb = W.roomAt(P.pos.x, P.pos.z);
     if (rb && rb.safe) return null;
+    if (NF.bunker && NF.bunker.active && e.pos.x > 9000) return NF.bunker.steer(e.pos, P.pos);
     if (!ra || !rb || ra === rb) return P.pos;
     var d = W.nextWaypoint(e.pos, P.pos, canOpen);
     if (!d) return null;
@@ -184,6 +185,11 @@ NF.enemies = (function () {
         }
         pose = A.base(); fallAnim(e, dt, pose); if (e.t > 1.2 && e.state === 'dying') { e.state = 'dead'; NF.fx.blood(e.pos.clone().setY(e.pos.y + 0.2), new V3(0, 0.5, 0), 6); }
         A.apply(e.rig, pose, k(dt, 10));  return;
+      }
+      if (e.state === 'feign') { // a corpse that isn't one
+        e.rig.root.rotation.x = -e.fallDir * PI / 2; e.lift = 0.14; pose = A.base(); A.dead(pose); A.apply(e.rig, pose, 1);
+        var df = e.pos.distanceTo(P.pos); if (e.alert || df < 3.0 || (df < 7 && P.speed > 4.2)) { e.state = 'down'; e.t = 3.0; e.alert = true; NF.audio.groan(eye(e), 0.8, 1.2); }
+        return;
       }
       var d = perceive(e, P, dt);
       e.groanT -= dt; if (e.groanT < 0 && d < 18) { NF.audio.groan(eye(e), 0.9 + e.v * 0.3); e.groanT = 4 + Math.random() * 6; }

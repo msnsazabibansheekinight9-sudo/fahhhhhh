@@ -99,6 +99,7 @@ NF.mapui = (function () {
       g.font = (big ? 700 : 500) + ' ' + (big ? labelSize * 1.25 : labelSize) + 'px Cinzel, serif'; g.textAlign = 'center';
       g.lineWidth = 3 * dpr; g.strokeStyle = 'rgba(20,14,8,.85)'; g.strokeText(p.name, q[0], q[1] - 10 * dpr); g.fillStyle = p.id === 'lake' ? '#a8c8d8' : '#f0e4c8'; g.fillText(p.name, q[0], q[1] - 10 * dpr);
       if (p.id !== 'lake') { g.fillStyle = '#f0e4c8'; g.strokeStyle = '#1a120a'; g.lineWidth = 2 * dpr; g.beginPath(); g.arc(q[0], q[1], 4 * dpr, 0, 7); g.fill(); g.stroke(); }
+      if (p.danger && view.zoom >= 2.2) { var sk = '☠'.repeat(Math.min(5, p.danger)); g.font = (10 * dpr) + 'px sans-serif'; g.lineWidth = 3 * dpr; g.strokeStyle = 'rgba(10,8,6,.9)'; g.strokeText(sk, q[0], q[1] + 16 * dpr); g.fillStyle = T.DANGER_COLS[p.danger]; g.fillText(sk, q[0], q[1] + 16 * dpr); }
     });
     // safehouses
     (T.placements || []).forEach(function (o) {
@@ -150,7 +151,7 @@ NF.mapui = (function () {
     var disc = c.flags.disc || {};
     if (!best || !(disc[best.p.id] || best.p.id === 'town')) { tip.style.display = 'none'; return; }
     var dist = Math.round(Math.hypot(best.p.x - c.P.pos.x, best.p.z - c.P.pos.z));
-    tip.innerHTML = '<b>' + best.p.name + '</b>' + (dist > 1000 ? (dist / 1000).toFixed(1) + ' km' : dist + ' m') + ' away';
+    tip.innerHTML = '<b>' + best.p.name + '</b>' + (dist > 1000 ? (dist / 1000).toFixed(1) + ' km' : dist + ' m') + ' away' + (best.p.danger ? '<br>Danger: ' + NF.game.dangerTag(best.p.danger) : '');
     tip.style.display = 'block'; tip.style.left = (hover[0] + 16) + 'px'; tip.style.top = (hover[1] + 12) + 'px';
   }
   function safeKnown(o, c) { var seen = c.flags.seen || {}, CH = NF.terrain.CH; return o.kind === 'police' || seen[Math.floor(o.x / CH) + ',' + Math.floor(o.z / CH)]; }
@@ -197,17 +198,18 @@ NF.mapui = (function () {
     var rows = tab === 'county'
       ? [['<i style="color:#ff4a3a">▲</i>', 'You'], ['<i style="color:#ffd25a">★</i>', 'Objective'], ['<i style="color:#5ac87a">⌂</i>', 'Safehouse: typewriter, item box, Peddler'], ['<i style="color:#6a9ad8">▣</i>', 'Truck'], ['<i style="color:#e6d6a8">━</i>', 'Road'], ['<i style="color:#8a6a4a">■</i>', 'Building'], ['<i style="color:#5a7a4a">▓</i>', 'Forest'], ['<i style="color:#555">░</i>', 'Not yet explored']]
       : [['<i style="color:#ff4a3a">▲</i>', 'You'], ['<i style="color:#3cff7a">▬</i>', 'Open door'], ['<i style="color:#5aa0ff">▬</i>', 'Unlocked door'], ['<i style="color:#ff3a3a">▬</i>', 'Locked door'], ['<i style="color:#ffd25a">●</i>', 'Item you have seen'], ['<i style="color:#5ac87a">⌨</i>', 'Typewriter']];
-    if (tab === 'county') rows.splice(3, 0, ['<i style="color:#5ac87a">⇄</i>', 'In a safehouse, click another safehouse to fast travel']);
+    if (tab === 'county') { rows.splice(3, 0, ['<i style="color:#5ac87a">⇄</i>', 'In a safehouse, click another safehouse to fast travel']); rows.push(['<i style="color:#e03a30">☠</i>', 'Danger rating, 1 to 5 skulls']); }
+    if (tab === 'nadir') rows = [['<i style="color:#ff4a3a">▲</i>', 'You'], ['<i style="color:#ffd25a">⇅</i>', 'Elevator'], ['<i style="color:#5aa0ff">▬</i>', 'Doorway'], ['<i style="color:#ff3a3a">▬</i>', 'Locked security door'], ['<i style="color:#ff7ad0">●</i>', 'Key card or weapon'], ['<i style="color:#9ad0ff">●</i>', 'File'], ['<i style="color:#ffd25a">●</i>', 'Supplies'], ['<i style="color:#5ac87a">■</i>', 'Safe room']];
     $('mapLegend').innerHTML = rows.map(function (r) { return r[0] + '<span>' + r[1] + '</span>'; }).join('');
   }
   function sizeCanvas() { var dpr = Math.min(2, window.devicePixelRatio || 1); cv.width = innerWidth * dpr; cv.height = innerHeight * dpr; cv.dpr = dpr; }
   function frame() { if (!open) return; draw(); requestAnimationFrame(frame); }
-  function draw() { if (tab === 'county') drawCounty(); else drawManor(); }
+  function draw() { if (tab === 'county') drawCounty(); else if (tab === 'nadir') { var c = ctxFn(); NF.bunker.drawPlan(g, cv.width, cv.height, cv.dpr, c.P, c.flags, view.zoom); $('mapTip').style.display = 'none'; } else drawManor(); }
   function setTab(t) {
     tab = t; document.querySelectorAll('[data-mtab]').forEach(function (b) { b.classList.toggle('on', b.dataset.mtab === t); });
-    var c = ctxFn(); $('mapTitle').textContent = t === 'county' ? 'Ashgrove County' : 'Ashgrove Manor';
+    var c = ctxFn(); $('mapTitle').textContent = t === 'county' ? 'Ashgrove County' : t === 'nadir' ? 'Site NADIR' : 'Ashgrove Manor';
     var disc = Object.keys(c.flags.disc || {}).length, seenN = Object.keys(c.flags.seen || {}).length;
-    $('mapSub').textContent = t === 'county' ? 'Survey sheet · 16 km × 16 km · ' + (seenN / (4 * NF.terrain.NCH * NF.terrain.NCH) * 100).toFixed(1) + '% explored · ' + disc + ' places found' : 'Floor plan · ' + Object.keys(c.flags.visited || {}).filter(function (k) { return NF.world.room(k); }).length + ' of 6 rooms explored';
+    $('mapSub').innerHTML = t === 'nadir' ? (NF.bunker.current() ? NF.bunker.current().def.name + ' · −' + NF.bunker.current().def.depth + ' m · ' + NF.game.dangerTag(NF.bunker.DANGER[NF.bunker.level]) : '') : t === 'county' ? 'Survey sheet · 16 km × 16 km · ' + (seenN / (4 * NF.terrain.NCH * NF.terrain.NCH) * 100).toFixed(1) + '% explored · ' + disc + ' places found' : 'Floor plan · ' + Object.keys(c.flags.visited || {}).filter(function (k) { return NF.world.room(k); }).length + ' of 6 rooms explored';
     legend();
   }
   M.init = function (getCtx) {
@@ -239,8 +241,9 @@ NF.mapui = (function () {
   M.open = function () {
     var c = ctxFn(); open = true; sizeCanvas();
     if (!base) buildBase();
-    var t = c.flags.escaped && !c.inManor ? 'county' : 'manor';
+    var t = c.inBunker ? 'nadir' : c.flags.escaped && !c.inManor ? 'county' : 'manor';
     $('mapTabs').style.display = c.flags.escaped ? 'flex' : 'none';
+    var nb = document.querySelector('[data-mtab=nadir]'); if (nb) nb.style.display = c.inBunker ? '' : 'none';
     $('mapZoom').style.display = t === 'county' ? 'flex' : 'none';
     view.x = c.P.pos.x; view.z = c.P.pos.z; view.zoom = t === 'county' ? 6 : 1;
     setTab(t); requestAnimationFrame(frame);
@@ -256,6 +259,7 @@ NF.mapui = (function () {
     for (var dx = -1; dx <= 1; dx++) for (var dz = -1; dz <= 1; dz++) s[(cx + dx) + ',' + (cz + dz)] = 1;
   };
   var mini, mg, miniT = 0;
+  M.miniBunker = function (P, heading) { if (!mini) { mini = $('mini'); mg = mini.getContext('2d'); } mini.style.display = 'block'; NF.bunker.drawMini(mg, mini.width, P, heading); };
   M.mini = function (show, P, heading, obj) {
     if (!mini) { mini = $('mini'); mg = mini.getContext('2d'); }
     mini.style.display = show ? 'block' : 'none';

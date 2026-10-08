@@ -56,4 +56,16 @@ Leave the lab through the emergency exit and the game opens up into a **16 km ×
   8. Fire the flare at the airfield.
   9. Defeat the Warden, Unbound.
 - **Side quests**: six Raven Unit dog tags to collect (the reward is armour that halves damage) and 24 Velgen sample cases the Peddler buys.
-- **Bounties**: the Butcher, the Quarry Burrower, the Brood Mother (a giant spider that spawns its young), the Reaper Alpha, the farm burrowers, Teo, Specimen R-01 at the Velgen campus, the prison and sawmill butchers, the Bayou Queen and the Wind Farm Burrower, paid out by the Peddler. A Quests tab in the inventory tracks chapters, collectibles and bounties.
+- **Bounties**: the Butcher, the Quarry Burrower, the Brood Mother (a giant spider that spawns its young), the Reaper Alpha, the farm burrowers, Teo, Specimen R-01 at the Velgen campus, the prison and sawmill butchers, the Bayou Queen, the Wind Farm Burrower, and Site NADIR's Captain Holt, GOLIATH and NADIR, paid out by the Peddler. A Quests tab in the inventory tracks chapters, collectibles and bounties.
+- **Danger ratings**: every place in the county is rated from 1 to 5 skulls (Low to Extreme), shown in area titles, on the map, in map tooltips and on the HUD under the minimap. The rating is real: enemies in a dangerous area have more health and hit harder. Site NADIR is rated Lethal.
+
+## Site NADIR: the black site under Camp Greaves
+In the far south-west corner of the county, a highway leads to Camp Greaves, a walled army post (Extreme danger) with barracks, hangars, a helipad and Hollow Troopers on patrol. A freight elevator in the blockhouse goes down to a four-level underground base, built on a grid of rooms with security doors, a floor-plan map tab and its own minimap:
+- **B1 · Security & Barracks** (−40 m): checkpoint, barracks, mess hall, armory, motor pool, command center, holding cells, generator hall. Captain Holt, turned, carries the Level 2 clearance.
+- **B2 · Research Wing** (−75 m): genetics, virology and specimen labs, cryo storage, a server room, surgery, a central atrium with a giant specimen tank, the incinerator and animal pens. Restart the reactor and hold Reactor Control for 75 seconds against waves.
+- **B3 · Containment** (−110 m): four cell blocks, a tank hall, bio-waste, the Stalker Pens and the Holding Arena, where GOLIATH (Subject G-7) waits.
+- **B4 · The Core** (−160 m): the overgrown chamber of NADIR, the thing that has been calling the infected all along, and the Prototype Vault behind it.
+- **Creatures found nowhere else**: Hollow Troopers (laser-sighted rifle bursts, helmets that stop small-arms headshots), Lashers (blind, four bone whips; walk and they may not hear you, run and they will), Stalkers (almost invisible, look for the eyes), spawnlings, GOLIATH (armoured from the front, heart on its back, stunned when it charges into a wall) and NADIR (tentacle slams marked by red rings, acid volleys, brood, gas; shoot out three eyes to open the ribs, then the heart). Some of the corpses aren't dead.
+- **The dead**: hundreds of soldiers, scientists and failed specimens lie everywhere, slumped against walls, on gurneys, in cells and in body bags, drawn with instancing so they cost almost nothing.
+- **Reward**: the XR-9 Railgun (key 8), whose slugs pierce every body in a line, plus files that explain what Velgen and the Army were building.
+
