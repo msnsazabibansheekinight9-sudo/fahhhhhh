@@ -866,6 +866,84 @@ RX.MODE_INFO = {
   heats: { name: 'Heat + A-Main', desc: 'A heat race sets the order for the feature A-Main.' }
 };
 
+
+// Additional tracks (5 more per discipline) and cars, merged before parsing.
+RX.EXTRA_TRACKS = {
+  f1: [['Hungaroring Valley', 'circuit', 'grass', 3011, {}], ['Imola Riverside', 'circuit', 'autumn', 3012, { hilly: 1 }], ['Las Vegas Strip', 'street', 'nightcity', 3013, { night: 1 }], ['Shanghai Gardens', 'circuit', 'city', 3014, { fast: 1 }], ['Baku Old Town', 'street', 'coast', 3015, {}]],
+  indy: [['Toronto Exhibition', 'street', 'city', 3021, {}], ['Milwaukee Mile', 'oval', 'grass', 3022, { oval: 'egg', bank: 9, small: 1 }], ['Barber Park', 'circuit', 'autumn', 3023, { hilly: 1 }], ['Nashville Bridges', 'street', 'nightcity', 3024, { night: 1 }], ['Michigan Superspeedway', 'oval', 'forest', 3025, { oval: 'tri', bank: 18, big: 1 }]],
+  nascar: [['Richmond Short Track', 'oval', 'autumn', 3031, { oval: 'egg', bank: 14, small: 1 }], ['Atlanta High Banks', 'oval', 'forest', 3032, { oval: 'quad', bank: 28 }], ['Kansas Speedway', 'oval', 'grass', 3033, { oval: 'tri', bank: 20 }], ['Charlotte Roval', 'circuit', 'city', 3034, {}], ['North Wilkesboro Night', 'oval', 'autumn', 3035, { oval: 'egg', bank: 14, small: 1, night: 1 }]],
+  endurance: [['Sebring Bumps', 'circuit', 'jungle', 3041, {}], ['Road America Enduro', 'circuit', 'autumn', 3042, { fast: 1 }], ['Portimão Rollercoaster', 'circuit', 'coast', 3043, { hilly: 1 }], ['Fuji Twilight', 'circuit', 'mountain', 3044, { night: 1 }], ['Silverstone Six Hours', 'circuit', 'grass', 3045, { fast: 1, long: 1 }]],
+  gt: [['Laguna Corkscrew', 'circuit', 'canyon', 3051, { hilly: 1 }], ['Imola Tamburello', 'circuit', 'autumn', 3052, {}], ['Misano Adriatic', 'circuit', 'coast', 3053, {}], ['Sepang Monsoon', 'circuit', 'jungle', 3054, { rain: 1 }], ['Spielberg Hills', 'circuit', 'mountain', 3055, { hilly: 1 }]],
+  touring: [['Croft Moors', 'circuit', 'grass', 3061, {}], ['Donington National', 'circuit', 'autumn', 3062, { hilly: 1 }], ['Pukekohe Park', 'circuit', 'grass', 3063, { fast: 1 }], ['Surfers Paradise Streets', 'street', 'coast', 3064, {}], ['Guia Night Hills', 'street', 'nightcity', 3065, { night: 1, hilly: 1 }]],
+  rally: [['Finland Night Jumps', 'stage', 'forest', 3071, { surface: 'gravel', night: 1, jumps: 1 }], ['Monte Carlo Ice', 'stage', 'snow', 3072, { surface: 'snow', hilly: 1 }], ['Fafe Rally Portugal', 'stage', 'autumn', 3073, { surface: 'gravel', jumps: 1 }], ['Australian Red Dirt', 'stage', 'canyon', 3074, { surface: 'dirt' }], ['Japan Forest Tarmac', 'stage', 'jungle', 3075, { surface: 'asphalt', rain: 1 }]],
+  rx: [['Spa-Francorchamps RX', 'rx', 'autumn', 3081, { surface: 'mixed' }], ['Hell Lånkebanen', 'rx', 'snow', 3082, { surface: 'mixed' }], ['Nitro Island', 'rx', 'jungle', 3083, { surface: 'mixed', jumps: 1 }], ['Mettet Night', 'rx', 'city', 3084, { surface: 'mixed', night: 1 }], ['Kouvola Arena', 'rx', 'forest', 3085, { surface: 'mixed' }]],
+  drag: [['zMAX Dragway Night', 'drag', 'city', 3091, { len: 402, night: 1 }], ['Houston Raceway', 'drag', 'coast', 3092, { len: 402 }], ['Sonoma Drag Strip', 'drag', 'autumn', 3093, { len: 402 }], ['Brainerd Lakes', 'drag', 'forest', 3094, { len: 402 }], ['Route 66 Eighth-Mile', 'drag', 'canyon', 3095, { len: 201 }]],
+  drift: [['Sonoma Drift Loop', 'circuit', 'autumn', 3101, { small: 1, hilly: 1 }], ['Wall Speedway Bowl', 'oval', 'coast', 3102, { oval: 'egg', bank: 6, small: 1 }], ['Fuji Drift Course', 'circuit', 'mountain', 3103, { small: 1 }], ['Nikko Circuit', 'circuit', 'jungle', 3104, { small: 1 }], ['Canyon Touge Downhill', 'hill', 'canyon', 3105, { surface: 'asphalt', down: 1 }]],
+  fe: [['New York Red Hook', 'street', 'nightcity', 3111, { night: 1 }], ['Hong Kong Harbour', 'street', 'city', 3112, {}], ['Cape Town ePrix', 'street', 'coast', 3113, {}], ['Hyderabad Lakeside', 'street', 'city', 3114, {}], ['Seoul Olympic Park', 'street', 'autumn', 3115, {}]],
+  kart: [['Bowl Kart Oval', 'kart', 'grass', 3121, {}], ['Jungle Hairpins', 'kart', 'jungle', 3122, {}], ['Autumn Kart Ring', 'kart', 'autumn', 3123, {}], ['Canyon Kart Park', 'kart', 'canyon', 3124, {}], ['Neon Night Kart', 'kart', 'nightcity', 3125, { night: 1 }]],
+  offroad: [['Red Centre Outback', 'stage', 'canyon', 3131, { surface: 'dirt', jumps: 1 }], ['Amazon Mud Trail', 'stage', 'jungle', 3132, { surface: 'mud', rain: 1 }], ['Gobi Dunes', 'stage', 'desert', 3133, { surface: 'sand', dunes: 1 }], ['Lucerne Valley Whoops', 'stage', 'desert', 3134, { surface: 'dirt', jumps: 1 }], ['Arctic Ice Road', 'stage', 'snow', 3135, { surface: 'snow' }]],
+  prewar: [['Tripoli Mellaha', 'circuit', 'desert', 3141, { fast: 1 }], ['Coppa Acerbo Roads', 'circuit', 'coast', 3142, { long: 1 }], ['Masaryk Brno Woods', 'circuit', 'autumn', 3143, { hilly: 1 }], ['Vanderbilt Cup Long Island', 'circuit', 'grass', 3144, {}], ['Le Mans 1923', 'circuit', 'grass', 3145, { fast: 1, long: 1 }]],
+  canam: [['Riverside Night', 'circuit', 'canyon', 3151, { night: 1 }], ['Texas World Road Course', 'circuit', 'grass', 3152, { fast: 1 }], ['Donnybrooke', 'circuit', 'autumn', 3153, {}], ['Michigan International Road', 'circuit', 'forest', 3154, {}], ['Pacific Raceways Kent', 'circuit', 'jungle', 3155, {}]],
+  hill: [['Klausen Pass', 'hill', 'mountain', 3161, { surface: 'asphalt', long: 1 }], ['Monument Valley Climb', 'hill', 'canyon', 3162, { surface: 'gravel' }], ['Mount Washington Auto Road', 'hill', 'autumn', 3163, { surface: 'gravel' }], ['Ollon-Villars', 'hill', 'snow', 3164, { surface: 'asphalt' }], ['Jungle Ascent', 'hill', 'jungle', 3165, { surface: 'asphalt', rain: 1 }]],
+  dirt: [['Port Royal Clay', 'oval', 'autumn', 3171, { oval: 'egg', bank: 12, small: 1, surface: 'dirt' }], ['Skagit Speedway', 'oval', 'forest', 3172, { oval: 'egg', bank: 16, small: 1, surface: 'dirt' }], ['Tulsa Expo Indoor', 'oval', 'nightcity', 3173, { oval: 'quad', bank: 12, small: 1, surface: 'dirt', night: 1 }], ['Placerville Speedway', 'oval', 'canyon', 3174, { oval: 'egg', bank: 10, small: 1, surface: 'dirt' }], ["Huset's Night", 'oval', 'grass', 3175, { oval: 'rect', bank: 14, small: 1, surface: 'dirt', night: 1 }]],
+  land: [['Lake Hart Salt', 'drag', 'salt', 3181, { len: 1609 * 3 }], ['Canyon Dry Lake', 'drag', 'canyon', 3182, { len: 1609 * 2 }], ['Jungle Airfield', 'drag', 'jungle', 3183, { len: 1609 * 2 }], ['Autumn Airstrip', 'drag', 'autumn', 3184, { len: 1609 * 2 }], ['Bonneville Sunset', 'drag', 'salt', 3185, { len: 1609 * 3, night: 1 }]]
+};
+RX.EXTRA_CARS = {
+  f1: `March 711|1971|440|550|305|V8
+Ferrari 312B3|1974|495|575|315|F12
+Lotus 78|1977|485|580|310|V8
+Brabham BT49|1981|510|585|315|V8
+Lotus 97T Renault|1985|900|540|335|V6T
+Jordan 191 Ford|1991|700|505|325|V8
+McLaren MP4/8 Ford|1993|720|505|330|V8
+Williams FW15C Renault|1993|780|505|340|V10
+Ferrari F1-2000|2000|805|600|350|V10
+Ferrari F2012|2012|750|640|340|V8
+Mercedes-AMG F1 W13|2022|1000|798|350|V6H
+Haas VF-23|2023|1000|798|350|V6H
+Kick Sauber C45|2025|1000|800|350|V6H
+Racing Bulls VCARB 02|2025|1000|800|350|V6H`,
+  gt: `Ferrari F40 LM|1989|720|1050|330|V8T
+Lamborghini Diablo GTR|2000|590|1100|330|V12
+Jaguar XJ220C|1993|680|1100|340|V6T
+Mercedes-Benz SLS AMG GT3|2011|600|1300|295|V8
+Bentley Continental GT3|2018|550|1300|290|V8T
+Lotus Evora GTE|2012|500|1200|290|V6`,
+  touring: `Ford Capri RS3100|1974|420|1000|260|V6|RWD|coupe
+Jaguar XJ-S TWR|1984|450|1400|270|V12|RWD|coupe
+BMW 320i STW (E36)|1996|300|1040|245|I4|RWD
+Alfa Romeo 155 BTCC|1994|290|975|240|I4|FWD`,
+  rally: `Ford Escort RS1600 Mk1|1972|200|900|190|I4|RWD|sedan
+Renault 5 Turbo|1981|260|970|210|I4T|RWD|hatch
+Opel Manta 400|1984|275|1000|210|I4|RWD|coupe
+Nissan 240RS|1983|275|1000|210|I4|RWD|coupe
+Škoda Fabia WRC|2003|300|1230|220|I4T|AWD`,
+  endurance: `Porsche 908/3|1970|370|545|290|F8|RWD|roadster
+Lancia LC2|1983|720|850|370|V8T|RWD|groupc
+Mazda 767B|1989|630|900|340|R|RWD|groupc
+Jaguar XJR-14|1991|650|780|350|V8|RWD|groupc`,
+  drift: `Nissan Fairlady Z S30|1975|330|1050|230|I6
+Toyota GT86 Drift|2013|500|1200|250|F4T
+BMW M3 E92 Drift|2010|550|1350|270|V8`,
+  prewar: `Mercedes Simplex 60hp|1903|60|1100|120|I4
+Talbot-Lago T26 Grand Prix|1939|240|900|240|I6
+Napier L48 Samson|1904|90|1200|150|I6`,
+  offroad: `Mitsubishi Pajero Dakar|1985|200|1600|170|V6|AWD|suv
+Citroën C5 Rallye-Raid? |2000|300|1500|190|I4T|AWD|buggy`,
+  kart: `125cc ICC Shifter|1990|40|165|140|2T
+Vortex DVS Shifter|2005|46|170|145|2T`,
+  canam: `Porsche 908/2 Spyder|1969|350|600|280|F8
+McLaren M20|1972|750|680|340|V8`,
+  dirt: `Winged Outlaw Midget|2023|380|460|210|I4|RWD|sprint`,
+  land: `Budweiser Rocket|1979|48000|4400|1190|T|RWD|streamliner
+Bluebird K-Car|1960|4100|4000|640|T|AWD|streamliner`
+};
+RX.EXTRA_CARS.offroad = RX.EXTRA_CARS.offroad.replace("Citroën C5 Rallye-Raid? ", "Schlesser-Renault Buggy");
+RX.SPORTS.forEach(function (s) {
+  (RX.EXTRA_TRACKS[s.id] || []).forEach(function (t) { s.tracks.push(t); });
+  if (RX.EXTRA_CARS[s.id]) s.cars = s.cars + '\n' + RX.EXTRA_CARS[s.id];
+});
+
 // Parse rows into car objects.
 RX.CARS = [];
 RX.carById = {};

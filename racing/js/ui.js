@@ -59,6 +59,29 @@ var RX = window.RX || (window.RX = {});
     ['Chassis', 'weightRed', 'Weight reduction', [0, 1, 0.05], 1], ['Chassis', 'ballast', 'Ballast (kg)', [0, 120, 5], 1],
     ['Brakes & Diff', 'brakeBias', 'Brake bias (front)', [0.45, 0.72, 0.01], 1], ['Brakes & Diff', 'brakePress', 'Brake pressure', [0.7, 1.2, 0.01], 1],
     ['Brakes & Diff', 'diff', 'Differential lock (open ↔ spool)', [0, 1, 0.05], 1],
+    ['Paint', 'roofColor', 'Two-tone roof', [['none', 'Body colour'], ['#111111', 'Black'], ['#f2f2f2', 'White'], ['#c0c4ca', 'Silver'], ['#c8102e', 'Red'], ['#0a2a6b', 'Navy'], ['#ffd400', 'Yellow']]],
+    ['Paint', 'carbonHood', 'Carbon bonnet', 'BOOL'],
+    ['Paint', 'mirrorColor', 'Mirror caps', [['body', 'Body colour'], ['carbon', 'Carbon'], ['#111111', 'Black'], ['#f2f2f2', 'White'], ['#ffd400', 'Yellow'], ['#c8102e', 'Red']]],
+    ['Paint', 'wingColor', 'Wing finish', [['body', 'Default'], ['carbon', 'Carbon'], ['#111111', 'Black'], ['#f2f2f2', 'White'], ['#c0c4ca', 'Silver']]],
+    ['Paint', 'trimColor', 'Window seals', COL],
+    ['Livery', 'pattern2', 'Second pattern layer', 'PATTERNS2'], ['Livery', 'numFont', 'Number font', ['sans', 'serif', 'stencil', 'script', 'mono']],
+    ['Livery', 'decal', 'Decal', [['none', 'None'], ['stars', 'Stars'], ['bolt', 'Lightning bolt'], ['shark', 'Shark teeth'], ['eyes', 'Headlight eyes'], ['checkflag', 'Chequered flag']]],
+    ['Livery', 'decalColor', 'Decal colour', COL],
+    ['Livery', 'flag', 'National flag', [['none', 'None'], ['italy', 'Italy'], ['germany', 'Germany'], ['france', 'France'], ['uk', 'United Kingdom'], ['usa', 'USA'], ['japan', 'Japan'], ['brazil', 'Brazil'], ['belgium', 'Belgium'], ['mexico', 'Mexico']]],
+    ['Livery', 'driverName', 'Driver name (window)', 'TEXT'], ['Livery', 'banner', 'Windscreen banner', 'TEXT'], ['Livery', 'bannerColor', 'Banner colour', COL], ['Livery', 'bannerText', 'Banner text colour', COL],
+    ['Wheels & Tyres', 'wallColor', 'Sidewall lettering colour', COL],
+    ['Aero & Body', 'hoodPins', 'Bonnet pins', 'BOOL'], ['Aero & Body', 'fenderVents', 'Fender vents', 'BOOL'], ['Aero & Body', 'roofVent', 'Roof vent', 'BOOL'], ['Aero & Body', 'louvres', 'Rear window louvres', 'BOOL'],
+    ['Aero & Body', 'towHook', 'Tow straps', 'BOOL'], ['Aero & Body', 'towColor', 'Tow strap colour', COL], ['Aero & Body', 'antenna', 'Radio aerial', 'BOOL'], ['Aero & Body', 'classLight', 'Endurance class lights', COL],
+    ['Driver & Cockpit', 'visor', 'Visor', [['smoke', 'Smoke'], ['clear', 'Clear'], ['gold', 'Gold iridium'], ['blue', 'Blue iridium'], ['red', 'Red iridium']]],
+    ['Driver & Cockpit', 'helmetType', 'Helmet', [['full', 'Full face'], ['open', 'Open face + goggles']]], ['Driver & Cockpit', 'skinTone', 'Skin tone', COL],
+    ['Interior', 'interiorColor', 'Interior colour', COL], ['Interior', 'interiorTrim', 'Interior trim', [['race', 'Stripped race carbon'], ['road', 'Trimmed']]],
+    ['Interior', 'seatColor', 'Seat colour', COL], ['Interior', 'harnessColor', 'Harness colour', COL],
+    ['Interior', 'wheelStyle', 'Steering wheel', [['auto', 'Period correct'], ['wood', 'Wood-rim'], ['classic', 'Leather 3-spoke'], ['race', 'Suede dished'], ['gt', 'Flat-bottom GT'], ['formula', 'Formula wheel'], ['kart', 'Kart'], ['yoke', 'Yoke'], ['truck', 'Large truck']]],
+    ['Interior', 'wheelMark', 'Wheel centre mark', COL],
+    ['Interior', 'dashStyle', 'Instruments', [['auto', 'Period correct'], ['analog', 'Analogue dials'], ['digital', 'Digital display']]],
+    ['Interior', 'leverStyle', 'Gear selector', [['auto', 'Period correct'], ['H', 'H-pattern'], ['seq', 'Sequential'], ['paddle', 'Paddles'], ['none', 'None']]],
+    ['Interior', 'knobColor', 'Gear knob colour', COL],
+    ['Interior', 'seatHeight', 'Seat height (cm)', [-6, 6, 1]], ['Interior', 'seatFore', 'Seat fore/aft (cm)', [-12, 12, 1]],
     ['Assists', 'tc', 'Traction control (T)', 'BOOL', 1], ['Assists', 'abs', 'ABS', 'BOOL', 1], ['Assists', 'sc', 'Stability control', 'BOOL', 1], ['Assists', 'steerAssistOff', 'Disable steering assist', 'BOOL', 1]
   ];
 
@@ -101,6 +124,23 @@ var RX = window.RX || (window.RX = {});
   ui.renderPreview = function (dt) {
     var P = G.preview, r = G.renderer; P.t += dt;
     if (P.auto) P.theta += dt * 0.25;
+    if (P.cockpit && P.rig && P.rig.eye && P.view === 'garage') {
+      var rg = P.rig; rg.root.updateMatrixWorld(true);
+      var e = rg.body.localToWorld(rg.eye.clone());
+      P.cam.position.copy(e); P.cam.fov = 72;
+      P.cam.setViewOffset(window.innerWidth, window.innerHeight, -window.innerWidth * 0.17, 0, window.innerWidth, window.innerHeight);
+      P.cam.aspect = window.innerWidth / window.innerHeight; P.cam.updateProjectionMatrix();
+      var yaw = Math.sin(P.t * 0.3) * 0.5 + (P.lookYaw || 0);
+      P.cam.lookAt(e.x + Math.sin(yaw) * 3, e.y - 0.35 - (rg.lookPitch || 0) * 3, e.z + Math.cos(yaw) * 3);
+      if (rg.driverHead) rg.driverHead.visible = false;
+      rg.interior.forEach(function (m) { m.visible = true; });
+      RX.animateRig(rg, { speed: 0, steer: Math.sin(P.t * 0.8) * 0.3, swAngle: Math.sin(P.t * 0.8) * 1.8, pitch: 0, roll: 0, heave: 0, brake: 0, throttle: 0.5, rpm01: 0.55 + Math.sin(P.t * 1.7) * 0.4, rpm: 6000, kmh: 120 + Math.sin(P.t) * 60, gear: 1 + Math.floor(P.t / 1.5) % 5, lights: true, latG: 0, rain: false }, dt);
+      G.renderer.setScissorTest(false); G.renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+      G.renderer.render(P.scene, P.cam);
+      return;
+    }
+    P.cam.fov = 35;
+    if (P.rig) { if (P.rig.driverHead) P.rig.driverHead.visible = true; P.rig.interior.forEach(function (m) { m.visible = false; }); }
     var tgtY = P.rig ? Math.min(1.2, P.rig.dims.L * 0.08 + 0.3) : 0.5;
     P.cam.position.set(Math.sin(P.theta) * Math.cos(P.phi) * P.dist, Math.sin(P.phi) * P.dist + 0.3, Math.cos(P.theta) * Math.cos(P.phi) * P.dist);
     P.cam.lookAt(0, tgtY, 0);
@@ -143,7 +183,7 @@ var RX = window.RX || (window.RX = {});
     $('setupBack').onclick = function () { ui.show('sports'); };
     $('btnGarage').onclick = function () { ui.openGarage(); };
     $('btnStart').onclick = function () { ui.startRace(); };
-    $('garageBack').onclick = function () { RX.saveCustom(sel.car, sel.cus); ui.show('setup'); ui.refreshCarInfo(); };
+    $('garageBack').onclick = function () { G.preview.cockpit = false; RX.saveCustom(sel.car, sel.cus); ui.show('setup'); ui.refreshCarInfo(); };
     $('garageReset').onclick = function () { sel.cus = RX.defaultCustom(sel.car); RX.saveCustom(sel.car, sel.cus); ui.openGarage(); };
     $('garageRandom').onclick = function () { ui.randomize(); };
     $('carSearch').oninput = function () { ui.fillCars(); };
@@ -194,7 +234,7 @@ var RX = window.RX || (window.RX = {});
   };
 
   function styleName(tr) { return { circuit: 'Road course', street: 'Street circuit', oval: 'Oval', stage: 'Point-to-point stage', hill: 'Hill climb', drag: 'Drag strip', kart: 'Kart circuit', rx: 'Mixed-surface' }[tr.style] || tr.style; }
-  function themeName(t) { return { grass: 'parkland', forest: 'forest', desert: 'desert', coast: 'coastal', city: 'city', nightcity: 'city lights', mountain: 'mountains', snow: 'snow', savanna: 'savanna', salt: 'salt flats' }[t] || t; }
+  function themeName(t) { return { grass: 'parkland', forest: 'forest', desert: 'desert', coast: 'coastal', city: 'city', nightcity: 'city lights', mountain: 'mountains', snow: 'snow', autumn: 'autumn woods', canyon: 'red canyon', jungle: 'jungle', savanna: 'savanna', salt: 'salt flats' }[t] || t; }
   function drawOutline(c, tr) {
     var g = c.getContext('2d'), b = tr.bounds, sx = b.maxx - b.minx, sz = b.maxz - b.minz, s = Math.min((c.width - 10) / Math.max(sx, 1), (c.height - 10) / Math.max(sz, 1));
     if (tr.style === 'drag') { g.strokeStyle = '#fff'; g.lineWidth = 3; g.beginPath(); g.moveTo(10, c.height / 2); g.lineTo(c.width - 10, c.height / 2); g.stroke(); return; }
@@ -217,7 +257,7 @@ var RX = window.RX || (window.RX = {});
     $('carCount').textContent = list.length + ' / ' + s.carList.length + ' cars';
   };
 
-  function engineName(e) { return { I4: 'inline-4', I4T: 'turbo I4', I4H: 'hybrid I4', I5: 'inline-5', I5T: 'turbo I5', I6: 'inline-6', I6T: 'turbo I6', I8: 'straight-8', I3T: 'turbo I3', V4: 'V4', V4H: 'hybrid V4', V6: 'V6', V6T: 'turbo V6', V6H: 'hybrid V6', V8: 'V8', V8T: 'turbo V8', V8H: 'hybrid V8', V10: 'V10', V12: 'V12', V16: 'V16', F4: 'flat-4', F4T: 'turbo flat-4', F6: 'flat-6', F6T: 'turbo flat-6', F12: 'flat-12', R: 'rotary', E: 'electric', T: 'turbine / jet', '2T': '2-stroke', '4T': '4-stroke single', D: 'turbodiesel', NITRO: 'nitromethane V8' }[e] || e; }
+  function engineName(e) { return { I4: 'inline-4', I4T: 'turbo I4', I4H: 'hybrid I4', I5: 'inline-5', I5T: 'turbo I5', I6: 'inline-6', I6T: 'turbo I6', I8: 'straight-8', I3T: 'turbo I3', V4: 'V4', V4H: 'hybrid V4', V6: 'V6', V6T: 'turbo V6', V6H: 'hybrid V6', V8: 'V8', V8T: 'turbo V8', V8H: 'hybrid V8', V10: 'V10', V12: 'V12', V16: 'V16', F4: 'flat-4', F8: 'flat-8', F4T: 'turbo flat-4', F6: 'flat-6', F6T: 'turbo flat-6', F12: 'flat-12', R: 'rotary', E: 'electric', T: 'turbine / jet', '2T': '2-stroke', '4T': '4-stroke single', D: 'turbodiesel', NITRO: 'nitromethane V8' }[e] || e; }
 
   ui.selectCar = function (c) {
     sel.car = c; sel.cus = RX.loadCustom(c);
@@ -283,6 +323,7 @@ var RX = window.RX || (window.RX = {});
     var rebuildT = null;
     function rebuild() { clearTimeout(rebuildT); rebuildT = setTimeout(function () { ui.setPreviewCar(car, cus); RX.saveCustom(car, cus); }, 120); }
     function showTab(name) {
+      G.preview.cockpit = name === 'Interior' || name === 'Driver & Cockpit';
       tabs.querySelectorAll('button').forEach(function (b) { b.classList.toggle('sel', b.textContent === name); });
       panel.innerHTML = '';
       groups[name].forEach(function (o) {
@@ -293,8 +334,9 @@ var RX = window.RX || (window.RX = {});
         var set = function (v) { cus[key] = v; if (!physOnly) rebuild(); else RX.saveCustom(car, cus); ui.refreshCarInfo(); };
         if (type === COL) { input = h('input'); input.type = 'color'; input.value = toHex(cus[key]); input.oninput = function () { set(input.value); }; }
         else if (type === 'BOOL') { input = h('input'); input.type = 'checkbox'; input.checked = !!cus[key]; input.onchange = function () { set(input.checked ? 1 : 0); }; }
-        else if (type === 'PATTERNS' || type === 'RIMS') {
-          input = h('select'); var opts = type === 'PATTERNS' ? RX.PATTERNS : ['auto'].concat(RX.RIMS);
+        else if (type === 'TEXT') { input = h('input'); input.type = 'text'; input.maxLength = 20; input.value = cus[key] || ''; input.placeholder = 'type…'; input.oninput = function () { set(input.value); }; input.onkeydown = function (e) { e.stopPropagation(); }; }
+        else if (type === 'PATTERNS' || type === 'RIMS' || type === 'PATTERNS2') {
+          input = h('select'); var opts = type === 'PATTERNS' ? RX.PATTERNS : type === 'PATTERNS2' ? ['none'].concat(RX.PATTERNS) : ['auto'].concat(RX.RIMS);
           opts.forEach(function (v) { var op = h('option', null, v); op.value = v; input.appendChild(op); }); input.value = cus[key]; input.onchange = function () { set(input.value); };
         } else if (Array.isArray(type) && typeof type[0] === 'number') {
           input = h('div', 'rng'); var r = h('input'); r.type = 'range'; r.min = type[0]; r.max = type[1]; r.step = type[2]; r.value = cus[key];
@@ -315,7 +357,7 @@ var RX = window.RX || (window.RX = {});
     ui.show('garage');
   };
   function fmtV(v) { return Math.abs(v) >= 10 ? Math.round(v) : (+v).toFixed(2); }
-  function toHex(c) { if (!c || c === 'none') return '#000000'; var x = new THREE.Color(c); return '#' + x.getHexString(); }
+  function toHex(c) { if (!c || c === 'none' || c === 'body' || c === 'carbon') return '#000000'; var x = new THREE.Color(c); return '#' + x.getHexString(); }
   ui.randomize = function () {
     var c = sel.cus, r = Math.random;
     var hue = function () { return '#' + new THREE.Color().setHSL(r(), 0.5 + r() * 0.5, 0.25 + r() * 0.5).getHexString(); };
@@ -333,9 +375,9 @@ var RX = window.RX || (window.RX = {});
       ['Graphics quality', 'quality', [[0.6, 'Low'], [0.8, 'Medium'], [1, 'High'], [1.25, 'Ultra']]],
       ['Shadows', 'shadows', 'BOOL'], ['Rear-view mirror (M)', 'mirror', 'BOOL'], ['Units', 'units', [['kmh', 'km/h'], ['mph', 'mph']]],
       ['Field of view', 'fov', [55, 95, 1]], ['Master volume', 'volume', [0, 1, 0.05]], ['Co-driver voice', 'voice', 'BOOL'],
-      ['Keyboard steering assist', 'steerAssist', 'BOOL'], ['AI catch-up', 'catchup', 'BOOL'], ['Damage', 'damage', 'BOOL']
+      ['Keyboard steering assist', 'steerAssist', 'BOOL'], ['Helmet view in cockpit', 'helmetCam', 'BOOL'], ['Look into corners', 'apexLook', 'BOOL'], ['Camera shake', 'shake', [0, 2, 0.1]], ['AI catch-up', 'catchup', 'BOOL'], ['Damage', 'damage', 'BOOL']
     ];
-    if (S.voice == null) S.voice = true;
+    if (S.voice == null) S.voice = true; if (S.apexLook == null) S.apexLook = true; if (S.shake == null) S.shake = 1;
     box.innerHTML = '';
     rows.forEach(function (r) {
       var row = h('div', 'opt'); row.appendChild(h('span', 'opt-l', r[0]));
@@ -382,7 +424,18 @@ var RX = window.RX || (window.RX = {});
     el.classList.add('on'); clearTimeout(ui._pnT); ui._pnT = setTimeout(function () { el.classList.remove('on'); }, 2200);
   };
 
+  ui.initTouch = function () {
+    var coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    if (coarse || 'ontouchstart' in window) $('touch').classList.add('on');
+    document.querySelectorAll('#touch .tb').forEach(function (b) {
+      var k = b.getAttribute('data-k'), tap = b.getAttribute('data-tap');
+      var down = function (e) { e.preventDefault(); b.classList.add('down'); if (k) G.keys[k] = true; if (tap) { if (tap === 'Escape' && G.state === 'paused') RX.resume(); else if (G.race) G.race.onKey(tap); } };
+      var up = function (e) { e.preventDefault(); b.classList.remove('down'); if (k) G.keys[k] = false; };
+      b.addEventListener('pointerdown', down); b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('pointerleave', up);
+    });
+  };
   ui.mirrorFrame = function (x, y, w, h2, on) {
+    var vz = $('visor'); vz.style.display = G.race && G.race.camMode === 2 && G.settings.helmetCam ? 'block' : 'none';
     var m = $('mirrorFrame'); m.style.display = on ? 'block' : 'none';
     if (on) { m.style.left = x - 3 + 'px'; m.style.top = y - 3 + 'px'; m.style.width = w + 'px'; m.style.height = h2 + 'px'; }
   };
@@ -534,6 +587,7 @@ var RX = window.RX || (window.RX = {});
     RX.initRenderer($('gl'));
     ui.initPreview();
     ui.build();
+    ui.initTouch();
     var hero = RX.sportById.f1.carList[RX.sportById.f1.carList.length - 1];
     ui.setPreviewCar(hero, RX.loadCustom(hero));
     ui.show('title');

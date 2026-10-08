@@ -70,6 +70,20 @@ var RX = window.RX || (window.RX = {});
 
   function smoothstep(a, b, x) { var t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
 
+  RX.gearTypeFor = function (car, cus) {
+    if (cus.leverStyle && cus.leverStyle !== 'auto') return cus.leverStyle;
+    var y = car.year, sp = car.sport, b = car.body;
+    if (car.engine === 'E' || car.engine === 'T' || b === 'dragster' || b === 'funny' || b === 'sprint' || b === 'midget' || b === 'streamliner') return 'none';
+    if (b === 'prewar') return 'external';
+    if (b === 'kart') return /KZ|Shifter|Superkart|100cc/.test(car.name) ? 'seq' : 'none';
+    if (b === 'openwheel') return y >= 1989 ? 'paddle' : 'H';
+    if ((sp === 'gt' || sp === 'endurance' || sp === 'hill') && y >= 2000) return 'paddle';
+    if (sp === 'touring' && y >= 2012) return 'paddle';
+    if (sp === 'nascar') return y >= 2022 ? 'seq' : 'H';
+    if ((sp === 'rally' || sp === 'rx' || sp === 'touring' || sp === 'gt' || sp === 'endurance' || sp === 'drift' || sp === 'offroad') && y >= 1995) return 'seq';
+    return 'H';
+  };
+
   // ========== CLOSED / SPORTS BODIES ==========
   function buildBodied(car, cus, rig) {
     var M = RX.mats(), type = car.body;
@@ -107,6 +121,7 @@ var RX = window.RX || (window.RX = {});
       return { hw: hw, yb: yb, belt: belt, x5: r[2], y5: y5, y6: y6 };
     };
     var lo = RX.loft(L, P, { stations: 80 });
+    rig.bodyGeo = lo.geo;
     var kv = lo.keyV;
     // glass regions
     var hasRoof = sp.cabin === 'closed';
@@ -122,7 +137,8 @@ var RX = window.RX || (window.RX = {});
       if (top && c > 0.08 && c < 0.96 && slope > 0.4) return true;
       return false;
     } : null;
-    var liv = RX.drawLivery(cus, glass, { doors: hasRoof ? [0.42, 0.62] : null });
+    var roofT0 = 1, roofT1 = 0; table.forEach(function (r) { if (r[4] >= maxRoof - 0.001) { roofT0 = Math.min(roofT0, r[0]); roofT1 = Math.max(roofT1, r[0]); } });
+    var liv = RX.drawLivery(cus, glass, { doors: hasRoof ? [0.42, 0.62] : null, roofU: hasRoof ? [roofT0, roofT1] : null, hoodU: [Math.min(0.95, roofT1 + 0.16), 0.985], wsU: hasRoof ? [roofT1, Math.min(0.97, roofT1 + 0.11)] : null, nameU: hasRoof ? (roofT0 + roofT1) / 2 : null });
     rig.livery = liv;
     var paint = RX.paintMaterial(cus, liv.tex);
     var body = new THREE.Mesh(lo.geo, paint);
@@ -147,33 +163,17 @@ var RX = window.RX || (window.RX = {});
     var hy = (ph.belt + ph.y5) / 2 - 0.02;
     var headMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: new THREE.Color(cus.headColor), emissiveIntensity: 0.4, roughness: 0.05, metalness: 0.3 });
     rig.headMat = headMat;
-    if (type !== 'streamliner' && type !== 'funny' && car.sport !== 'drag' || type === 'prostock') {
-      [-1, 1].forEach(function (s) {
-        var hl = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), headMat);
-        var round = car.year < 1975 || type === 'roadster' || type === 'suv' || type === 'pickup';
-        hl.scale.set(round ? 0.09 : 0.16, round ? 0.09 : 0.055, 0.06);
-        hl.position.set(s * ph.hw * 0.62, hy, zt(front) - 0.03); rig.body.add(hl);
-        var bez = new THREE.Mesh(new THREE.TorusGeometry(round ? 0.09 : 0.1, 0.012, 6, 16), M.chrome);
-        if (round) { bez.position.copy(hl.position); bez.position.z += 0.035; rig.body.add(bez); }
-      });
-    }
     var tailMat = new THREE.MeshStandardMaterial({ color: 0x440000, emissive: 0xff1111, emissiveIntensity: 0.35, roughness: 0.3 });
     rig.tailMat = tailMat;
-    var pr = P(0.012);
-    [-1, 1].forEach(function (s) {
-      var tl = box(type === 'stock' || type === 'pickup' ? 0.4 : 0.22, 0.07, 0.04, tailMat, s * pr.hw * 0.62, (pr.belt + pr.y5) / 2 - 0.04, zt(0.006), rig.body);
-    });
-    // grille / intakes
-    var pg = P(0.995);
-    box(pg.hw * 0.9, 0.12 * yS, 0.04, M.mesh, 0, Math.max(sp.clear + 0.12, pg.belt - 0.12), zt(0.995) + 0.01, rig.body);
     // mirrors
     var cabinT = 0.5;
     table.forEach(function (r) { if (r[4] >= maxRoof - 0.001) cabinT = Math.max(0, r[0]); });
     var wsT = Math.min(0.95, cabinT + 0.1), pm = P(wsT);
+    RX.decorateBody(rig, { P: P, zt: zt, type: type, car: car, cus: cus, headMat: headMat, tailMat: tailMat, clear: sp.clear, W: W, hasRoof: hasRoof, cabinT: cabinT, sport: car.sport });
     if (cus.mirrors && type !== 'streamliner') {
       [-1, 1].forEach(function (s) {
         var mg = new THREE.Group();
-        box(0.12, 0.08, 0.06, paint, 0, 0, 0, mg);
+        box(0.12, 0.08, 0.06, cus.mirrorColor && cus.mirrorColor !== 'body' ? (cus.mirrorColor === 'carbon' ? M.carbon : new THREE.MeshStandardMaterial({ color: cus.mirrorColor, roughness: 0.3 })) : paint, 0, 0, 0, mg);
         box(0.1, 0.06, 0.005, M.chrome, 0, 0, -0.031, mg);
         box(0.08, 0.02, 0.03, M.black, -s * 0.06, -0.02, 0, mg);
         mg.position.set(s * (pm.hw + 0.06), pm.belt + 0.08, zt(wsT) - 0.05); rig.body.add(mg);
@@ -215,11 +215,12 @@ var RX = window.RX || (window.RX = {});
       var span = Math.min(W * (wingLvl >= 3 ? 0.98 : 0.85), 2.0);
       var wg = new THREE.Group(); wg.position.set(0, wy, zt(wt) - (type === 'funny' ? 0.15 : 0)); rig.body.add(wg);
       var chord = wingLvl >= 3 ? 0.32 : 0.24;
-      var m1 = box(span, 0.025, chord, wingLvl >= 3 ? M.carbon : paint, 0, 0, 0, wg); m1.rotation.x = -0.12;
-      if (wingLvl >= 3) { var m2 = box(span, 0.02, chord * 0.5, M.carbon, 0, 0.06, -chord * 0.55, wg); m2.rotation.x = -0.5; }
+      var wingM = cus.wingColor === 'carbon' ? M.carbon : cus.wingColor && cus.wingColor !== 'body' ? new THREE.MeshStandardMaterial({ color: cus.wingColor, roughness: 0.35, metalness: 0.2 }) : (wingLvl >= 3 ? M.carbon : paint);
+      var m1 = box(span, 0.025, chord, wingM, 0, 0, 0, wg); m1.rotation.x = -0.12;
+      if (wingLvl >= 3) { var m2 = box(span, 0.02, chord * 0.5, wingM, 0, 0.06, -chord * 0.55, wg); m2.rotation.x = -0.5; box(span, 0.03, 0.006, M.black, 0, 0.085, -chord * 0.8, wg); }
       [-1, 1].forEach(function (s) {
-        box(0.015, 0.22, chord * 1.4, wingLvl >= 3 ? M.carbon : paint, s * span / 2, 0.02, -0.04, wg);
-        var post = box(0.03, wy - pw.y6 + 0.05, 0.08, wingLvl >= 3 ? M.carbon : paint, s * span * 0.3, -(wy - pw.y6) / 2, 0.02, wg);
+        box(0.015, 0.22, chord * 1.4, wingM, s * span / 2, 0.02, -0.04, wg);
+        var post = box(0.03, wy - pw.y6 + 0.05, 0.08, wingM, s * span * 0.3, -(wy - pw.y6) / 2, 0.02, wg);
       });
       rig.rearWing = wg;
       if (wingLvl === 5) { wg.position.z = zt(0.05); }
@@ -250,6 +251,8 @@ var RX = window.RX || (window.RX = {});
         box(0.5, 0.09, 0.01, M.mesh, 0, ph2.y6 + 0.08, zt(0.8) + 0.451, rig.body);
       }
     }
+    if (cus.roofVent && hasRoof) { var prv = P(roofT1 - 0.02); box(0.3, 0.035, 0.18, M.black, 0, prv.y6 + 0.015, zt(roofT1 - 0.02), rig.body); }
+    if (cus.louvres && hasRoof) { for (var lv = 0; lv < 6; lv++) { var tl = roofT0 - 0.02 - lv * 0.015, plv = P(Math.max(0.02, tl)); box(plv.hw * 1.1 * 0.7, 0.012, 0.03, M.black, 0, plv.y5 + 0.025, zt(Math.max(0.02, tl)), rig.body); } }
     var flaps = cus.mudflaps >= 0 ? cus.mudflaps : (sport === 'rally' || sport === 'rx' || sport === 'offroad' ? 1 : 0);
     if (flaps) [[tF, rF], [tR, rR]].forEach(function (a) { [-1, 1].forEach(function (s) { box(0.3, 0.3, 0.01, new THREE.MeshStandardMaterial({ color: cus.paint2, roughness: 0.8 }), s * (hw0 - 0.18), a[1] * 0.75 + sp.clear * 0.5, zt(a[0]) - a[1] - 0.12, rig.body); }); });
     if (cus.lightpod || (sport === 'rally' && rig.night)) {
@@ -331,25 +334,29 @@ var RX = window.RX || (window.RX = {});
     box(0.48, 0.08, 0.5, M.seat, seatX, seatY + 0.02, zt(seatT) + 0.02, rig.body);
     if (eyeY - seatY < 0.66) { drv.scale.setScalar(Math.max(0.75, (eyeY - seatY) / 0.74)); }
     var dashZ = zt(seatT) + 0.62;
-    var wheelKind = car.year < 1965 ? 'wood' : 'round';
-    var sw = RX.buildSteeringWheel(wheelKind);
-    var swPivot = new THREE.Group(); swPivot.position.set(seatX, eyeY - 0.3, zt(seatT) + 0.45); swPivot.rotation.x = -0.35;
-    swPivot.add(sw); rig.body.add(swPivot); sw.userData.dyn = true; rig.steer = sw;
-    // column + dashboard
-    var col = RX.cyl(0.025, 0.025, 0.4, M.black, 8, rig.body); col.position.set(seatX, eyeY - 0.36, zt(seatT) + 0.62); col.rotation.x = Math.PI / 2 - 0.35;
-    if (hasRoof || type === 'roadster' || type === 'canam' || type === 'lmpopen') {
-      var dash = box(ps.hw * 1.9, 0.2, 0.35, M.plastic, 0, eyeY - 0.24, dashZ + 0.12, rig.body);
-      box(0.36, 0.1, 0.12, M.plastic, seatX, eyeY - 0.1, dashZ - 0.02, rig.body); // instrument binnacle
-      rig.dashPos = new V3(seatX, eyeY - 0.1, dashZ - 0.085);
-    }
+    // windscreen base for wipers and the interior mirror position
+    var wsBase = cabinT;
+    for (var tq = cabinT; tq < 0.99; tq += 0.005) { var pq = P(tq); if (pq.y5 < pq.belt + 0.12 * yS) { wsBase = tq; break; } }
+    var pTop = P(cabinT), pBase = P(wsBase);
+    var noWipers = type === 'streamliner' || !hasRoof || car.year < 1925;
+    RX.buildCockpit(rig, car, cus, {
+      kind: hasRoof ? 'closed' : 'open', seatX: seatX, seatY: seatY, seatZ: zt(seatT), eyeY: eyeY, dashZ: dashZ, hw: ps.hw, floorY: floorY,
+      roofY: roofAtSeat, beltY: ps.belt, red: RX.carSpec(car, cus).red, wheelY: eyeY - 0.25, wheelZ: zt(seatT) + 0.48, wheelTilt: -0.3,
+      gearType: RX.gearTypeFor(car, cus), leverX: seatX - Math.sign(seatX || 1) * 0.3, leverY: floorY + 0.33, leverZ: zt(seatT) + 0.3,
+      handbrake: /rally|rx|drift|offroad/.test(car.sport), pedalZ: zt(seatT) + 0.95, mirrorZ: zt(cabinT) + 0.02,
+      wipers: !noWipers, wiperY: pBase.y6 + 0.03, wiperZ: zt(wsBase) - 0.06, wiperSlope: -Math.atan2(Math.max(0.05, zt(wsBase) - zt(cabinT)), Math.max(0.05, pTop.y5 - pBase.y6))
+    });
     // roll cage for race cars
     var cage = cus.cage >= 0 ? cus.cage : (hasRoof && car.year > 1965 && type !== 'streamliner' ? 1 : 0);
     if (cage && hasRoof) {
-      var ry = roofAtSeat - 0.06, hz = zt(seatT) - 0.3, fz = zt(Math.min(0.95, cabinT + 0.05)), w2 = ps.hw * 0.86;
+      var hz = zt(seatT) - 0.3, fz = zt(Math.min(0.95, cabinT + 0.05)), w2 = ps.hw * 0.86;
+      var roofAt = function (z) { var pz = P(z / L + 0.5); return pz.belt + (pz.y5 - pz.belt) * 0.9; };
+      var ry = Math.min(roofAtSeat, roofAt(hz)) - 0.08;
+      var fry = Math.min(ry - 0.05, roofAt(fz) - 0.08);
       [-1, 1].forEach(function (s) {
         RX.rod(new V3(s * w2, floorY, hz), new V3(s * w2 * 0.92, ry, hz), 0.022, M.cage, rig.body);
-        RX.rod(new V3(s * w2 * 0.92, ry, hz), new V3(s * w2 * 0.85, ry - 0.05, fz), 0.022, M.cage, rig.body);
-        RX.rod(new V3(s * w2 * 0.85, ry - 0.05, fz), new V3(s * w2 * 0.95, floorY + 0.3, fz + 0.25), 0.022, M.cage, rig.body);
+        RX.rod(new V3(s * w2 * 0.92, ry, hz), new V3(s * w2 * 0.85, fry, fz), 0.022, M.cage, rig.body);
+        RX.rod(new V3(s * w2 * 0.85, fry, fz), new V3(s * w2 * 0.95, floorY + 0.3, fz + 0.25), 0.022, M.cage, rig.body);
         RX.rod(new V3(s * w2, floorY + 0.25, hz), new V3(s * w2, floorY + 0.3, fz + 0.15), 0.02, M.cage, rig.body);
       });
       RX.rod(new V3(-w2 * 0.92, ry, hz), new V3(w2 * 0.92, ry, hz), 0.022, M.cage, rig.body);
@@ -372,10 +379,9 @@ var RX = window.RX || (window.RX = {});
         hoop.position.set(seatX, P(seatT - 0.08).y6, zt(seatT) - 0.28); rig.body.add(hoop);
       }
     }
-    rig.eye = new V3(seatX, eyeY, zt(seatT) + 0.02); rig.lookPitch = 0.03;
+    rig.eye = new V3(seatX, eyeY, zt(seatT) - 0.08); rig.lookPitch = 0.07;
     rig.hood = new V3(0, P(0.8).y6 + 0.35, zt(0.62));
     rig.bumper = new V3(0, sp.clear + 0.35, zt(1) + 0.05);
-    rig.handsRadius = sw.userData.R;
     rig.P = P; rig.zt = zt;
     // wheels
     var rim = cus.rimStyle !== 'auto' ? cus.rimStyle : (car.year < 1940 ? 'wire' : car.year < 1965 ? (type === 'stock' ? 'steelie' : 'wire') : type === 'stock' || type === 'latemodel' ? 'steelie' :
@@ -414,9 +420,10 @@ var RX = window.RX || (window.RX = {});
     ];
     if (o.extraFront) o.extraFront.forEach(function (z) { defs.push({ front: 1, side: 1, z: z, r: dims.rF, w: dims.twF, x: dims.trackF / 2 }, { front: 1, side: -1, z: z, r: dims.rF, w: dims.twF, x: dims.trackF / 2 }); });
     rig.wheels = [];
+    if (!o.tread) o.tread = cus.compound && cus.compound !== 'auto' ? cus.compound : (rig.carRef && RX.autoCompound ? RX.autoCompound(rig.carRef, { surface: rig.carRef.sport === 'rally' ? 'gravel' : 'asphalt' }) : 'medium');
     defs.forEach(function (d) {
       var prof = Math.max(0.15, Math.min(0.7, (o.profile || 0.36) / rs));
-      var wh = RX.buildWheel(d.r, d.w, rimStyle, cus, { side: d.side, profile: prof, knobby: o.knobby, knockoff: rimStyle === 'wire' });
+      var wh = RX.buildWheel(d.r, d.w, rimStyle, cus, { side: d.side, profile: prof, knobby: o.knobby, knockoff: rimStyle === 'wire', tread: o.tread });
       var stagger = (o.stagger && d.side === -1 && !d.front) ? 1.08 : 1;
       wh.pivot.scale.setScalar(stagger);
       wh.pivot.position.set(d.side * d.x, d.r * stagger, d.z);
@@ -481,8 +488,8 @@ var RX = window.RX || (window.RX = {});
       row(cz - 0.9, tw * 1.05, .08, .4, .6, engH, engH + 0.06);
       row(cz - 0.5, tw * 1.1, .06, .42, .55, coverTop * 0.9, coverTop); // airbox / roll hoop
       row(cz - 0.32, tw * 1.08, .06, .42, .6, .66, .6);
-      row(cz - 0.05, tw * 1.05, .06, .44, .62, .6, .55); // cockpit opening (low centre)
-      row(cz + 0.32, tw, .06, .46, .65, .64, .66);
+      row(cz - 0.05, tw * 1.05, .06, .44, .62, .6, .46); // cockpit opening (low centre)
+      row(cz + 0.3, tw, .06, .46, .66, .63, .48);
       row(cz + 0.62, tw * 0.9, .08, .48, .7, .64, .68); // dash bulkhead
       var nb = e.raised ? e.noseY - 0.12 : .1;
       row(zF - 0.15, tw * 0.62, Math.max(.1, nb * 0.7), .48, .7, Math.max(.52, e.noseY + .1), Math.max(.56, e.noseY + .14));
@@ -611,7 +618,8 @@ var RX = window.RX || (window.RX = {});
     // mirrors
     [-1, 1].forEach(function (s) {
       var mg = new THREE.Group(); mg.position.set(s * (tw + 0.18), 0.68, cz + 0.4); rig.body.add(mg);
-      box(0.13, 0.06, 0.04, paint, 0, 0, 0, mg); box(0.12, 0.05, 0.004, M.chrome, 0, 0, -0.022, mg);
+      box(0.13, 0.06, 0.04, paint, 0, 0, 0, mg);
+      var mface = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.05), rig.sideMirrorMat || (rig.sideMirrorMat = new THREE.MeshBasicMaterial({ color: 0x8090a0 }))); mface.position.z = -0.0215; mface.rotation.y = Math.PI; mg.add(mface);
       RX.rod(new V3(0, -0.02, 0.02), new V3(-s * 0.15, -0.12, 0.1), 0.01, M.carbon, mg);
     });
     // number decal on nose & engine cover
@@ -643,17 +651,16 @@ var RX = window.RX || (window.RX = {});
     var drv = RX.buildDriver(cus, { recline: frontEngine || y < 1968 ? 0.25 : y < 1990 ? 0.6 : 0.85, vintage: y < 1955 });
     var seatY = frontEngine ? 0.3 : 0.08;
     drv.position.set(0, seatY, cz - 0.15); rig.body.add(drv); rig.driver = drv;
-    var sw = RX.buildSteeringWheel(frontEngine || y < 1968 ? 'wood' : 'formula');
-    var swPivot = new THREE.Group();
     var swY = frontEngine ? 0.85 : y < 1990 ? 0.56 : 0.5;
-    swPivot.position.set(0, swY, cz + (frontEngine ? 0.35 : 0.42)); swPivot.rotation.x = frontEngine ? -0.5 : -0.25;
-    swPivot.add(sw); rig.body.add(swPivot); sw.userData.dyn = true; rig.steer = sw;
-    rig.formulaScreen = sw.userData.screen || null;
     var headY = seatY + drv.userData.head.position.y;
-    rig.eye = new V3(0, headY + 0.1, cz - 0.15 + drv.userData.head.position.z + 0.02); rig.lookPitch = 0.12;
+    RX.buildCockpit(rig, car, cus, {
+      kind: frontEngine || y < 1968 ? 'open' : 'formula', seatX: 0, seatY: seatY, seatZ: cz - 0.15, eyeY: headY + 0.1, dashZ: cz + 0.5, hw: tw, floorY: 0.06,
+      red: RX.carSpec(car, cus).red, wheelY: swY, wheelZ: cz + (frontEngine ? 0.35 : 0.42), wheelTilt: frontEngine ? -0.5 : -0.25, colLen: 0.25,
+      gearType: RX.gearTypeFor(car, cus), leverX: -0.24, leverY: frontEngine ? 0.45 : 0.3, leverZ: cz + 0.05, pedals: false
+    });
+    rig.eye = new V3(0, headY + 0.06, cz - 0.15 + drv.userData.head.position.z + 0.0); rig.lookPitch = frontEngine || y < 1968 ? 0.14 : 0.3;
     rig.hood = new V3(0, 1.15, cz - 0.6);
     rig.bumper = new V3(0, 0.45, noseTip - 0.4);
-    rig.handsRadius = sw.userData.R;
     // ---- wheels + suspension arms ----
     var dims = { L: L, W: e.track + e.twR, wb: wb, zF: zF, zR: zR, rF: e.rF, rR: e.rR, twF: e.twF, twR: e.twR, trackF: e.track, trackR: e.track - (y < 1983 ? 0 : 0.04) };
     var rim = cus.rimStyle !== 'auto' ? cus.rimStyle : (frontEngine || y < 1960 ? 'wire' : y < 1968 ? 'spoke7' : y < 1983 ? 'split' : y < 2022 ? 'monoblock' : 'aero');
@@ -707,11 +714,11 @@ var RX = window.RX || (window.RX = {});
     // driver sits up
     var drv = RX.buildDriver(cus, { recline: 0.15, legs: true });
     drv.position.set(0, 0.16, -0.25); rig.body.add(drv); rig.driver = drv;
-    var sw = RX.buildSteeringWheel('round'); sw.scale.setScalar(0.85);
-    var swp = new THREE.Group(); swp.position.set(0, 0.52, 0.18); swp.rotation.x = -0.9; swp.add(sw); rig.body.add(swp); sw.userData.dyn = true; rig.steer = sw;
+    RX.buildCockpit(rig, car, cus, { kind: 'kart', seatX: 0, seatY: 0.16, seatZ: -0.25, eyeY: 0.95, dashZ: 0.3, hw: 0.4, floorY: 0.06, red: RX.carSpec(car, cus).red,
+      wheelY: 0.52, wheelZ: 0.18, wheelTilt: -0.9, colLen: 0.1, gearType: RX.gearTypeFor(car, cus), leverX: -0.22, leverY: 0.2, leverZ: 0.0, pedals: false });
     RX.rod(new V3(0, 0.1, 0.45), new V3(0, 0.5, 0.17), 0.012, M.steel, rig.body);
-    rig.eye = new V3(0, 0.95, -0.15); rig.hood = new V3(0, 1.3, -0.6); rig.bumper = new V3(0, 0.3, wb / 2 + 0.4);
-    rig.handsRadius = sw.userData.R * 0.85;
+    rig.eye = new V3(0, 0.95, -0.2); rig.lookPitch = 0.22; rig.hood = new V3(0, 1.3, -0.6); rig.bumper = new V3(0, 0.3, wb / 2 + 0.4);
+
     var dims = { L: 1.85, W: 1.4, wb: wb, zF: wb / 2, zR: -wb / 2, rF: 0.13, rR: 0.14, twF: 0.13, twR: 0.2, trackF: track, trackR: track + 0.1 };
     addWheels(rig, dims, cus, cus.rimStyle !== 'auto' ? cus.rimStyle : 'kart', { profile: 0.45 });
     rig.tailMat = new THREE.MeshStandardMaterial({ color: 0x330000, emissive: 0xff0000, emissiveIntensity: 0 });
@@ -739,7 +746,6 @@ var RX = window.RX || (window.RX = {});
       RX.rod(new V3(s * 0.26, 1.05, -0.2), new V3(s * 0.24, 1.0, 0.25), 0.024, M.cage, rig.body);
     });
     RX.rod(new V3(-0.26, 1.05, -0.2), new V3(0.26, 1.05, -0.2), 0.024, M.cage, rig.body);
-    RX.rod(new V3(-0.24, 1.0, 0.25), new V3(0.24, 1.0, 0.25), 0.024, M.cage, rig.body);
     // front torsion tube + axle
     RX.rod(new V3(-track / 2, 0.38, wb / 2), new V3(track / 2, 0.38, wb / 2), 0.03, M.chrome, rig.body);
     RX.rod(new V3(-track / 2, 0.4, -wb / 2), new V3(track / 2, 0.4, -wb / 2), 0.035, M.steel, rig.body);
@@ -764,9 +770,9 @@ var RX = window.RX || (window.RX = {});
       else [-1, 1].forEach(function (s) { var n = num.clone(); n.scale.setScalar(0.5); n.position.set(s * 0.43, 0.42, -0.9); n.rotation.y = s * Math.PI / 2; rig.body.add(n); });
     }
     var drv = RX.buildDriver(cus, { recline: 0.1 }); drv.position.set(0, 0.32, -0.05); rig.body.add(drv); rig.driver = drv;
-    var sw = RX.buildSteeringWheel('round'); var swp = new THREE.Group(); swp.position.set(0, 0.8, 0.35); swp.rotation.x = -0.3; swp.add(sw); rig.body.add(swp); sw.userData.dyn = true; rig.steer = sw;
-    rig.eye = new V3(0, 1.02, 0.02); rig.hood = new V3(0, 1.4, -0.5); rig.bumper = new V3(0, 0.6, wb / 2 + 0.6);
-    rig.handsRadius = sw.userData.R;
+    RX.buildCockpit(rig, car, cus, { kind: 'sprint', seatX: 0, seatY: 0.32, seatZ: -0.05, eyeY: 1.02, dashZ: 0.5, hw: 0.35, floorY: 0.28, red: RX.carSpec(car, cus).red,
+      wheelY: 0.8, wheelZ: 0.35, wheelTilt: -0.3, colLen: 0.3, gearType: 'none', pedals: false });
+    rig.eye = new V3(0, 0.88, -0.08); rig.lookPitch = 0.1; rig.hood = new V3(0, 1.4, -0.5); rig.bumper = new V3(0, 0.6, wb / 2 + 0.6);
     var dims = { L: 3.6, W: track + 0.45, wb: wb, zF: wb / 2, zR: -wb / 2, rF: 0.33, rR: 0.42, twF: 0.22, twR: 0.4, trackF: track, trackR: track + 0.12 };
     addWheels(rig, dims, cus, cus.rimStyle !== 'auto' ? cus.rimStyle : 'beadlock', { profile: 0.5, stagger: true });
     rig.tailMat = new THREE.MeshStandardMaterial({ color: 0x330000, emissive: 0xff0000, emissiveIntensity: 0 }); rig.headMat = rig.tailMat;
@@ -818,10 +824,10 @@ var RX = window.RX || (window.RX = {});
     if (cus.numStyle !== 'none') [-1, 1].forEach(function (s) { var n = RX.numberDecal(cus, 0.3, 0.3); n.position.set(s * 0.33, 0.45, zF - 1.5); n.rotation.y = s * Math.PI / 2; rig.body.add(n); });
     addChute(rig, zR - 0.6, front ? 0.7 : 1.1);
     var drv = RX.buildDriver(cus, { recline: front ? 0.3 : 0.55 }); drv.position.set(0, 0.2, cz); rig.body.add(drv); rig.driver = drv;
-    var sw = RX.buildSteeringWheel(front ? 'wood' : 'round'); sw.scale.setScalar(front ? 1 : 0.6);
-    var swp = new THREE.Group(); swp.position.set(0, 0.62, cz + 0.42); swp.rotation.x = -0.4; swp.add(sw); rig.body.add(swp); sw.userData.dyn = true; rig.steer = sw;
+    RX.buildCockpit(rig, car, cus, { kind: 'dragster', seatX: 0, seatY: 0.2, seatZ: cz, eyeY: 0.88, dashZ: cz + 0.6, hw: 0.3, floorY: 0.15, red: RX.carSpec(car, cus).red,
+      wheelY: 0.62, wheelZ: cz + 0.42, wheelTilt: -0.4, colLen: 0.3, gearType: 'none', pedals: false });
     rig.eye = new V3(0, 0.88, cz + 0.08); rig.hood = new V3(0, 1.6, cz - 1.0); rig.bumper = new V3(0, 0.3, zF + 0.4);
-    rig.handsRadius = sw.userData.R * (front ? 1 : 0.6);
+
     var dims = { L: wb + 1.6, W: 1.6, wb: wb, zF: zF, zR: zR, rF: front ? 0.3 : 0.23, rR: front ? 0.55 : 0.62, twF: 0.09, twR: 0.45, trackF: 0.9, trackR: 1.1 };
     addWheels(rig, dims, cus, cus.rimStyle !== 'auto' ? cus.rimStyle : 'dish', { profile: 0.55 });
     rig.wheels.forEach(function (w) { if (w.front) w.pivot.children[0].children.forEach(function () { }); });
@@ -880,9 +886,9 @@ var RX = window.RX || (window.RX = {});
     if (cus.numStyle !== 'none') [-1, 1].forEach(function (s) { var n = RX.numberDecal(Object.assign({}, cus, { numStyle: 'roundel' }), 0.32, 0.32); n.position.set(s * (hw * 0.98 + 0.01), 0.6, zt(midEngine ? 0.3 : 0.25)); n.rotation.y = s * Math.PI / 2; rig.body.add(n); });
     var seatZ = zt(midEngine ? 0.57 : heavy ? 0.42 : 0.43);
     var drv = RX.buildDriver(cus, { recline: 0.05, vintage: true }); drv.position.set(heavy ? 0.25 : 0, 0.3, seatZ); rig.body.add(drv); rig.driver = drv;
-    var sw = RX.buildSteeringWheel('wood'); var swp = new THREE.Group(); swp.position.set(heavy ? 0.25 : 0, 0.82, seatZ + 0.42); swp.rotation.x = -0.6; swp.add(sw); rig.body.add(swp); sw.userData.dyn = true; rig.steer = sw;
-    rig.eye = new V3(heavy ? 0.25 : 0, 1.05, seatZ + 0.06); rig.hood = new V3(0, 1.4, seatZ - 0.5); rig.bumper = new V3(0, 0.6, zt(1) + 0.2);
-    rig.handsRadius = sw.userData.R;
+    RX.buildCockpit(rig, car, cus, { kind: 'prewar', seatX: heavy ? 0.25 : 0, seatY: 0.3, seatZ: seatZ, eyeY: 1.05, dashZ: seatZ + 0.62, hw: hw, floorY: 0.25, red: RX.carSpec(car, cus).red,
+      wheelY: 0.82, wheelZ: seatZ + 0.42, wheelTilt: -0.6, colLen: 0.5, gearType: 'external', leverX: (heavy ? 0.25 : 0) - (hw + 0.06), leverY: 0.55, leverZ: seatZ + 0.15, pedals: false });
+    rig.eye = new V3(heavy ? 0.25 : 0, 1.12, seatZ - 0.04); rig.lookPitch = 0.16; rig.hood = new V3(0, 1.4, seatZ - 0.5); rig.bumper = new V3(0, 0.6, zt(1) + 0.2);
     var r = heavy ? 0.42 : 0.4;
     var dims = { L: L, W: 1.6, wb: wb, zF: wb / 2, zR: -wb / 2, rF: r, rR: r + 0.02, twF: 0.14, twR: 0.16, trackF: heavy ? 1.42 : 1.32, trackR: heavy ? 1.42 : 1.32 };
     addWheels(rig, dims, cus, cus.rimStyle !== 'auto' ? cus.rimStyle : 'wire', { profile: 0.3 });
@@ -898,7 +904,7 @@ var RX = window.RX || (window.RX = {});
     var liv = RX.drawLivery(cus, null, { noSponsors: false });
     var paint = RX.paintMaterial(cus, liv.tex); rig.livery = liv;
     var cab = box(2.4, 1.6, 1.9, paint, 0, 2.15, 2.0, rig.body);
-    var ws = box(2.2, 0.75, 0.04, M.glass, 0, 2.5, 2.96, rig.body); ws.rotation.x = -0.12;
+    var ws = box(2.2, 0.75, 0.02, M.clearGlass, 0, 2.5, 2.96, rig.body); ws.rotation.x = -0.12;
     [-1, 1].forEach(function (s) { box(0.04, 0.6, 0.9, M.glass, s * 1.205, 2.5, 2.3, rig.body); });
     box(2.3, 0.35, 0.1, M.mesh, 0, 1.55, 2.98, rig.body);
     var hm = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: new THREE.Color(cus.headColor), emissiveIntensity: 0.4 }); rig.headMat = hm;
@@ -912,9 +918,10 @@ var RX = window.RX || (window.RX = {});
     rig.exhausts = [new V3(1.1, 3.55, 0.9)];
     if (cus.numStyle !== 'none') [-1, 1].forEach(function (s) { var n = RX.numberDecal(cus, 0.6, 0.6); n.position.set(s * 1.21, 2.0, 1.9); n.rotation.y = s * Math.PI / 2; rig.body.add(n); });
     var drv = RX.buildDriver(cus, { recline: 0.05 }); drv.position.set(0.55, 1.75, 2.1); rig.body.add(drv); rig.driver = drv;
-    var sw = RX.buildSteeringWheel('round'); sw.scale.setScalar(1.4); var swp = new THREE.Group(); swp.position.set(0.55, 2.2, 2.6); swp.rotation.x = -0.9; swp.add(sw); rig.body.add(swp); sw.userData.dyn = true; rig.steer = sw;
+    RX.buildCockpit(rig, car, cus, { kind: 'lorry', seatX: 0.55, seatY: 1.75, seatZ: 2.1, eyeY: 2.55, dashZ: 2.75, hw: 1.15, floorY: 1.7, red: RX.carSpec(car, cus).red,
+      wheelY: 2.2, wheelZ: 2.6, wheelTilt: -0.9, colLen: 0.3, gearType: 'seq', leverX: 0.2, leverY: 1.95, leverZ: 2.35, pedalZ: 2.9 });
     rig.eye = new V3(0.55, 2.55, 2.25); rig.hood = new V3(0, 3.4, 2.0); rig.bumper = new V3(0, 1.4, 3.1);
-    rig.handsRadius = sw.userData.R * 1.4;
+
     var dims = { L: 7.0, W: 2.55, wb: 4.2, zF: 2.1, zR: -2.1, rF: 0.68, rR: 0.68, twF: 0.48, twR: 0.48, trackF: 2.05, trackR: 2.05 };
     addWheels(rig, dims, cus, 'steelie', { profile: 0.5, knobby: true });
     rig.tailMat = new THREE.MeshStandardMaterial({ color: 0x330000, emissive: 0xff0000, emissiveIntensity: 0.3 });
@@ -924,7 +931,7 @@ var RX = window.RX || (window.RX = {});
   // ========== top-level ==========
   RX.buildCar = function (car, cus, opts) {
     opts = opts || {};
-    var rig = { root: new THREE.Group(), body: new THREE.Group(), interior: [], wheels: [], exhausts: null, night: opts.night };
+    var rig = { root: new THREE.Group(), body: new THREE.Group(), interior: [], wheels: [], exhausts: null, night: opts.night, carRef: car };
     rig.root.add(rig.body);
     var b = car.body, dims;
     if (b === 'openwheel') dims = buildOpenWheel(car, cus, rig);
@@ -936,6 +943,7 @@ var RX = window.RX || (window.RX = {});
     else dims = buildBodied(car, cus, rig);
     rig.dims = dims;
     rig.exhausts = rig.exhausts || [];
+    if (rig.eye) { rig.eye.y += (cus.seatHeight || 0) * 0.01; rig.eye.z += (cus.seatFore || 0) * 0.01; }
     // stance: ride height and static camber are visible on the car
     rig.rideOffset = (cus.rideHeight || 0) * 0.01;
     rig.camF = (cus.camberF == null ? -2.5 : cus.camberF) * Math.PI / 180 * 0.8;
@@ -1007,12 +1015,13 @@ var RX = window.RX || (window.RX = {});
       dr.updateMatrixWorld(true);
       [-1, 1].forEach(function (s) {
         var a = s > 0 ? -0.15 : Math.PI + 0.15;
-        tmp.set(Math.cos(a) * R, Math.sin(a) * R, 0.01);
+        tmp.set(Math.cos(a) * R, Math.sin(a) * R, -0.02);
         rig.steer.localToWorld(tmp); dr.worldToLocal(tmp);
         hands.push(tmp.clone());
       });
-      // hands order must match arms [-1, 1]
-      RX.poseArms(dr, [hands[1], hands[0]]);
+      // hands[0] = right hand (driver's right is the -x side); the cockpit may take it to the lever
+      hands = RX.animateCockpit(rig, st, dt, hands);
+      RX.poseArms(dr, hands);
       if (rig.driverHead) {
         rig.driverHead.rotation.y = -st.steer * 0.6;
         rig.driverHead.rotation.z = -(st.latG || 0) * 0.05;

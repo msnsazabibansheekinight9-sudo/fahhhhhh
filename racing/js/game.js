@@ -120,6 +120,14 @@ var RX = window.RX || (window.RX = {});
     var rig = RX.buildCar(car, cus, env);
     scene.add(rig.root);
     var st = RX.makePhysics(car, cus, rig.dims);
+    // live rear-view mirrors (interior mirror in closed cars, pod mirrors on single-seaters)
+    var mirMats = [rig.cockpit && rig.cockpit.mirrorMat, rig.sideMirrorMat].filter(Boolean);
+    if (mirMats.length) {
+      this.mirrorRT = new THREE.WebGLRenderTarget(512, 160);
+      var mt = this.mirrorRT.texture; mt.wrapS = THREE.RepeatWrapping; mt.repeat.x = -1; mt.offset.x = 1; mt.encoding = THREE.sRGBEncoding;
+      mirMats.forEach(function (m) { m.map = mt; m.color.set(0xffffff); m.needsUpdate = true; });
+      this.mirrorWorld = rig.cockpit && rig.cockpit.mirrorMat ? 'interior' : 'pods';
+    }
     this.player = { isPlayer: true, car: car, cus: cus, rig: rig, st: st, lap: 0, lapStart: 0, laps: [], best: Infinity, sector: 0, finished: false, name: 'You', out: false, pitStops: 0, jokers: 0, drift: 0 };
     // headlight for the player
     if (this.tod.night || sess.dayNight || this.fog) {
@@ -329,8 +337,29 @@ var RX = window.RX || (window.RX = {});
     if (st.vx > 22) { this.flash('Slow down below ' + RX.fmtSpeed(22) + ' ' + RX.unitLabel() + ' to pit'); return; }
     if (this.pitting) return;
     this.pitting = { t: 0, dur: 2.8 + (st.fuel < 1 && this.sess.fuel ? (1 - st.fuel) * 6 : 0) + (st.damage * 6) };
+    this.showPitCrew(true);
     p.pitStops++;
     this.flash('PIT STOP', this.pitting.dur, 'yellow');
+  };
+
+  // pit crew: one crew member with a wheel gun at each corner, plus the car up on jacks
+  Race.prototype.showPitCrew = function (on) {
+    var rig = this.player.rig;
+    if (!on) { if (this.crew) { rig.root.remove(this.crew); this.crew = null; } return; }
+    var M = RX.mats(), g = new THREE.Group(), d = rig.dims;
+    var suit = new THREE.MeshStandardMaterial({ color: this.player.cus.paint1, roughness: 0.8 });
+    var helm = new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.3 });
+    this.crewParts = [];
+    rig.wheels.slice(0, 4).forEach(function (w) {
+      var c = new THREE.Group(); c.position.set(w.x + Math.sign(w.x) * (w.r * 0.3 + 0.55), 0, w.z);
+      var body = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.2, 0.7, 10), suit); body.position.y = 0.55; c.add(body);
+      var legs = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.25, 0.45), suit); legs.position.set(0, 0.15, 0); c.add(legs);
+      var head = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 10), helm); head.position.y = 1.0; c.add(head);
+      var gun = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.12, 0.12), M.black); gun.position.set(-Math.sign(w.x) * 0.3, 0.55, 0); c.add(gun);
+      body.rotation.z = -Math.sign(w.x) * 0.5; head.position.x = -Math.sign(w.x) * 0.25;
+      g.add(c); this.crewParts.push(c);
+    }, this);
+    rig.root.add(g); this.crew = g;
   };
 
   Race.prototype.resetCar = function () {
@@ -367,7 +396,7 @@ var RX = window.RX || (window.RX = {});
     if (sess.kind === 'drag') this.dragUpdate(dt, inp);
     if (this.pitting) {
       this.pitting.t += dt; inp.throttle = 0; inp.brake = 1;
-      if (this.pitting.t >= this.pitting.dur) { st.wear = 0; st.fuel = 1; st.damage = 0; st.energy = 1; this.pitting = null; this.flash('GO GO GO', 1, 'green'); p.pitDone = true; }
+      if (this.pitting.t >= this.pitting.dur) { this.showPitCrew(false); st.wear = 0; st.fuel = 1; st.damage = 0; st.energy = 1; this.pitting = null; this.flash('GO GO GO', 1, 'green'); p.pitDone = true; }
     }
     if (p.finished && sess.kind !== 'drag') { inp.throttle = 0; inp.brake = 0.35; inp.steer = this.autoSteer(); }
     if (this.started) this.raceTime += dt;
@@ -868,9 +897,21 @@ var RX = window.RX || (window.RX = {});
     var lightsOn = this.tod.night || this.night || this.fog || this.rain || this.lightsForced;
     RX.animateRig(rig, {
       speed: st.vx, wheelSpeed: st.wheelSpeed, wheelSpeedF: st.wheelSpeedF, steer: st.steer, swAngle: st.swAngle, pitch: st.pitch, roll: st.roll, heave: st.heave,
-      brake: st.brake, throttle: st.throttle, rpm01: st.rpm01, flame: st.flame, drs: st.drs, lights: lightsOn, susp: st.susp, brakeHeat: st.brakeHeat * 2.5, latG: st.latG, chute: st.chute, camber: 0
+      brake: st.brake, throttle: st.throttle, rpm01: st.rpm01, flame: st.flame, drs: st.drs, lights: lightsOn, susp: st.susp, brakeHeat: st.brakeHeat * 2.5, latG: st.latG, chute: st.chute,
+      gear: st.gear, rpm: st.rpm, kmh: st.kmh, handbrake: inp.handbrake, rain: this.rain
     }, dt);
     if (this.headlight && !this.sess.dayNight) this.headlight.intensity = lightsOn ? 2.2 : 0;
+    if (this.crew && this.pitting) {
+      var pt = this.pitting.t;
+      rig.root.position.y += Math.min(0.08, pt * 0.3) * (pt < this.pitting.dur - 0.3 ? 1 : 0);
+      this.crewParts.forEach(function (c, i) { c.children[0].rotation.x = Math.sin(pt * 9 + i) * 0.15; });
+      rig.wheels.forEach(function (w) { w.spin.rotation.x += pt > 0.5 && pt < 1.6 ? dt * 25 : 0; });
+    }
+    if (p.finished && rig.driver && this.camMode !== 2 && this.sess.kind !== 'drag') {
+      // victory wave with the left hand
+      var arm = rig.driver.userData.arms.filter(function (a) { return a.s > 0; })[0];
+      if (arm) RX.solveArm(arm, new V3(0.3, 0.95 + Math.sin(this.t * 8) * 0.06, 0.15 + Math.cos(this.t * 8) * 0.08));
+    }
     // dash display
     if (this.t - (rig.dash.last || 0) > 0.08) {
       rig.dash.last = this.t;
@@ -882,7 +923,7 @@ var RX = window.RX || (window.RX = {});
       if (!a.rig || a.out) return;
       self.poseCar(a.rig, a.x, a.y, a.z, a.heading, a.s(), a.lat, 0, 0);
       var lo = self.tod.night || self.night || self.fog || self.rain;
-      RX.animateRig(a.rig, { speed: a.v, steer: a.steer, swAngle: a.steer * 7, pitch: a.pitch, roll: a.roll, heave: 0, brake: a.accel < -3 ? 1 : 0, throttle: a.accel > 0 ? 1 : 0, rpm01: a.rpm01 || 0.5, flame: 0, drs: false, lights: lo, latG: 0, chute: a.chute }, dt);
+      RX.animateRig(a.rig, { speed: a.v, steer: a.steer, swAngle: a.steer * 7, pitch: a.pitch, roll: a.roll, heave: 0, brake: a.accel < -3 ? 1 : 0, throttle: a.accel > 0 ? 1 : 0, rpm01: a.rpm01 || 0.5, flame: 0, drs: false, lights: lo, latG: 0, chute: a.chute, gear: a.gear, rpm: (a.rpm01 || 0.5) * a.spec.red, kmh: a.v * 3.6 }, dt);
       // dust from AI on loose surfaces
       var surf = self.track.pts[a.idx || 0].surf;
       if (surf !== 'asphalt' && a.v > 8 && Math.random() < 0.5) {
@@ -952,9 +993,27 @@ var RX = window.RX || (window.RX = {});
     } else if (mode === 2 || mode === 3 || mode === 4) {
       rig.root.updateMatrixWorld(true);
       var eye = mode === 2 ? rig.eye.clone() : mode === 3 ? rig.hood.clone() : rig.bumper.clone();
+      var H = this.head || (this.head = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, look: 0, jolt: 0, lastGear: st.gear });
       if (mode === 2) {
-        // head moves with g-forces
-        eye.x += -st.latG * 0.015; eye.z += -st.lonG * 0.012; eye.y += (Math.random() - 0.5) * 0.002 * Math.min(1, spd / 30) * (st.surf !== 'asphalt' ? 6 : 1);
+        // head on a damped spring: g-forces push it around, engine and road shake it
+        var tx = -st.latG * 0.022, tz = -st.lonG * 0.018, ty = -(st.landing || 0) * 0.04;
+        if (st.gear !== H.lastGear) { H.jolt = 0.12; H.lastGear = st.gear; }
+        H.jolt = Math.max(0, H.jolt - dt);
+        tz += H.jolt > 0 ? Math.sin(H.jolt / 0.12 * Math.PI) * 0.025 : 0;
+        H.vx += ((tx - H.x) * 90 - H.vx * 12) * dt; H.x += H.vx * dt;
+        H.vy += ((ty - H.y) * 120 - H.vy * 14) * dt; H.y += H.vy * dt;
+        H.vz += ((tz - H.z) * 90 - H.vz * 12) * dt; H.z += H.vz * dt;
+        var rough = st.surf === 'asphalt' ? (st.offTrack ? 3 : 1) : 4;
+        if (Math.abs(st.lat) > (this.track.pts[st.idx].w - 0.3) && this.track.pts[st.idx].kerb) rough = 6;
+        var vib = (0.0006 + (st.rpm01 || 0) * 0.0008) * (G.settings.shake == null ? 1 : G.settings.shake);
+        var road = 0.0012 * rough * Math.min(1, spd / 25) * (G.settings.shake == null ? 1 : G.settings.shake);
+        eye.x += H.x + (Math.random() - 0.5) * (vib + road);
+        eye.y += H.y + (Math.random() - 0.5) * (vib + road * 1.5);
+        eye.z += H.z;
+        // look toward the apex, and Z / X to look left and right
+        var lookKey = (G.keys.KeyZ ? 1 : 0) - (G.keys.KeyX ? 1 : 0);
+        H.look += (lookKey * 1.2 - H.look) * Math.min(1, dt * 8);
+        H.yaw += ((st.steer || 0) * 0.55 * (G.settings.apexLook === false ? 0 : 1) + H.look - H.yaw) * Math.min(1, dt * 5);
       }
       var src = mode === 2 ? rig.body : rig.root;
       var wp = src.localToWorld(eye);
@@ -962,7 +1021,7 @@ var RX = window.RX || (window.RX = {});
       var q = new THREE.Quaternion(); src.getWorldQuaternion(q);
       var look = new THREE.Quaternion().setFromEuler(new THREE.Euler(mode === 2 ? (rig.lookPitch != null ? rig.lookPitch : 0.08) : 0.05, back < 0 ? 0 : Math.PI, mode === 2 ? st.latG * 0.02 : 0, 'YXZ'));
       cam.quaternion.copy(q).multiply(look);
-      if (mode === 2 && this.lookAround) cam.rotateY(this.lookAround);
+      if (mode === 2) { cam.rotateY(H.yaw); cam.rotateZ(-H.x * 1.2); }
     } else {
       // TV cameras placed along the track
       var tr = this.track, spacing = tr.closed ? Math.max(120, tr.length / 14) : 140;
@@ -979,16 +1038,27 @@ var RX = window.RX || (window.RX = {});
 
   Race.prototype.render = function () {
     var r = G.renderer;
+    if (this.mirrorRT && this.camMode === 2 && (this._mirFrame = (this._mirFrame || 0) + 1) % 2 === 1) {
+      var rg = this.player.rig, mc0 = this.mirrorCam, st0 = this.player.st;
+      var interiorMirror = this.mirrorWorld === 'interior';
+      var mp = rg.body.localToWorld(new V3(0, (rg.eye ? rg.eye.y : 1) + (interiorMirror ? 0.1 : 0.05), rg.eye ? rg.eye.z + (interiorMirror ? 0.3 : 0) : 0));
+      // the near plane starts past the cabin so seats, cage and the driver don't block the view
+      mc0.position.copy(mp); mc0.aspect = 3.2; mc0.fov = 26; mc0.near = interiorMirror ? 1.1 : 0.9; mc0.far = 1500; mc0.updateProjectionMatrix();
+      mc0.lookAt(mp.x - Math.sin(st0.heading) * 10, mp.y - 0.35, mp.z - Math.cos(st0.heading) * 10);
+      var hv = rg.driver ? rg.driver.visible : true; if (rg.driver) rg.driver.visible = false;
+      r.setRenderTarget(this.mirrorRT); r.render(this.scene, mc0); r.setRenderTarget(null);
+      if (rg.driver) rg.driver.visible = hv;
+    }
     r.setScissorTest(false);
     r.setViewport(0, 0, window.innerWidth, window.innerHeight);
     r.render(this.scene, this.camera);
-    if (G.settings.mirror && (this.camMode >= 2 && this.camMode <= 4) && !this.lookBack) {
+    if (G.settings.mirror && ((this.camMode === 2 && !this.mirrorRT) || this.camMode === 3 || this.camMode === 4) && !this.lookBack) {
       var w = Math.round(window.innerWidth * 0.28), h = Math.round(w / 3.2), x = Math.round((window.innerWidth - w) / 2), y = window.innerHeight - h - 12;
       var mc = this.mirrorCam, st = this.player.st, rig = this.player.rig;
       var wp = rig.body.localToWorld(new V3(0, (rig.eye ? rig.eye.y : 1) + 0.15, rig.eye ? rig.eye.z : 0));
       mc.position.copy(wp);
       mc.lookAt(wp.x - Math.sin(st.heading) * 10, wp.y - 0.4, wp.z - Math.cos(st.heading) * 10);
-      mc.aspect = w / h; mc.updateProjectionMatrix();
+      mc.aspect = w / h; mc.near = 0.1; mc.fov = 50; mc.updateProjectionMatrix();
       r.setScissorTest(true); r.setScissor(x, y, w, h); r.setViewport(x, y, w, h);
       // mirror image flipped horizontally
       mc.projectionMatrix.elements[0] *= -1;
@@ -1064,6 +1134,7 @@ var RX = window.RX || (window.RX = {});
       if (o.geometry) o.geometry.dispose();
       if (o.material) { (Array.isArray(o.material) ? o.material : [o.material]).forEach(function (m) { if (m.map) m.map.dispose(); m.dispose(); }); }
     });
+    if (this.mirrorRT) this.mirrorRT.dispose();
     if (this.env) { this.env.dispose(); if (RX.carEnv === this.env) RX.carEnv = null; }
   };
 

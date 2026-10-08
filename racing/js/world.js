@@ -14,6 +14,9 @@ var RX = window.RX || (window.RX = {});
     mountain: { ground: '#5d7a45', ground2: '#7d7a70', sky: ['#4c86d0', '#c8dbef'], fog: '#c3d2e2', hills: 120, trees: 'pine', density: 1.4, rocks: true },
     snow: { ground: '#eef2f6', ground2: '#d6e0ea', sky: ['#7da4d0', '#e6eef6'], fog: '#e2e9f0', hills: 50, trees: 'snowpine', density: 1.6 },
     savanna: { ground: '#a99a52', ground2: '#8e8a46', sky: ['#4a8ad8', '#f0e2b8'], fog: '#e6dcb8', hills: 20, trees: 'acacia', density: 0.4 },
+    autumn: { ground: '#6f7a3a', ground2: '#8a6a32', sky: ['#6b93c8', '#e6d8c0'], fog: '#d8d0c0', hills: 35, trees: 'autumn', density: 1.8 },
+    canyon: { ground: '#b5643a', ground2: '#9a4f2c', sky: ['#4a86d6', '#f0d2a8'], fog: '#e6c8a4', hills: 90, trees: 'cactus', density: 0.35, rocks: true, mesas: true },
+    jungle: { ground: '#2f5a22', ground2: '#3d6a28', sky: ['#5b8fc8', '#d8e6e0'], fog: '#c6d6cc', hills: 45, trees: 'jungle', density: 2.6, water: true },
     salt: { ground: '#eceae2', ground2: '#dedbd0', sky: ['#3d86e6', '#dbe8f4'], fog: '#e0e8ee', hills: 60, trees: 'none', density: 0 }
   };
 
@@ -538,6 +541,16 @@ var RX = window.RX || (window.RX = {});
         var leaf2 = new THREE.MeshStandardMaterial({ color: 0x3f6f2a, roughness: 0.9, flatShading: true });
         parts.push({ g: new THREE.IcosahedronGeometry(3.2, 0), m: leaf2, y: 5.5, s: 1, alt: true });
       }
+      if (kind === 'autumn') {
+        parts.push({ g: new THREE.CylinderGeometry(0.25, 0.4, 4, 6), m: trunk, y: 2, s: 1 });
+        parts.push({ g: new THREE.IcosahedronGeometry(3.1, 1), m: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, flatShading: true }), y: 5.6, s: 1, colors: ['#c8501e', '#e08a1e', '#d4b02a', '#9a2a1a', '#6a8a2a'] });
+      }
+      if (kind === 'jungle') {
+        var jl = new THREE.MeshStandardMaterial({ color: 0x2f6a24, roughness: 0.85, side: THREE.DoubleSide, flatShading: true });
+        parts.push({ g: new THREE.CylinderGeometry(0.2, 0.32, 9, 6), m: trunk, y: 4.5, s: 1 });
+        for (var jf = 0; jf < 7; jf++) { var jg = new THREE.ConeGeometry(0.7, 5, 3); jg.rotateX(Math.PI / 2 + 0.6); jg.translate(0, 0, 2.3); jg.rotateY(jf / 7 * Math.PI * 2); parts.push({ g: jg, m: jl, y: 9, s: 1 }); }
+        parts.push({ g: new THREE.IcosahedronGeometry(3.6, 1), m: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, flatShading: true }), y: 3.5, s: 1, alt: true, colors: ['#1f4a18', '#2d5e1f', '#3b7026'] });
+      }
       if (kind === 'palm') {
         var pleaf = new THREE.MeshStandardMaterial({ color: 0x3f7a2a, roughness: 0.8, side: THREE.DoubleSide, flatShading: true });
         parts.push({ g: new THREE.CylinderGeometry(0.2, 0.32, 8, 6), m: trunk, y: 4, s: 1 });
@@ -568,6 +581,7 @@ var RX = window.RX || (window.RX = {});
             dummy.position.set(s[0], s[1] + pt.y * s[3], s[2]); dummy.rotation.set(0, s[4], 0); dummy.scale.setScalar(s[3]); dummy.updateMatrix();
             im.setMatrixAt(i, dummy.matrix);
           });
+          if (pt.colors) { var cc = new THREE.Color(); list.forEach(function (sp, i) { im.setColorAt(i, cc.set(pt.colors[Math.floor(Math.abs(Math.sin(sp[4] * 91.7)) * pt.colors.length) % pt.colors.length])); }); }
           im.castShadow = true; im.receiveShadow = true;
           scene.add(im);
         });
@@ -583,6 +597,19 @@ var RX = window.RX || (window.RX = {});
         rim.setMatrixAt(r, dmy.matrix);
       }
       rim.receiveShadow = true; scene.add(rim);
+    }
+    // canyon mesas: tall layered red-rock buttes
+    if (theme.mesas) {
+      var mg = new THREE.CylinderGeometry(1, 1.25, 1, 7); mg.translate(0, 0.5, 0);
+      var mm = new THREE.MeshStandardMaterial({ color: 0xa8552e, roughness: 1, flatShading: true });
+      var mc = 70, mim = new THREE.InstancedMesh(mg, mm, mc), md = new THREE.Object3D();
+      for (var q2 = 0; q2 < mc; q2++) {
+        var pq = P[Math.floor(R() * N)], sq = R() < 0.5 ? 1 : -1, oq = pq.w + 120 + R() * 500;
+        var mx = pq.x + pq.nx * sq * oq, mz = pq.z + pq.nz * sq * oq;
+        var nrq = RX.nearestIdx(track, mx, mz, 3); if (nrq.idx >= 0 && Math.sqrt(nrq.d2) < 90) continue;
+        md.position.set(mx, heightAt(mx, mz) - 2, mz); var rr2 = 20 + R() * 60; md.scale.set(rr2, 30 + R() * 90, rr2 * (0.6 + R() * 0.8)); md.rotation.set(0, R() * 6, 0); md.updateMatrix(); mim.setMatrixAt(q2, md.matrix);
+      }
+      mim.receiveShadow = true; scene.add(mim);
     }
     // buildings for city tracks
     if (theme.buildings) {

@@ -2,7 +2,7 @@
 var RX = window.RX || (window.RX = {});
 
 (function () {
-  var CYL = { I3T: 3, I4: 4, I4T: 4, I4H: 4, I5: 5, I5T: 5, I6: 6, I6T: 6, I8: 8, V4: 4, V4H: 4, V6: 6, V6T: 6, V6H: 6, V8: 8, V8T: 8, V8H: 8, V10: 10, V12: 12, V16: 16, F4: 4, F4T: 4, F6: 6, F6T: 6, F12: 12, R: 6, '2T': 2, '4T': 1, D: 6, NITRO: 8, E: 0, T: 0 };
+  var CYL = { I3T: 3, I4: 4, I4T: 4, I4H: 4, I5: 5, I5T: 5, I6: 6, I6T: 6, I8: 8, V4: 4, V4H: 4, V6: 6, V6T: 6, V6H: 6, V8: 8, V8T: 8, V8H: 8, V10: 10, V12: 12, V16: 16, F4: 4, F4T: 4, F8: 8, F6: 6, F6T: 6, F12: 12, R: 6, '2T': 2, '4T': 1, D: 6, NITRO: 8, E: 0, T: 0 };
 
   RX.Audio = function () { this.ok = false; this.vol = 0.8; };
 
