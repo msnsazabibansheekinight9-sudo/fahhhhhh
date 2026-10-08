@@ -931,7 +931,7 @@ var RX = window.RX || (window.RX = {});
   // ========== top-level ==========
   RX.buildCar = function (car, cus, opts) {
     opts = opts || {};
-    var rig = { root: new THREE.Group(), body: new THREE.Group(), interior: [], wheels: [], exhausts: null, night: opts.night, carRef: car };
+    var rig = { root: new THREE.Group(), body: new THREE.Group(), interior: [], wheels: [], exhausts: null, night: opts.night, carRef: car, lite: !!opts.lite };
     rig.root.add(rig.body);
     var b = car.body, dims;
     if (b === 'openwheel') dims = buildOpenWheel(car, cus, rig);
@@ -985,7 +985,17 @@ var RX = window.RX || (window.RX = {});
       RX.mergeStatic(rig.body);
       rig.wheels.forEach(function (w) { RX.mergeStatic(w.spin); });
     }
-    rig.body.traverse(function (m) { if (m.isMesh && !m.material.transparent) m.castShadow = true; });
+    rig.body.traverse(function (m) {
+      if (!m.isMesh) return;
+      if (rig.lite) { if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere(); m.castShadow = !m.material.transparent && m.geometry.boundingSphere.radius > 0.5; }
+      else m.castShadow = !m.material.transparent;
+    });
+    if (rig.lite) {
+      rig.detail = [];
+      rig.body.children.forEach(function (m) { if (m === rig.driver) { rig.detail.push(m); return; } var r = m.isMesh && m.geometry.boundingSphere ? m.geometry.boundingSphere.radius : 0; if (!m.isMesh || r < 0.6) rig.detail.push(m); });
+      rig.lodNear = true;
+    }
+    if (rig.lite) rig.wheels.forEach(function (w) { w.pivot.traverse(function (m) { if (m.isMesh) m.castShadow = m.geometry.boundingSphere ? m.geometry.boundingSphere.radius > 0.2 : true; }); });
     if (RX.carEnv) rig.root.traverse(function (m) { if (m.isMesh && m.material && m.material.isMeshStandardMaterial && m.material.envMap !== RX.carEnv) { m.material.envMap = RX.carEnv; m.material.needsUpdate = true; } });
     rig.root.userData.rig = rig;
     return rig;

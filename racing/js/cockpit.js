@@ -26,6 +26,7 @@ var RX = window.RX || (window.RX = {});
     add(th, new THREE.CylinderGeometry(0.01, 0.009, 0.045, 6), material, 0, 0.022, 0);
     // knuckle panel detail
     add(g, new THREE.BoxGeometry(0.065, 0.025, 0.006), RX.mats().carbon, 0, 0.02, -0.017);
+    RX.mergeStatic(g);
     return g;
   };
 
@@ -112,7 +113,7 @@ var RX = window.RX || (window.RX = {});
     return 'race';
   };
 
-  RX.buildSteeringWheel = function (kind, cus) {
+  RX.buildSteeringWheel = function (kind, cus, lite) {
     cus = cus || {};
     var M = RX.mats(), g = new THREE.Group();
     var suede = new THREE.MeshStandardMaterial({ map: suedeTex(), roughness: 0.95 });
@@ -126,17 +127,17 @@ var RX = window.RX || (window.RX = {});
         grip.rotation.z = s * 0.12;
         var cap = add(g, new THREE.SphereGeometry(0.03, 10, 8), suede, s * 0.15, 0.075, 0);
         // paddles behind the wheel
-        var pp = new THREE.Group(); pp.position.set(s * 0.09, 0.0, 0.035); g.add(pp);
+        var pp = new THREE.Group(); pp.position.set(s * 0.09, 0.0, 0.035); pp.userData.dyn = true; g.add(pp);
         add(pp, new THREE.BoxGeometry(0.07, 0.1, 0.006), carbon, s * 0.02, 0, 0.01);
         g.userData.paddles.push(pp);
       });
       var scr = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.055), new THREE.MeshBasicMaterial({ color: 0x113322 }));
-      scr.position.set(0, 0.008, -0.0235); scr.rotation.y = Math.PI; g.add(scr); g.userData.screen = scr;
+      scr.position.set(0, 0.008, -0.0235); scr.rotation.y = Math.PI; scr.userData.dyn = true; g.add(scr); g.userData.screen = scr;
       // shift LEDs across the top
-      for (var l = 0; l < 15; l++) {
+      for (var l = 0; l < (lite ? 0 : 15); l++) {
         var col = l < 5 ? 0x19e04a : l < 10 ? 0xff2a2a : 0x3a6bff;
         var lm = new THREE.MeshBasicMaterial({ color: new THREE.Color(col).multiplyScalar(0.12) }); lm.userData.on = new THREE.Color(col); lm.userData.off = new THREE.Color(col).multiplyScalar(0.12);
-        var led = new THREE.Mesh(new THREE.CircleGeometry(0.0045, 8), lm); led.position.set(-0.07 + l * 0.01, 0.052, -0.0235); led.rotation.y = Math.PI; g.add(led);
+        var led = new THREE.Mesh(new THREE.CircleGeometry(0.0045, 8), lm); led.position.set(-0.07 + l * 0.01, 0.052, -0.0235); led.rotation.y = Math.PI; led.userData.dyn = true; g.add(led);
         g.userData.leds.push(lm);
       }
       // rotary knobs and buttons
@@ -154,9 +155,9 @@ var RX = window.RX || (window.RX = {});
       add(g, rimG, suede);
       var hub = add(g, new THREE.BoxGeometry(0.16, 0.1, 0.04), carbon, 0, 0.0, 0.005);
       var spoke = add(g, new THREE.BoxGeometry(0.3, 0.03, 0.02), carbon, 0, 0.0, 0.0);
-      var scr2 = new THREE.Mesh(new THREE.PlaneGeometry(0.08, 0.04), new THREE.MeshBasicMaterial({ color: 0x113322 })); scr2.position.set(0, 0.02, -0.0155); scr2.rotation.y = Math.PI; g.add(scr2); g.userData.screen = scr2;
+      var scr2 = new THREE.Mesh(new THREE.PlaneGeometry(0.08, 0.04), new THREE.MeshBasicMaterial({ color: 0x113322 })); scr2.position.set(0, 0.02, -0.0155); scr2.rotation.y = Math.PI; scr2.userData.dyn = true; g.add(scr2); g.userData.screen = scr2;
       for (var b2 = 0; b2 < 8; b2++) { var bb = add(g, new THREE.CylinderGeometry(0.007, 0.007, 0.008, 10), b2 % 4 === 0 ? M.red : (b2 % 4 === 1 ? new THREE.MeshStandardMaterial({ color: 0xffcc00 }) : alu), (b2 < 4 ? -1 : 1) * (0.05 + (b2 % 2) * 0.016), -0.025 - Math.floor((b2 % 4) / 2) * 0.016, -0.0165); bb.rotation.x = Math.PI / 2; }
-      [-1, 1].forEach(function (s) { var pp = new THREE.Group(); pp.position.set(s * 0.1, 0.02, 0.03); g.add(pp); add(pp, new THREE.BoxGeometry(0.06, 0.11, 0.006), alu, s * 0.025, 0, 0.01); g.userData.paddles.push(pp); });
+      [-1, 1].forEach(function (s) { var pp = new THREE.Group(); pp.position.set(s * 0.1, 0.02, 0.03); pp.userData.dyn = true; g.add(pp); add(pp, new THREE.BoxGeometry(0.06, 0.11, 0.006), alu, s * 0.025, 0, 0.01); g.userData.paddles.push(pp); });
       mark(0.14, 0.02);
       R = 0.16;
     } else if (kind === 'wood' || kind === 'classic') {
@@ -206,6 +207,7 @@ var RX = window.RX || (window.RX = {});
       mark(R);
     }
     g.userData.R = R;
+    RX.mergeStatic(g); // everything except LEDs, screens and paddles becomes one mesh per material
     return g;
   };
 
@@ -235,7 +237,7 @@ var RX = window.RX || (window.RX = {});
     var cp = rig.cockpit;
     // ---- steering wheel ----
     var style = RX.wheelStyleFor(car, cus);
-    var sw = RX.buildSteeringWheel(style, cus);
+    var sw = RX.buildSteeringWheel(style, cus, rig.lite);
     var swPivot = new THREE.Group();
     swPivot.position.set(c.seatX, c.wheelY, c.wheelZ); swPivot.rotation.x = c.wheelTilt;
     swPivot.add(sw); body.add(swPivot); sw.userData.dyn = true;
@@ -247,6 +249,8 @@ var RX = window.RX || (window.RX = {});
     var qr = RX.cyl(0.03, 0.03, 0.05, M.alu, 12, swPivot); qr.rotation.x = Math.PI / 2; qr.position.z = 0.06;
     // ---- dashboard ----
     var analog = cus.dashStyle === 'analog' || (cus.dashStyle !== 'digital' && y < 1996);
+    var lite = rig.lite; // opponents: skip animated cockpit internals nobody can see
+    if (lite) { rig.dashPos = null; }
     if (kind === 'closed') {
       var w = c.hw * 1.92;
       var sh = new THREE.Shape();
@@ -259,7 +263,7 @@ var RX = window.RX || (window.RX = {});
       var hood = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.26, 16, 1, true, -Math.PI / 2, Math.PI), interior);
       hood.rotation.z = Math.PI / 2; hood.rotation.y = Math.PI / 2; hood.scale.set(1, 1, 0.5); hood.position.set(c.seatX, c.eyeY - 0.16, c.dashZ + 0.06); hood.material = new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.9, side: THREE.DoubleSide }); body.add(hood);
       var panel = new THREE.Group(); panel.position.set(c.seatX, c.eyeY - 0.17, c.dashZ - 0.01); body.add(panel);
-      if (analog) {
+      if (lite) { } else if (analog) {
         var light = y < 1975;
         var redFrac = 0.82;
         cp.gauges.push(gauge(panel, 'rpm', Math.ceil(c.red / 1000), redFrac, 0.062, 0.065, 0, 0, light, -0.2));
@@ -268,7 +272,7 @@ var RX = window.RX || (window.RX = {});
         cp.gauges.push(gauge(panel, 'oil', 8, 0, 0.024, 0.0, -0.025, 0.004, light, -0.2));
         // warning lamps
         ['#ff2a2a', '#ffb000', '#1ee05a'].forEach(function (col2, i) { var lm = new THREE.MeshBasicMaterial({ color: new THREE.Color(col2).multiplyScalar(0.15) }); lm.userData.on = new THREE.Color(col2); lm.userData.off = new THREE.Color(col2).multiplyScalar(0.15); var l = new THREE.Mesh(new THREE.CircleGeometry(0.006, 8), lm); l.position.set(-0.015 + i * 0.015, 0.072, -0.004); l.rotation.y = Math.PI; panel.add(l); cp.leds.push(lm); });
-      } else {
+      } else if (!lite) {
         rig.dashPos = new V3(c.seatX, c.eyeY - 0.16, c.dashZ - 0.02);
         // LED shift bar above the display
         for (var l2 = 0; l2 < 10; l2++) {
@@ -307,6 +311,7 @@ var RX = window.RX || (window.RX = {});
       cp.mirrorMat = mm;
       // sun visors / headliner trim
       [-1, 1].forEach(function (s) { add(body, new THREE.BoxGeometry(0.34, 0.012, 0.16), interior, s * c.hw * 0.42, c.roofY - 0.04, c.mirrorZ - 0.05); });
+    } else if (lite) {
     } else if (kind === 'prewar' || kind === 'open') {
       // scuttle-mounted gauges
       var pn = new THREE.Group(); pn.position.set(c.seatX, c.eyeY - 0.2, c.dashZ); body.add(pn);
@@ -319,7 +324,7 @@ var RX = window.RX || (window.RX = {});
       [-1, 1].forEach(function (s) { add(body, new THREE.BoxGeometry(0.06, 0.12, 0.35), interior, s * 0.25, c.eyeY - 0.18, c.seatZ - 0.05); });
     }
     // ---- gear lever / paddles ----
-    var gType = c.gearType;
+    var gType = lite ? 'none' : c.gearType;
     if (gType === 'H' || gType === 'seq') {
       var base = new THREE.Group(); base.position.set(c.leverX, c.leverY, c.leverZ); body.add(base);
       add(base, new THREE.BoxGeometry(0.12, 0.03, 0.16), M.black);
@@ -339,7 +344,7 @@ var RX = window.RX || (window.RX = {});
       cp.lever = lev2; cp.gType = 'H';
     } else cp.gType = gType;
     // ---- hydraulic handbrake (rally / drift / rallycross / off-road) ----
-    if (c.handbrake) {
+    if (c.handbrake && !lite) {
       var hb = new THREE.Group(); hb.position.set(c.leverX + Math.sign(c.leverX - c.seatX) * -0.02, c.leverY, c.leverZ - 0.22); body.add(hb);
       add(hb, new THREE.BoxGeometry(0.06, 0.05, 0.08), M.alu);
       var hl = new THREE.Group(); hl.userData.dyn = true; hb.add(hl);
@@ -348,7 +353,7 @@ var RX = window.RX || (window.RX = {});
       hl.rotation.x = -0.35; cp.hb = hl;
     }
     // ---- pedals ----
-    if (c.pedals !== false) {
+    if (c.pedals !== false && !lite) {
       var pz = c.pedalZ, px = c.seatX;
       var pc = gType === 'paddle' || car.engine === 'E' ? 2 : 3;
       for (var i = 0; i < pc; i++) {
@@ -383,7 +388,7 @@ var RX = window.RX || (window.RX = {});
       add(dr, new THREE.CylinderGeometry(0.04, 0.04, 0.015, 12), M.alu, 0, 0.12, 0.17).rotation.x = Math.PI / 2;
     }
     // ---- windscreen glass with rain, and wipers (closed cars) ----
-    if (kind === 'closed' && rig.livery && rig.livery.maskCanvas && rig.bodyGeo) {
+    if (kind === 'closed' && rig.livery && rig.livery.maskCanvas && rig.bodyGeo && !lite) {
       var inv = RX.canvas(256, 128), ig = inv.getContext('2d');
       ig.drawImage(rig.livery.maskCanvas, 0, 0); ig.globalCompositeOperation = 'difference'; ig.fillStyle = '#fff'; ig.fillRect(0, 0, 256, 128);
       var invTex = new THREE.CanvasTexture(inv);

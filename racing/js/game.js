@@ -149,7 +149,7 @@ var RX = window.RX || (window.RX = {});
       ocus.number = (ocus.number + i * 7) % 99 + 1;
       if (i > 0 && oc === oppCars[i - 1]) { ocus.paint1 = ['#d40000', '#0a2a6b', '#00a19b', '#ff8000', '#1a7a2e', '#5d2e8c', '#ffd400', '#f2f2f2'][i % 8]; ocus.pattern = RX.PATTERNS[i % RX.PATTERNS.length]; }
       ocus.tc = 1; ocus.abs = 1;
-      var orig = RX.buildCar(oc, ocus, env);
+      var orig = RX.buildCar(oc, ocus, { night: env.night, lite: true });
       scene.add(orig.root);
       var skill = diff * (0.95 + rnd() * 0.08);
       if (sess.tandem) skill = diff * 0.82;
@@ -919,9 +919,13 @@ var RX = window.RX || (window.RX = {});
       RX.drawDash(rig, { rpm01: st.rpm01, gear: st.gear === -1 ? 'R' : st.gear, kmh: RX.fmtSpeed(Math.abs(st.vx)), units: RX.unitLabel(), lap: RX.fmtTime(lapT), delta: p.best < Infinity ? 'B ' + RX.fmtTime(p.best) : '', extra: this.sess.fuel ? 'FUEL ' + Math.round(st.fuel * 100) + '%' : (this.sess.energy ? 'BATT ' + Math.round(st.energy * 100) + '%' : ''), extra2: st.drs ? 'DRS' : (p.cus.tc ? 'TC' : '') });
     }
     // AI poses
+    var cp = this.camera.position;
     this.ai.forEach(function (a) {
       if (!a.rig || a.out) return;
       self.poseCar(a.rig, a.x, a.y, a.z, a.heading, a.s(), a.lat, 0, 0);
+      // level of detail: small parts only near the camera
+      var near = (a.x - cp.x) * (a.x - cp.x) + (a.z - cp.z) * (a.z - cp.z) < (self.camMode === 5 ? 90 * 90 : 45 * 45);
+      if (a.rig.detail && near !== a.rig.lodNear) { a.rig.lodNear = near; a.rig.detail.forEach(function (m) { m.visible = near; }); }
       var lo = self.tod.night || self.night || self.fog || self.rain;
       RX.animateRig(a.rig, { speed: a.v, steer: a.steer, swAngle: a.steer * 7, pitch: a.pitch, roll: a.roll, heave: 0, brake: a.accel < -3 ? 1 : 0, throttle: a.accel > 0 ? 1 : 0, rpm01: a.rpm01 || 0.5, flame: 0, drs: false, lights: lo, latG: 0, chute: a.chute, gear: a.gear, rpm: (a.rpm01 || 0.5) * a.spec.red, kmh: a.v * 3.6 }, dt);
       // dust from AI on loose surfaces

@@ -1,14 +1,14 @@
 # Gridlock: Legends of Motorsport
 
-A browser racing game covering 18 motorsport disciplines from 1899 to 2025, built with Three.js (r128). Everything is generated in code: car models, liveries, tracks, scenery, physics and engine sounds. There are no asset files.
+A browser racing game covering 18 motorsport disciplines from 1899 to 2025, 566 cars and 270 tracks, built with Three.js (r128). Everything is generated in code: car models, liveries, tracks, scenery, physics and engine sounds. There are no asset files.
 
 Open `racing/index.html`. The easiest way is to serve the repo folder (for example `python3 -m http.server`) and visit `/racing/`.
 
 ## What's in it
 
-- **18 disciplines** with **518 real cars** from period race series, each with its own year, power, weight, top speed, engine type and drivetrain:
+- **18 disciplines** with **566 real cars** from period race series, each with its own year, power, weight, top speed, engine type and drivetrain:
   Formula 1 (1950–2025), IndyCar & CART (1911–2025), NASCAR (1949–2025, including Truck Series), Le Mans & endurance (Bentley Boys to hypercars), GT racing, touring cars (BTCC, DTM, Group A, Supercars, TCR), rally (Group 2 to Rally1, Group B included), rallycross, drag racing (Top Fuel, Funny Car, Pro Stock, Pro Mod, Super Stock), drifting, Formula E (Gen1 to Gen3 Evo), karting, Dakar & trophy trucks, pre-war Grand Prix, Can-Am, hill climb (Pikes Peak), dirt oval & sprint cars, and land speed records.
-- **10 tracks per discipline (180 total)**, generated from a style and a seed: road courses, street circuits with 90° corners, tri-ovals, paperclips and superspeedways with banking, kart tracks, mixed-surface rallycross loops with jumps, point-to-point rally stages, switchback hill climbs with up to 550 m of climb, drag strips and multi-mile salt flats. Ten scenery themes: parkland, forest, desert, coast, city, city at night, mountains, snow, savanna and salt flats.
+- **15 tracks per discipline (270 total)**, generated from a style and a seed: road courses, street circuits with 90° corners, tri-ovals, paperclips and superspeedways with banking, kart tracks, mixed-surface rallycross loops with jumps, point-to-point rally stages, switchback hill climbs with up to 550 m of climb, drag strips and multi-mile salt flats. Thirteen scenery themes: parkland, forest, autumn woods, jungle, red-rock canyon with mesas, desert, coast, city, city at night, mountains, snow, savanna and salt flats.
 - **33 game modes.** Every discipline has its own set:
   - *F1:* Quick Race, Grand Prix Weekend (qualifying sets your grid, then a race with tyre wear, fuel, damage and a mandatory pit stop), Qualifying Shootout, Time Trial with a ghost, five-round Championship with real points, Elimination. DRS on 2011+ cars.
   - *IndyCar:* 500 sprint with drafting and fuel stops. Push-to-pass on 2012+ cars.
@@ -25,7 +25,7 @@ Open `racing/index.html`. The easiest way is to serve the repo folder (for examp
   - *Dakar:* rally-raid stages with waypoints, staggered-start Baja races and a checkpoint time-extension mode.
   - *Hill climb:* single run, or best of two runs.
   - *Dirt oval:* heat race then A-main.
-- **Customisation: 69 options per car**, saved per car:
+- **Customisation: 106 options per car**, saved per car:
   - *Paint:* three colours, eight finishes (gloss, metallic, matte, satin, chrome, pearl, candy, flake), weathering.
   - *Livery:* 24 patterns with adjustable scale, race number in five styles, sponsor sets, roof number, window tint.
   - *Wheels & tyres:* 14 rim designs (wire, Minilite-style split, BBS-style mesh, dish, turbofan, beadlock and others), rim colour, finish and size, sidewall lettering, 11 tyre compounds, pressure, brake caliper colour.
@@ -45,6 +45,14 @@ Open `racing/index.html`. The easiest way is to serve the repo folder (for examp
   - brake discs glow and brake lights come on
   - exhausts backfire with flames on lift-off and upshifts
   - tyres smoke, loose surfaces throw dust, rain throws spray and walls throw sparks
+- **Cockpits** are modelled for every era:
+  - steering wheels by period: wood-rim, leather 3-spoke, dished suede, flat-bottom GT wheels with a screen, buttons and paddles, and F1 wheels with shift LEDs, rotaries and paddles
+  - analogue gauges with moving needles and warning lamps, or digital dashes with LED shift bars
+  - H-pattern, sequential and pre-war external gear levers; the right hand leaves the wheel to shift, paddles flick on paddle-shift cars, and rally/drift cars have a hydraulic handbrake the hand pulls
+  - two-bone arm IK with modelled gloves, bucket seats with harnesses, door cards, switch panels, fire extinguishers, pedals
+  - a live interior rear-view mirror (and live pod mirrors on single-seaters), real windscreen glass that gathers rain, and animated wipers
+  - the head moves on a damped spring with g-forces, shakes with engine and kerbs, jolts on gearshifts and looks into corners; Z / X look left and right; an optional helmet-visor view
+- **More customisation for the cockpit and livery:** interior colour and trim, seat and harness colours, wheel style, instruments, gear selector, seat height and fore/aft, a second livery layer, two-tone roof, carbon bonnet, decals, national flags, driver name and windscreen banner text, number fonts, visor tints.
 - **First-person cockpit view** for every car. The cockpit has a modelled interior (window openings, pillars, roll cage, dashboard) and a live dash or steering-wheel display with shift lights, gear, speed and lap time. The driver's head moves with g-forces. There's also a rear-view mirror inset, plus chase, far chase, hood, bumper and TV cameras.
 - **Physics:** a single-track vehicle model with tyre slip curves and a friction circle, longitudinal and lateral load transfer, aero downforce and drag, power curves, gearboxes, and grip for each surface and tyre compound (tarmac, gravel, dirt, mud, snow, sand, salt and wet tarmac). Ovals are banked, crests launch the car into jumps, the lead car gives a slipstream and dirty air, and tyre wear, fuel, battery energy and damage are modelled.
 - **AI opponents** drive each car's real performance envelope. Their speed comes from the car's grip, downforce, power and braking on that track. They follow a racing line, overtake, draft, make occasional mistakes and pit. There are five difficulty levels and optional catch-up.
@@ -68,7 +76,7 @@ Open `racing/index.html`. The easiest way is to serve the repo folder (for examp
 | R | Reset to the track |
 | Esc | Pause |
 
-Gamepads are supported: analog steering, throttle and brake on the triggers, and buttons for shifting, cameras, reset, boost and pit.
+Touch controls appear on phones and tablets. Gamepads are supported: analog steering, throttle and brake on the triggers, and buttons for shifting, cameras, reset, boost and pit.
 
 ## Files
 
@@ -78,6 +86,8 @@ Gamepads are supported: analog steering, throttle and brake on the triggers, and
 | `js/tracks.js` | Track generators, surfaces and track queries |
 | `js/models.js` | Materials, livery painter, lofted bodies, wheels, drivers and mesh merging |
 | `js/models2.js` | Body builders for each car type, and the animation rig |
+| `js/cockpit.js` | Cockpits: wheels, gauges, levers, seats, mirrors, glass, wipers, gloves and arm IK |
+| `js/models3.js` | Exterior detail: light clusters, grilles, hardware, tyre and brake textures |
 | `js/physics.js` | Vehicle dynamics, tyre compounds and the AI speed profile |
 | `js/ai.js` | AI drivers and an autopilot used for testing |
 | `js/world.js` | Sky, terrain, road, kerbs, barriers, grandstands, pits, scenery, particles and rain |

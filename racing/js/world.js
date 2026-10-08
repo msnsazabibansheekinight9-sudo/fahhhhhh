@@ -453,6 +453,7 @@ var RX = window.RX || (window.RX = {});
       var x = p.x + p.tz * side * off, z = p.z - p.tx * side * off;
       g.position.set(x, RX.roadHeight(p.p, 0) - 0.2, z);
       g.rotation.y = Math.atan2(p.tx, p.tz) + (side > 0 ? -Math.PI / 2 : Math.PI / 2);
+      RX.mergeStatic(g);
       g.traverse(function (o) { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
       scene.add(g);
     }
@@ -470,6 +471,7 @@ var RX = window.RX || (window.RX = {});
     var pitlane = new THREE.Mesh(new THREE.PlaneGeometry(130, 12), new THREE.MeshStandardMaterial({ color: 0x45474b, roughness: 0.9 })); pitlane.rotation.x = -Math.PI / 2; pitlane.position.set(0, 0.03, -7); g.add(pitlane);
     g.position.set(p.x + p.tz * side * off, RX.roadHeight(p.p, 0) - 0.15, p.z - p.tx * side * off);
     g.rotation.y = Math.atan2(p.tx, p.tz) - Math.PI / 2;
+    RX.mergeStatic(g);
     g.traverse(function (o) { if (o.isMesh) o.receiveShadow = true; });
     scene.add(g);
     // pit entry board
@@ -492,7 +494,7 @@ var RX = window.RX || (window.RX = {});
     function tex(n) {
       return boardTex[n] || (boardTex[n] = (function () { var c = RX.canvas(64, 64), g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, 64, 64); g.fillStyle = '#111'; g.font = 'bold 34px Arial'; g.textAlign = 'center'; g.fillText(n, 32, 45); return new THREE.CanvasTexture(c); })());
     }
-    var last = -1e9;
+    var last = -1e9, grp = new THREE.Group(); scene.add(grp);
     for (var i = 0; i < N; i++) {
       if (Math.abs(P[i].curv) > 0.02 && P[i].s - last > 300) {
         last = P[i].s;
@@ -500,11 +502,13 @@ var RX = window.RX || (window.RX = {});
           var p = RX.trackAt(track, P[i].s - d - 20, 0);
           var side = P[i].curv > 0 ? 1 : -1; // outside of the corner
           var off = p.w + 2.5;
-          var m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: tex(String(d)), side: THREE.DoubleSide }));
-          m.position.set(p.x + p.tz * side * off, p.y + 1.2, p.z - p.tx * side * off); m.rotation.y = Math.atan2(p.tx, p.tz) + Math.PI; scene.add(m);
+          var bm = boardTex['m' + d] || (boardTex['m' + d] = new THREE.MeshBasicMaterial({ map: tex(String(d)), side: THREE.DoubleSide }));
+          var m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), bm);
+          m.position.set(p.x + p.tz * side * off, p.y + 1.2, p.z - p.tx * side * off); m.rotation.y = Math.atan2(p.tx, p.tz) + Math.PI; grp.add(m);
         });
       }
     }
+    RX.mergeStatic(grp);
   }
 
   // ---------- trees, rocks, buildings, spectators ----------
