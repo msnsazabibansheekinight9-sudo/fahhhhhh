@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gridlock: Legends of Motorsport</title>
+<style>
+:root{--bg:#0b0d12;--panel:rgba(14,17,24,.86);--line:rgba(255,255,255,.09);--txt:#e9edf3;--dim:#8d97a6;--acc:#ff3b30;--acc2:#ffcc00;--good:#30d158;--purple:#bf5af2;--cyan:#32d7ff}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;overflow:hidden;user-select:none}
+#gl{position:fixed;inset:0;width:100%;height:100%;display:block}
+button{font:inherit;color:inherit;cursor:pointer}
+.screen{position:fixed;inset:0;display:none}
+.screen.on{display:block}
+.btn{background:rgba(255,255,255,.06);border:1px solid var(--line);padding:11px 22px;border-radius:8px;font-weight:600;letter-spacing:.02em;transition:background .15s,transform .1s}
+.btn:hover{background:rgba(255,255,255,.14)}
+.btn.primary{background:var(--acc);border-color:var(--acc);color:#fff}
+.btn.primary:hover{background:#ff5247}
+.btn:active{transform:translateY(1px)}
+h1,h2,h3{margin:0}
+/* title */
+#title .logo{position:absolute;left:6vw;top:16vh}
+#title .logo h1{font-size:clamp(44px,7vw,96px);font-weight:900;font-style:italic;letter-spacing:-.02em;line-height:.9;text-shadow:0 8px 40px rgba(0,0,0,.6)}
+#title .logo h1 span{color:var(--acc)}
+#title .logo p{color:var(--dim);font-size:18px;margin:14px 0 0;max-width:520px}
+#title .logo .totals{color:var(--acc2);font-weight:700;margin-top:10px;letter-spacing:.04em}
+#title .menu{position:absolute;left:6vw;bottom:12vh;display:flex;flex-direction:column;gap:10px;width:260px}
+#title .menu .btn{text-align:left;font-size:18px;padding:14px 22px}
+.stripe{position:absolute;left:0;right:0;bottom:0;height:5px;background:linear-gradient(90deg,var(--acc),var(--acc2),var(--cyan))}
+/* sports */
+#sports{background:linear-gradient(90deg,rgba(11,13,18,.97) 0%,rgba(11,13,18,.9) 60%,rgba(11,13,18,.55) 100%);padding:28px 32px;overflow:auto}
+.head{display:flex;align-items:center;gap:16px;margin-bottom:18px}
+.head h2{font-size:28px;font-weight:800;font-style:italic}
+.head .sub{color:var(--dim)}
+#sportGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;max-width:1300px;padding-bottom:80px}
+.sport-card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:0;text-align:left;overflow:hidden;transition:transform .12s,border-color .12s}
+.sport-card:hover{transform:translateY(-2px);border-color:var(--acc)}
+.sc-thumb{height:70px;display:flex;align-items:flex-end;padding:8px 12px;font-size:12px;font-weight:700;color:rgba(255,255,255,.9);text-shadow:0 1px 3px #000}
+.sc-name{font-weight:800;font-size:17px;padding:10px 12px 0}
+.sc-years{color:var(--acc2);font-size:13px;padding:2px 12px}
+.sc-meta{color:var(--dim);font-size:12px;padding:4px 12px 12px}
+/* setup */
+#setup .left{position:absolute;left:0;top:0;bottom:0;width:min(560px,42vw);background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:18px 18px 12px}
+#setup .cars{position:absolute;left:min(560px,42vw);top:0;bottom:0;width:min(330px,24vw);background:rgba(10,12,17,.8);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:18px 12px 12px}
+#setup .right{position:absolute;right:0;top:0;bottom:0;left:calc(min(560px,42vw) + min(330px,24vw));pointer-events:none}
+#setup .right > *{pointer-events:auto}
+.sect{color:var(--dim);font-size:12px;text-transform:uppercase;letter-spacing:.12em;margin:12px 0 6px;font-weight:700}
+#setupDesc{color:var(--dim);font-size:13px;margin-top:4px}
+#modeList{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.mode-item{background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:7px;padding:8px 10px;text-align:left;display:flex;flex-direction:column;gap:2px}
+.mode-item span{font-size:11px;color:var(--dim);line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.mode-item.sel,.track-item.sel,.car-item.sel{border-color:var(--acc);background:rgba(255,59,48,.14)}
+#trackList{flex:1;overflow:auto;display:flex;flex-direction:column;gap:5px;padding-right:4px;min-height:120px}
+.track-item{display:flex;gap:10px;align-items:center;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:7px;padding:5px 8px;text-align:left}
+.track-item canvas{background:rgba(0,0,0,.35);border-radius:5px;flex:none}
+.ti-info{display:flex;flex-direction:column}
+.ti-info span{font-size:11px;color:var(--dim)}
+.cars .tools{display:flex;gap:6px;margin-bottom:6px}
+.cars input,.cars select,#raceOpts input,#raceOpts select,.opt select,.opt input[type=number],.opt input[type=text]{background:#151a22;border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:6px 8px;font:inherit;font-size:13px}
+#carSearch{flex:1;min-width:0}
+#carCount{color:var(--dim);font-size:12px;margin-bottom:6px}
+#carList{flex:1;overflow:auto;display:flex;flex-direction:column;gap:4px;padding-right:4px}
+.car-item{text-align:left;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:7px;padding:6px 9px;display:grid;grid-template-columns:auto 1fr;column-gap:8px}
+.car-item b{font-size:13px}
+.ci-year{color:var(--acc2);font-weight:700;font-size:13px;grid-row:span 2}
+.ci-spec{font-size:11px;color:var(--dim)}
+.carinfo{position:absolute;right:20px;top:18px;width:min(380px,30vw);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.carinfo h2{font-size:21px;font-weight:800;font-style:italic}
+#carSpecs{display:grid;grid-template-columns:1fr 1fr;gap:4px 14px;margin-top:10px;font-size:13px}
+#carSpecs div{display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:3px 0}
+#carSpecs span{color:var(--dim)}
+.bar{display:grid;grid-template-columns:96px 1fr;align-items:center;font-size:12px;color:var(--dim);margin-top:6px}
+.bar i{display:block;height:6px;border-radius:3px;background:linear-gradient(90deg,var(--acc),var(--acc2))}
+#custCount{color:var(--cyan);font-size:12px;margin-top:10px}
+.raceopt{position:absolute;right:20px;bottom:18px;width:min(560px,40vw);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 16px}
+#modeDesc{color:var(--dim);font-size:13px;margin-bottom:8px}
+#raceOpts{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:13px;color:var(--dim)}
+#raceOpts label{display:flex;flex-direction:column;gap:3px}
+#raceOpts input{width:76px}
+.actions{display:flex;gap:10px;justify-content:flex-end;margin-top:12px}
+.back{position:absolute;left:18px;bottom:14px}
+/* garage */
+#garage .gp{position:absolute;left:0;top:0;bottom:0;width:min(520px,40vw);background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:18px}
+#garageTabs{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+#garageTabs button{background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:16px;padding:5px 12px;font-size:13px}
+#garageTabs button.sel{background:var(--acc);border-color:var(--acc)}
+#garagePanel{flex:1;overflow:auto;padding-right:6px}
+.opt{display:grid;grid-template-columns:1fr 190px;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
+.opt-l .phys{font-style:normal;font-size:10px;color:var(--cyan);border:1px solid rgba(50,215,255,.4);border-radius:4px;padding:0 4px;margin-left:6px}
+.opt input[type=color]{width:60px;height:30px;border:none;background:none;padding:0;justify-self:start}
+.opt input[type=checkbox]{width:20px;height:20px;justify-self:start;accent-color:var(--acc)}
+.opt .rng{display:flex;align-items:center;gap:8px}
+.opt input[type=range]{width:130px;accent-color:var(--acc)}
+.opt em{font-style:normal;color:var(--dim);font-size:12px;width:40px}
+#garageCount{color:var(--cyan);font-size:12px}
+.gactions{display:flex;gap:8px;margin-top:12px}
+.hint{position:absolute;right:20px;bottom:16px;color:var(--dim);font-size:13px;background:rgba(0,0,0,.4);padding:6px 10px;border-radius:6px}
+/* settings/help */
+.dialog{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(620px,92vw);max-height:86vh;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:22px 24px}
+#settings,#help,#pause,#results{background:rgba(5,7,10,.6)}
+.keys{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:14px;margin-top:12px}
+.keys kbd{background:#1f2530;border:1px solid #39404d;border-bottom-width:3px;border-radius:5px;padding:2px 7px;font-family:inherit;font-size:12px;margin-right:4px}
+.keys span{color:var(--dim)}
+/* hud */
+#hud{position:fixed;inset:0;pointer-events:none;display:none}
+#hud.on{display:block}
+#hudTitle{position:absolute;left:50%;top:10px;transform:translateX(-50%);font-size:13px;color:var(--dim);background:rgba(0,0,0,.35);padding:4px 12px;border-radius:12px}
+.tl{position:absolute;left:16px;top:14px;width:250px}
+#hudPos{font-weight:900;font-style:italic;text-shadow:0 2px 8px #000}
+#hudPos b{font-size:58px;line-height:1}
+#hudPos span{font-size:22px;color:var(--dim)}
+#timing{background:rgba(0,0,0,.45);border-radius:8px;padding:8px 12px;margin-top:6px;backdrop-filter:blur(4px)}
+.t-row{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:14px;font-size:15px;padding:2px 0}
+.t-row span{color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.t-row b{white-space:nowrap;font-variant-numeric:tabular-nums;text-align:right}
+.t-row.small{font-size:12px}
+.purple{color:var(--purple)}.red{color:var(--acc)}
+#mmCanvas{position:absolute;right:14px;top:14px;width:200px;height:200px;background:rgba(0,0,0,.35);border-radius:50%;}
+.speedo{position:absolute;right:22px;bottom:18px;text-align:right;text-shadow:0 2px 10px #000}
+#spd{font-size:68px;font-weight:900;font-style:italic;line-height:1;font-variant-numeric:tabular-nums}
+#spdU{font-size:15px;color:var(--dim);margin-left:4px}
+#gear{display:inline-block;font-size:40px;font-weight:900;width:58px;height:58px;line-height:58px;text-align:center;border:2px solid var(--txt);border-radius:10px;margin-left:12px;vertical-align:top;font-style:normal}
+.rpm{width:300px;height:10px;background:rgba(255,255,255,.12);border-radius:5px;margin:8px 0 4px auto;overflow:hidden}
+#rpmBar{height:100%;background:linear-gradient(90deg,var(--good),var(--acc2));width:0%}
+#rpmBar.amber{background:linear-gradient(90deg,var(--good),var(--acc2),#ff9500)}
+#rpmBar.red{background:var(--acc)}
+#rpmTxt,#assists{font-size:12px;color:var(--dim)}
+#hudMode{position:absolute;left:16px;bottom:18px;width:250px}
+.mbar{display:grid;grid-template-columns:70px 1fr;align-items:center;font-size:12px;color:var(--dim);margin-top:5px}
+.mbar i{display:block;height:8px;background:rgba(255,255,255,.12);border-radius:4px;overflow:hidden}
+.mbar em{display:block;height:100%;background:var(--good)}
+.mbar.low em{background:var(--acc)}.mbar.cyan em{background:var(--cyan)}
+.note{font-size:13px;margin-top:6px;background:rgba(0,0,0,.45);padding:4px 8px;border-radius:6px}
+.note.cyan{color:var(--cyan)}
+.drift b{font-size:44px;font-weight:900;font-style:italic;color:var(--purple);text-shadow:0 2px 10px #000}
+.drift span{display:block;font-size:14px;color:var(--txt)}
+#flash{position:absolute;left:50%;top:22%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px}
+.fl{font-size:28px;font-weight:900;font-style:italic;text-shadow:0 3px 14px #000;transition:opacity .5s,transform .5s;letter-spacing:.02em}
+.fl.out{opacity:0;transform:translateY(-12px)}
+.fl.green{color:var(--good)}.fl.red{color:var(--acc)}.fl.purple{color:var(--purple)}.fl.yellow{color:var(--acc2)}.fl.cyan{color:var(--cyan)}
+.fl.tip{font-size:15px;font-weight:600;font-style:normal;background:rgba(0,0,0,.5);padding:6px 14px;border-radius:8px}
+#countdown{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%);font-size:110px;font-weight:900;font-style:italic;text-shadow:0 6px 30px #000;display:none}
+#paceNote{position:absolute;left:50%;top:9%;transform:translateX(-50%) scale(.9);background:rgba(0,0,0,.6);border:2px solid var(--acc2);border-radius:10px;padding:8px 20px;font-size:30px;font-weight:900;color:var(--acc2);opacity:0;transition:opacity .2s,transform .2s}
+#paceNote.on{opacity:1;transform:translateX(-50%) scale(1)}
+.pn-i{margin-right:10px}
+#visor{position:absolute;inset:0;display:none;background:radial-gradient(ellipse 78% 62% at 50% 52%,rgba(0,0,0,0) 62%,rgba(8,10,14,.55) 78%,rgba(4,5,8,.97) 92%);}
+#visor::before{content:"";position:absolute;left:0;right:0;top:0;height:9%;background:linear-gradient(rgba(4,5,8,.95),rgba(4,5,8,0))}
+#touch{position:absolute;inset:0;display:none;pointer-events:none}
+#touch.on{display:block}
+.tb{position:absolute;pointer-events:auto;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.35);color:#fff;font-weight:800;border-radius:16px;touch-action:none;-webkit-user-select:none}
+.tb:active,.tb.down{background:rgba(255,59,48,.45)}
+.steer{bottom:24px;width:96px;height:96px;font-size:30px}.steer.l{left:16px}.steer.r{left:124px}
+.pedal{bottom:24px;width:92px;height:120px;font-size:15px}.pedal.gas{right:16px}.pedal.brake{right:120px}
+.tsmall{width:54px;height:44px;font-size:13px;bottom:160px}.hb{left:16px}.cam{right:16px;top:230px;bottom:auto}.pause{right:76px;top:230px;bottom:auto}.boost{left:78px}
+#mirrorFrame{position:absolute;border:3px solid #111;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.6);display:none}
+/* pause / results */
+#pause .dialog,#results .dialog{text-align:center}
+.vbtns{display:flex;flex-direction:column;gap:8px;margin-top:16px}
+#results .dialog{width:min(860px,94vw);text-align:left}
+#resSummary{font-size:22px;font-weight:800;color:var(--acc2);margin:6px 0 12px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;color:var(--dim);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.06em;padding:6px;border-bottom:1px solid var(--line)}
+td{padding:6px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+tr.me td{background:rgba(255,59,48,.16)}
+h3{margin:18px 0 6px;font-size:16px}
+#loading{background:var(--bg);z-index:10}
+#loading.on{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px}
+.spinner{width:46px;height:46px;border:4px solid rgba(255,255,255,.15);border-top-color:var(--acc);border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (max-width:900px),(max-height:540px){
+  #title .logo{top:5vh;left:5vw}
+  #title .logo h1{font-size:44px}
+  #title .logo p{font-size:13px;max-width:56vw;margin-top:8px}
+  #title .logo .totals{font-size:12px}
+  #title .menu{left:auto;right:5vw;bottom:7vh;width:190px;gap:6px}
+  #title .menu .btn{font-size:15px;padding:9px 16px}
+  #sports{padding:14px}
+  .head h2{font-size:20px}
+  #sportGrid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+  .sc-thumb{height:44px}
+  #sportsBack{top:10px;right:10px;left:auto;bottom:auto}
+  #setup{overflow-y:auto;background:var(--bg)}
+  #setup .left,#setup .cars,#setup .right{position:static;width:auto;height:auto;border:none}
+  #setup .right{pointer-events:auto}
+  #setup .left{padding:12px}
+  #trackList{max-height:42vh}
+  #setup .cars{padding:0 12px}
+  #carList{max-height:46vh}
+  .carinfo{display:none}
+  .raceopt{position:static;width:auto;margin:12px}
+  #garage .gp{width:100%;background:rgba(14,17,24,.93)}
+  .tl{transform:scale(.72);transform-origin:top left;left:8px;top:8px}
+  #hudTitle{display:none}
+  #mmCanvas{width:110px;height:110px;right:8px;top:8px}
+  .speedo{right:auto;left:50%;bottom:auto;top:2px;transform:translateX(-50%) scale(.62);transform-origin:top center;text-align:center}
+  .rpm{margin:6px auto 2px}
+  #hudMode{bottom:auto;top:150px;left:8px;transform:scale(.8);transform-origin:top left}
+  .hb{bottom:132px}.boost{bottom:132px}
+  .cam{top:126px}.pause{top:126px}
+  #flash{top:30%}
+  .fl{font-size:20px}
+  #countdown{font-size:70px}
+  #paceNote{top:22%;font-size:20px}
+}
+@media (max-width:900px) and (orientation:portrait){
+  #title .menu{left:5vw;right:auto;width:auto;bottom:5vh}
+  #title .logo p{max-width:90vw}
+}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div id="title" class="screen">
+  <div class="logo">
+    <h1>GRID<span>LOCK</span></h1>
+    <p>Legends of Motorsport — every discipline from 1899 to today, each with its own rules, cars and circuits.</p>
+    <div class="totals" id="totals"></div>
+  </div>
+  <div class="menu">
+    <button class="btn primary" id="btnPlay">Race</button>
+    <button class="btn" id="btnSettings">Settings</button>
+    <button class="btn" id="btnHelp">Controls</button>
+  </div>
+  <div class="stripe"></div>
+</div>
+
+<div id="sports" class="screen">
+  <div class="head"><h2>Choose a discipline</h2><span class="sub">Hover to preview a car · click to enter</span></div>
+  <div id="sportGrid"></div>
+  <button class="btn back" id="sportsBack" style="position:fixed">← Back</button>
+</div>
+
+<div id="setup" class="screen">
+  <div class="left">
+    <div><h2 id="setupTitle"></h2><span id="setupYears" style="color:var(--acc2);font-weight:700"></span><div id="setupDesc"></div></div>
+    <div class="sect">Game mode</div>
+    <div id="modeList"></div>
+    <div class="sect">Track</div>
+    <div id="trackList"></div>
+    <div style="margin-top:10px"><button class="btn" id="setupBack">← Disciplines</button></div>
+  </div>
+  <div class="cars">
+    <div class="sect" style="margin-top:0">Car</div>
+    <div class="tools"><input id="carSearch" placeholder="Search name or year"><select id="carSort"><option value="year">Year</option><option value="name">Name</option><option value="hp">Power</option><option value="pw">Power/weight</option><option value="top">Top speed</option></select></div>
+    <div id="carCount"></div>
+    <div id="carList"></div>
+  </div>
+  <div class="right">
+    <div class="carinfo"><h2 id="carName"></h2><div id="carSpecs"></div><div id="carBars"></div><div id="custCount"></div></div>
+    <div class="raceopt">
+      <div id="modeDesc"></div>
+      <div id="raceOpts"></div>
+      <div class="actions"><button class="btn" id="btnGarage">Customise car</button><button class="btn primary" id="btnStart">Start ▶</button></div>
+    </div>
+  </div>
+</div>
+
+<div id="garage" class="screen">
+  <div class="gp">
+    <h2 id="garageTitle" style="font-style:italic"></h2>
+    <div id="garageCount"></div>
+    <div id="garageTabs"></div>
+    <div id="garagePanel"></div>
+    <div class="gactions"><button class="btn" id="garageBack">← Done</button><button class="btn" id="garageRandom">Randomise livery</button><button class="btn" id="garageReset">Reset</button></div>
+  </div>
+  <div class="hint">Drag to orbit · scroll to zoom</div>
+</div>
+
+<div id="settings" class="screen"><div class="dialog"><h2>Settings</h2><div id="setList" style="margin-top:12px"></div><div class="actions"><button class="btn primary" id="setBack">Done</button></div></div></div>
+
+<div id="help" class="screen"><div class="dialog"><h2>Controls</h2>
+  <div class="keys">
+    <div><kbd>W</kbd><kbd>↑</kbd></div><span>Throttle</span>
+    <div><kbd>S</kbd><kbd>↓</kbd></div><span>Brake · hold when stopped to reverse</span>
+    <div><kbd>A</kbd><kbd>D</kbd><kbd>←</kbd><kbd>→</kbd></div><span>Steer</span>
+    <div><kbd>Space</kbd></div><span>Handbrake</span>
+    <div><kbd>E</kbd><kbd>Shift</kbd> / <kbd>Q</kbd><kbd>Ctrl</kbd></div><span>Shift up / down (manual gearbox, toggle with <kbd>G</kbd>)</span>
+    <div><kbd>C</kbd></div><span>Camera: chase · far chase · cockpit · hood · bumper · TV</span>
+    <div><kbd>B</kbd></div><span>Look back</span>
+    <div><kbd>Z</kbd> <kbd>X</kbd></div><span>Look left / right (cockpit)</span>
+    <div><kbd>F</kbd></div><span>DRS (F1 2011+) · push-to-pass (IndyCar) · Attack Mode (Formula E) · nitrous</span>
+    <div><kbd>N</kbd></div><span>Nitrous (when fitted in the garage)</span>
+    <div><kbd>P</kbd></div><span>Pit stop (in the pit zone before the line, below 80 km/h)</span>
+    <div><kbd>T</kbd></div><span>Toggle traction control</span>
+    <div><kbd>H</kbd></div><span>Headlights</span>
+    <div><kbd>M</kbd></div><span>Rear-view mirror</span>
+    <div><kbd>R</kbd></div><span>Reset car to the track</span>
+    <div><kbd>Esc</kbd></div><span>Pause</span>
+    <div>Gamepad</div><span>Left stick steer · RT throttle · LT brake · A handbrake · RB/LB shift · Y camera · B look back · X reset · D-pad up boost · D-pad down pit · Start pause</span>
+  </div>
+  <div class="actions"><button class="btn primary" id="helpBack">Back</button></div></div></div>
+
+<div id="hud">
+  <div id="hudTitle"></div>
+  <div class="tl"><div id="hudPos"></div><div id="timing"></div></div>
+  <canvas id="mmCanvas" width="220" height="220"></canvas>
+  <div id="hudMode"></div>
+  <div class="speedo"><span id="spd">0</span><span id="spdU">km/h</span><span id="gear">N</span><div class="rpm"><div id="rpmBar"></div></div><div id="rpmTxt"></div><div id="assists"></div></div>
+  <div id="flash"></div>
+  <div id="countdown"></div>
+  <div id="paceNote"></div>
+  <div id="mirrorFrame"></div>
+  <div id="visor"></div>
+  <div id="touch">
+    <button data-k="ArrowLeft" class="tb steer l">◀</button><button data-k="ArrowRight" class="tb steer r">▶</button>
+    <button data-k="ArrowDown" class="tb pedal brake">BRAKE</button><button data-k="ArrowUp" class="tb pedal gas">GAS</button>
+    <button data-k="Space" class="tb tsmall hb">HB</button><button data-tap="KeyC" class="tb tsmall cam">CAM</button><button data-tap="Escape" class="tb tsmall pause">II</button><button data-tap="KeyF" class="tb tsmall boost">F</button>
+  </div>
+</div>
+
+<div id="pause" class="screen"><div class="dialog"><h2>Paused</h2><div class="vbtns">
+  <button class="btn primary" id="pResume">Resume</button><button class="btn" id="pRestart">Restart session</button><button class="btn" id="pSettings">Settings</button><button class="btn" id="pQuit">Quit to menu</button></div></div></div>
+
+<div id="results" class="screen"><div class="dialog"><h2 id="resTitle"></h2><div id="resSummary"></div><div id="resTable"></div>
+  <div class="actions"><button class="btn" id="resMenu">Menu</button><button class="btn" id="resRetry">Retry</button><button class="btn primary" id="resNext">Continue</button></div></div></div>
+
+<div id="loading" class="screen"><div class="spinner"></div><div id="loadTxt">Loading…</div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="js/cars.js"></script>
+<script src="js/tracks.js"></script>
+<script src="js/models.js"></script>
+<script src="js/models2.js"></script>
+<script src="js/cockpit.js"></script>
+<script src="js/models3.js"></script>
+<script src="js/physics.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/world.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/modes.js"></script>
+<script src="js/game.js"></script>
+<script src="js/ui.js"></script>
+<script>RX.boot();</script>
+</body>
+</html>
