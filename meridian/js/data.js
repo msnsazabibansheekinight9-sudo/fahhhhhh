@@ -181,6 +181,9 @@ SM.TREE = {}; // faction -> branch -> lines [{line, nodes:[unitIds by rank]}]
 
 SM.weaponFor = function (cls, fac, rank) {
   let wt = cls.wt;
+  if (wt === 'flame' || wt === 'arty' || wt === 'bomb' || wt === 'torpedo') return wt;
+  if (fac === 'legion') { if (wt === 'laser' || wt === 'plasma') return 'cannon'; if (wt === 'rail' && cls.key !== 'td') return 'cannon'; return wt; }
+  if (fac === 'helios') { if (wt === 'cannon' && rank >= 3) return 'rail'; if ((wt === 'mg' || wt === 'auto') && rank >= 3) return 'laser'; if (wt === 'plasma') return 'laser'; return wt; }
   if (wt === 'cannon' && rank >= 4) { if (fac === 'concord') wt = 'rail'; if (fac === 'syndicate') wt = 'plasma'; }
   if (wt === 'mg' && rank >= 3 && fac === 'syndicate') wt = 'laser';
   if (wt === 'auto' && rank >= 5 && fac === 'concord') wt = 'laser';
@@ -232,7 +235,7 @@ SM.unitName = function (fac, cls, rank, used, r) {
   for (let tries = 0; tries < 60; tries++) {
     const nm = SM.pick(r, pool);
     let d;
-    if (cls.move === 'inf') d = nm + ' ' + des;
+    if (cls.move === 'inf') { const noun = { rifle: des, at: 'Hunters', sniper: 'Marksmen', exo: 'Ironclads', jump: 'Skyborne', engineer: 'Sappers', flamer: 'Torches', medic: 'Medics', cyborg: 'Synths', mortar: 'Mortars', manpads: 'Skyguard' }[cls.key] || des; d = nm + ' ' + noun + (tries > 25 ? ' ' + SM.ROMAN[rank] : ''); }
     else {
       const num = (fac === 'federation' ? 10 * rank + Math.floor(r() * 90) : rank * 10 + Math.floor(r() * 10));
       const pre = SM.CLASS_PREFIX[cls.key] || '';
@@ -241,7 +244,7 @@ SM.unitName = function (fac, cls, rank, used, r) {
     }
     if (!used.has(d)) { used.add(d); return d; }
   }
-  const d = des + Math.floor(r() * 9999) + ' ' + SM.pick(r, pool) + ' ' + SM.ROMAN[rank];
+  const d = (cls.move === 'inf' ? SM.pick(r, pool) + ' ' + des + ' ' + (10 + Math.floor(r() * 89)) : des + Math.floor(r() * 9999) + ' ' + SM.pick(r, pool)) + ' ' + SM.ROMAN[rank];
   used.add(d); return d;
 };
 
@@ -392,8 +395,9 @@ SM.makeExclusive = function (id, source, seedStr, opts) {
   if (SM.UNITS[id]) return SM.UNITS[id];
   const r = SM.rng(SM.hash(seedStr));
   const classes = (opts && opts.classes) || ['mbt', 'htank', 'mmech', 'hmech', 'titan', 'hattack', 'fighter', 'bomber', 'hover', 'spider', 'exo', 'destroyer', 'td', 'lmech', 'hgun', 'cas', 'cruiser', 'scout'];
-  const cls = SM.pick(r, classes);
-  const fac = (opts && opts.fac) || SM.pick(r, SM.FACTIONS).id;
+  const v2 = /v2/.test(seedStr);
+  const cls = SM.pick(r, v2 ? classes.concat(SM.EXCL_CLASSES_V2 || []) : classes);
+  const fac = (opts && opts.fac) || SM.pick(r, v2 ? SM.FACTIONS : SM.FACTIONS.slice(0, 4)).id;
   const rank = (opts && opts.rank) || (4 + Math.floor(r() * 3));
   const title = SM.pick(r, SM.EXCL_TITLES);
   const finish = (opts && opts.finish) || SM.pick(r, SM.FINISHES);
@@ -407,9 +411,10 @@ SM.getUnit = function (id) {
   if (SM.UNITS[id]) return SM.UNITS[id];
   // exclusives encode their generator in the id
   let m;
-  if ((m = /^gw_(\d+)_(\d+)$/.exec(id))) return SM.makeExclusive(id, 'shop', 'giveaway' + m[1] + '_' + m[2]);
-  if ((m = /^bp_(\d+)_(\d+)$/.exec(id))) return SM.makeExclusive(id, 'bp', 'season' + m[1] + '_' + m[2]);
-  if ((m = /^cr_(\d+)$/.exec(id))) return SM.makeExclusive(id, 'crate', 'crate' + m[1]);
+  if ((m = /^gw_(\d+)_(\d+)$/.exec(id)) && +m[2] < 2) return SM.makeExclusive(id, 'shop', 'giveaway' + m[1] + '_' + m[2]);
+  if ((m = /^bp_(\d+)_(\d+)$/.exec(id))) return SM.makeExclusive(id, 'bp', 'season' + m[1] + '_' + m[2] + (+m[2] >= 10 ? 'v2' : ''));
+  if ((m = /^gw_(\d+)_(\d+)$/.exec(id)) && +m[2] >= 2) return SM.makeExclusive(id, 'shop', 'giveaway' + m[1] + '_' + m[2] + 'v2');
+  if ((m = /^cr_(\d+)$/.exec(id))) return SM.makeExclusive(id, 'crate', 'crate' + m[1] + (+m[1] >= 30 ? 'v2' : ''));
   return null;
 };
 
@@ -523,4 +528,3 @@ SM.XP_BOOSTS = [
   { id: 'xp15_5', name: '+50% XP ×5', mult: 1.5, battles: 5 },
 ];
 
-SM.buildTrees();

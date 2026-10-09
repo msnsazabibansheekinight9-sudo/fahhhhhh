@@ -200,6 +200,7 @@
     if (!g) return;
     const m = this.mode;
     if (m.type === 'amove') { this.groupOrder(this.selection.filter(u => u.team === 0), 'amove', g.x, g.z); this.marker(g.x, g.z, 0xffb24a); }
+    else if (m.type === 'strat') { this.callStrat(0, m.i, g.x, g.z); this.marker(g.x, g.z, 0xffd36a); }
     else if (m.type === 'rally') { this.teams[0].rally = { x: g.x, z: g.z }; this.marker(g.x, g.z, 0x7affd8); this.flashMsg('Rally point set'); }
     else if (m.type === 'ability') {
       let used = 0;
@@ -288,6 +289,8 @@
     if (k === 'f') { if (this.selection.length) this.mode = { type: 'amove' }; return; }
     if (k === 'r') { this.mode = { type: 'rally' }; return; }
     if (k === 'tab') { e.preventDefault(); return; }
+    const si = ['t', 'y', 'u', 'i'].indexOf(k);
+    if (si >= 0) { this.triggerStrat(si); return; }
     const slot = ['z', 'x', 'c', 'v'].indexOf(k);
     if (slot >= 0) { this.triggerAbility(slot); return; }
   };
@@ -367,10 +370,10 @@
     const wm = this.wm || this.weather.mods();
     const wres = this.weather.update(dt, center, { light: wm.light });
     const W = this.weather;
-    const fogD = W.lerpVal('fog', 0.0012) * (this.def.time === 'night' ? 1.1 : 1);
+    const fogD = W.lerpVal('fog', 0.0012) * (this.def.time === 'night' ? 1.1 : this.def.time === 'space' ? 0.35 : 1);
     const fcB = SM.WEATHER[W.cur].fogColor, fcA = SM.WEATHER[W.from].fogColor;
     const fogCol = this.fogBase.clone();
-    const night = this.def.time === 'night' ? 0.3 : this.def.time === 'dusk' ? 0.75 : 1;
+    const night = this.def.time === 'night' || this.def.time === 'space' ? 0.3 : this.def.time === 'dusk' ? 0.75 : 1;
     if (fcA) fogCol.lerp(new T.Color(fcA).multiplyScalar(night), 1 - W.blend);
     if (fcB) fogCol.lerp(new T.Color(fcB).multiplyScalar(night), W.blend);
     fogCol.multiplyScalar(0.75 + 0.25 * wm.light);
@@ -381,7 +384,7 @@
     this.sunLight.intensity = this.tm.sunI * wm.light;
     this.hemi.intensity = this.tm.hemiI * (0.65 + 0.35 * wm.light) + flash * 2.2;
     const su = this.sky.material.uniforms;
-    su.uCloud.value = W.lerpVal('clouds', 0.3); su.uTime.value += dt; su.uFlash.value = flash * 0.6; su.uAurora.value = W.lerpVal('aurora', 0) + (this.def.id === 'pipeline' ? 0.35 : 0);
+    su.uCloud.value = W.lerpVal('clouds', 0.3); su.uTime.value += dt; su.uFlash.value = flash * 0.6; su.uAurora.value = W.lerpVal('aurora', 0) + (this.def.id === 'pipeline' ? 0.35 : 0); su.uRed.value = W.lerpVal('auroraRed', 0);
     su.uFogCol.value.copy(fogCol); su.uFogMix.value = SM.clamp(fogD * 120, 0, 0.95); su.uLight.value = wm.light;
     this.sky.position.copy(this.camera.position);
     if (this.water) { const u = this.water.material.uniforms; u.uTime.value += dt; u.uFogCol.value.copy(fogCol); u.uFogD.value = fogD; u.uLight.value = (0.55 + 0.45 * wm.light) * (this.def.time === 'night' ? 0.45 : 1); u.uSky.value.copy(fogCol).lerp(new T.Color(this.tm.horizon), 0.5); }
@@ -466,7 +469,16 @@
           sd.gy = u.jump ? 0 : this.M.groundAt(wx, wz) - u.pos.y;
         }
       }
-      SM.animateUnit(rig, cls, { speed: u.alive ? u.speed : 0, recoil: u.recoil, aimPitch: u.aimPitch, firing: u.firing, phase: u.phase, boost: u.buffs.speedT > 0 }, dt, time);
+      const tg = u.target && u.target.alive ? u.target : null;
+      SM.animateUnit(rig, cls, { speed: u.alive ? u.speed : 0, recoil: u.recoil, aimPitch: u.aimPitch, firing: u.firing, phase: u.phase, boost: u.buffs.speedT > 0, accel: u.accel || 0, steer: u.steer || 0, roll: u.roll || 0, jet: !!u.jump, engaged: !!tg && u.reload < 3, aimLocal: tg ? SM.angDiff(Math.atan2(tg.pos.x - u.pos.x, tg.pos.z - u.pos.z), u.yaw) : 0 }, dt, time);
+      if (rig.stepped && u.alive && dt > 0) {
+        const big = u.def.cls === 'titan' ? 1 : u.radius > 5 ? 0.5 : 0.25;
+        const fx2 = u.pos.x + Math.cos(u.yaw) * (rig.stepped === 1 ? 1 : -1) * u.radius * 0.25, fz2 = u.pos.z - Math.sin(u.yaw) * (rig.stepped === 1 ? 1 : -1) * u.radius * 0.25;
+        this.fx.dust(fx2, this.M.groundAt(fx2, fz2), fz2, 0.6 + big, this.M.biome.low);
+        if (big >= 1 && this.vol(u.pos) > 0.3) this.cameraShake = Math.max(this.cameraShake || 0, 0.25);
+      }
+      if (u.contrail && u.alive && dt > 0 && cls.move === 'plane') { const s = u.radius * 0.9, cx = Math.cos(u.yaw), cz = -Math.sin(u.yaw); for (const sd of [-1, 1]) this.fx.smoke.spawn(u.pos.x + cx * s * sd, u.pos.y, u.pos.z + cz * s * sd, 0, 0, 0, 2.5, 0.8, 3.5, u.team ? 0xff8a7a : 0x9fd8ff, 0.7, 0, 0); }
+      if (u.jump && u.alive && cls.move === 'mech' && Math.random() < 0.8) this.fx.fire.spawn(u.pos.x, u.pos.y + u.radius * 0.6, u.pos.z, 0, -8, 0, 0.4, 2.5, 0.6, 0x8ad8ff, 1, 0, 0);
       if (rig.blurs.length) for (const b of rig.blurs) b.visible = u.alive;
       // status effects
       if (u.alive && dt > 0) {
@@ -532,12 +544,13 @@
     // targeting mode
     if (this.mode && this.mouse.inside) {
       const g = this.groundAt(this.mouse.x, this.mouse.y);
-      if (g && this.mode.type === 'ability') {
+      if (g && this.mode.type === 'strat') { this.cursorRing.visible = true; this.cursorRing.position.set(g.x, g.y + 0.5, g.z); this.cursorRing.scale.setScalar(Math.max(4, this.mode.r)); }
+      else if (g && this.mode.type === 'ability') {
         const rad = { smoke: 18, barrage: 20, orbital: 18, napalm: 16, carpet: 30, grenade: 6, mines: 9, torpedo: 10, jumpjets: 4, decoy: 4 }[this.mode.id] || 8;
         this.cursorRing.visible = true; this.cursorRing.position.set(g.x, g.y + 0.5, g.z); this.cursorRing.scale.setScalar(rad);
       } else this.cursorRing.visible = false;
       c.fillStyle = '#ffd36a'; c.font = '600 12px ' + SM.FONT_MONO;
-      const label = this.mode.type === 'amove' ? 'ATTACK-MOVE: click a destination' : this.mode.type === 'rally' ? 'RALLY: click a point' : SM.ABILITIES[this.mode.id].name.toUpperCase() + ': click a target';
+      const label = this.mode.type === 'amove' ? 'ATTACK-MOVE: click a destination' : this.mode.type === 'rally' ? 'RALLY: click a point' : this.mode.type === 'strat' ? 'STRATAGEM ' + this.mode.name.toUpperCase() + ': click a target' : SM.ABILITIES[this.mode.id].name.toUpperCase() + ': click a target';
       c.fillText(label, this.mouse.x - r.left + 16, this.mouse.y - r.top + 26);
     } else this.cursorRing.visible = false;
     // hover label
@@ -581,6 +594,7 @@
       e.feed.innerHTML = this.feed.map(f => `<div style="color:${f.col}">${esc(f.text)}</div>`).join('');
     }
     this.renderSel();
+    if (this.updateStratHUD) this.updateStratHUD();
   };
   P.hudWeather = function () {
     if (!this.el) return;

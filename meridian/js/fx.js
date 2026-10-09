@@ -186,6 +186,14 @@
       for (let i = 0; i < 7 * this.q; i++) { const a = Math.random() * PI * 2, v = 3 + Math.random() * 6; this.fire.spawn(x, y, z, Math.cos(a) * v, 2 + Math.random() * 6, Math.sin(a) * v, 0.3 + Math.random() * 0.3, 0.5, 0.1, col || 0xffd080, 1, 1, 15); }
       this.fire.spawn(x, y, z, 0, 0, 0, 0.1, 3, 4, col || 0xffe0a0, 1, 0, 0);
     }
+    flameJet(ax, ay, az, bx, by, bz, size) {
+      const s = size || 1, dx = bx - ax, dy = by - ay, dz = bz - az, L = Math.hypot(dx, dy, dz) || 1;
+      for (let i = 0; i < 9 * this.q * s; i++) {
+        const sp = (14 + Math.random() * 10) * (L / 20), j = 0.18;
+        this.fire.spawn(ax, ay, az, (dx / L + (Math.random() - 0.5) * j) * sp, (dy / L + (Math.random() - 0.3) * j) * sp, (dz / L + (Math.random() - 0.5) * j) * sp, 0.55 + Math.random() * 0.4, 0.8 * s, 4.5 * s, Math.random() < 0.4 ? 0xffd070 : 0xff6a20, 0.95, 1.2, -2);
+      }
+      for (let i = 0; i < 3 * this.q; i++) this.smoke.spawn(bx + (Math.random() - 0.5) * 3, by + 1, bz + (Math.random() - 0.5) * 3, 0, 2.5, 0, 2.2, 2, 7, 0x2a2420, 0.5, 0.4, -0.5);
+    }
     trail(x, y, z, col, big) {
       this.smoke.spawn(x, y, z, (Math.random() - 0.5) * 0.6, 0.3 + Math.random() * 0.4, (Math.random() - 0.5) * 0.6, big ? 2.2 : 1.2, big ? 1.4 : 0.8, big ? 5 : 3, col || 0xcfcac2, big ? 0.5 : 0.4, 0.6, -0.2);
     }
@@ -292,7 +300,7 @@
       this.rain.geometry.setDrawRange(0, nR * 2); if (nR) this.rain.geometry.attributes.position.needsUpdate = true;
       const nF = Math.min(this.cap, flakeN);
       if (pt) {
-        const P = { snow: [0xffffff, 0.9, 9, 0.85, 1.2], sand: [0xd8b07a, 0.7, 2, 0.5, 4], ash: [0x6a6460, 0.8, 4, 0.7, 0.8], ember: [0xff8a3a, 1.0, -3, 1, 0.6], spark: [0xb08aff, 1.0, 1, 1, 1.5], haze: [0xffe8c0, 0.1, -1, 0.15, 20], mist: [0xe0e6ea, 0.12, 0.3, 0.2, 26] }[pt] || [0xffffff, 0.8, 6, 0.8, 1];
+        const P = { hail: [0xeef6ff, 0.95, 38, 0.9, 0.7], snow: [0xffffff, 0.9, 9, 0.85, 1.2], sand: [0xd8b07a, 0.7, 2, 0.5, 4], ash: [0x6a6460, 0.8, 4, 0.7, 0.8], ember: [0xff8a3a, 1.0, -3, 1, 0.6], spark: [0xb08aff, 1.0, 1, 1, 1.5], haze: [0xffe8c0, 0.1, -1, 0.15, 20], mist: [0xe0e6ea, 0.12, 0.3, 0.2, 26] }[pt] || [0xffffff, 0.8, 6, 0.8, 1];
         const col = pt === 'sand' && B.fogColor ? B.fogColor : P[0];
         const r = ((col >> 16) & 255) / 255, g = ((col >> 8) & 255) / 255, bb = (col & 255) / 255;
         this.flakeMat.blending = pt === 'ember' || pt === 'spark' ? T.AdditiveBlending : T.NormalBlending;

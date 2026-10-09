@@ -126,21 +126,52 @@
     },
     holo(ctx, S) { const g = ctx.createLinearGradient(0, 0, S, S); ['#ff5ab4', '#ffd25a', '#5affb4', '#5ab4ff', '#b45aff', '#ff5ab4'].forEach((c, i) => g.addColorStop(i / 5, c)); ctx.fillStyle = g; ctx.fillRect(0, 0, S, S); ctx.globalAlpha = 0.25; ctx.fillStyle = '#fff'; for (let y = 0; y < S; y += 6) ctx.fillRect(0, y, S, 1); ctx.globalAlpha = 1; },
   };
+  const pixels = (cols, base, px) => (ctx, S, r) => { ctx.fillStyle = base; ctx.fillRect(0, 0, S, S); for (let k = 0; k < cols.length; k++) for (let i = 0; i < 30; i++) { const cx = Math.floor(r() * S / px) * px, cy = Math.floor(r() * S / px) * px; ctx.fillStyle = cols[k]; const w = 1 + Math.floor(r() * 4), h = 1 + Math.floor(r() * 3); for (let a = 0; a < w; a++) for (let b = 0; b < h; b++) if (r() < 0.75) ctx.fillRect((cx + a * px) % S, (cy + b * px) % S, px, px); } };
+  const blobs = (cols, base, size) => (ctx, S, r) => { ctx.fillStyle = base; ctx.fillRect(0, 0, S, S); cols.forEach(c => { for (let i = 0; i < 7; i++) blob(ctx, S, r, r() * S, r() * S, (size || 24) + r() * 30, c, 10); }); };
+  const dots = (cols, base) => (ctx, S, r) => { ctx.fillStyle = base; ctx.fillRect(0, 0, S, S); cols.forEach(c => { ctx.fillStyle = c; for (let i = 0; i < 140; i++) { const x = r() * S, y = r() * S, rr = 2 + r() * 5; wrapDraw(S, (ox, oy) => { ctx.beginPath(); ctx.arc(x + ox, y + oy, rr, 0, 7); ctx.fill(); }); } }); };
+  const stripes = (cols, base) => (ctx, S, r) => { ctx.fillStyle = base; ctx.fillRect(0, 0, S, S); cols.forEach((c, k) => { ctx.fillStyle = c; for (let i = 0; i < 9; i++) { const y = r() * S, h = 5 + r() * 9; wrapDraw(S, (ox, oy) => { ctx.beginPath(); ctx.moveTo(ox - 10, oy + y); for (let x = 0; x <= S + 20; x += 16) ctx.lineTo(ox + x, oy + y + Math.sin(x * 0.05 + i + k) * 10); for (let x = S + 20; x >= -10; x -= 16) ctx.lineTo(ox + x, oy + y + h + Math.sin(x * 0.05 + i + k) * 10 + (r() - 0.5) * 3); ctx.fill(); }); } }); };
+  const glowLines = (col, base) => (ctx, S, r) => { ctx.fillStyle = base; ctx.fillRect(0, 0, S, S); ctx.strokeStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 8; ctx.lineWidth = 2; for (let i = 0; i < 16; i++) { let x = r() * S, y = r() * S; ctx.beginPath(); ctx.moveTo(x, y); for (let k = 0; k < 8; k++) { x += (r() - 0.5) * 50; y += (r() - 0.5) * 50; ctx.lineTo(x, y); } ctx.stroke(); } ctx.shadowBlur = 0; };
+  Object.assign(PAT, {
+    marpat: pixels(['#3a4a2a', '#6a5a3a', '#1e2418', '#7a8a50'], '#56663c', 6),
+    flecktarn: dots(['#2a3a1e', '#5a4a2e', '#1a1a14', '#7a8a4a'], '#5e6e40'),
+    redsand: blobs(['#8a3a22', '#c4703e', '#5a2a1a'], '#a8583a'),
+    snowpix: pixels(['#c8d0d6', '#8a949c', '#ffffff'], '#e4e9ec', 6),
+    savtiger: stripes(['#5a3e22', '#2a2014'], '#c49a5a'),
+    asplinter(ctx, S, r) { PAT.splinter(ctx, S, r); ctx.globalCompositeOperation = 'luminosity'; ctx.fillStyle = 'rgba(230,236,240,0.85)'; ctx.fillRect(0, 0, S, S); ctx.globalCompositeOperation = 'source-over'; },
+    tropic(ctx, S, r) { ctx.fillStyle = '#4a8a3a'; ctx.fillRect(0, 0, S, S); ['#2a5a1d', '#8ac04a', '#1b3a14', '#c0a04a'].forEach(c => { ctx.fillStyle = c; for (let i = 0; i < 24; i++) { const x = r() * S, y = r() * S, a = r() * Math.PI, l = 16 + r() * 20; wrapDraw(S, (ox, oy) => { ctx.save(); ctx.translate(x + ox, y + oy); ctx.rotate(a); ctx.beginPath(); ctx.ellipse(0, 0, l, l * 0.3, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }); } }); },
+    ironrust: blobs(['#7a3a1a', '#a8582a', '#3a2a22', '#5a5652'], '#6a4a3a', 18),
+    ivory(ctx, S, r) { ctx.fillStyle = '#e8e2d2'; ctx.fillRect(0, 0, S, S); panelLines(ctx, S, r, '#b8a87a', 0.6); ctx.fillStyle = '#c8a840'; for (let i = 0; i < 6; i++) ctx.fillRect(0, i * S / 6 + 2, S, 2); },
+    warlord: stripes(['#a01818', '#0a0a0a'], '#1c1c1c'),
+    cyberpink: glowLines('#ff4ad8', '#140a18'),
+    bloodmoon(ctx, S, r) { const g = ctx.createLinearGradient(0, 0, S, S); g.addColorStop(0, '#2a0606'); g.addColorStop(0.5, '#6a0a0a'); g.addColorStop(1, '#1a0404'); ctx.fillStyle = g; ctx.fillRect(0, 0, S, S); for (let i = 0; i < 6; i++) blob(ctx, S, r, r() * S, r() * S, 20 + r() * 30, 'rgba(255,60,40,0.25)', 9); },
+    plasma: glowLines('#5ad8ff', '#0a1018'),
+    nebula(ctx, S, r) { const g = ctx.createLinearGradient(0, 0, S, S); g.addColorStop(0, '#04142a'); g.addColorStop(0.5, '#0a3a4a'); g.addColorStop(1, '#1a0a3a'); ctx.fillStyle = g; ctx.fillRect(0, 0, S, S); for (let i = 0; i < 8; i++) blob(ctx, S, r, r() * S, r() * S, 26 + r() * 30, i % 2 ? 'rgba(60,220,200,0.2)' : 'rgba(255,90,200,0.16)', 10); for (let i = 0; i < 140; i++) { ctx.fillStyle = 'rgba(255,255,255,' + (0.4 + r() * 0.6) + ')'; ctx.fillRect(r() * S, r() * S, 1.5, 1.5); } },
+    aurora(ctx, S) { const g = ctx.createLinearGradient(0, 0, 0, S); ['#0a1a2a', '#1aff9a', '#3a6aff', '#b44aff', '#0a1a2a'].forEach((c, i) => g.addColorStop(i / 4, c)); ctx.fillStyle = g; ctx.fillRect(0, 0, S, S); },
+    sunforged(ctx, S, r) { const g = ctx.createRadialGradient(S / 2, S / 2, 4, S / 2, S / 2, S * 0.7); g.addColorStop(0, '#fff6c0'); g.addColorStop(0.4, '#f2b844'); g.addColorStop(1, '#a8601a'); ctx.fillStyle = g; ctx.fillRect(0, 0, S, S); panelLines(ctx, S, r, '#7a4a10', 0.5); },
+  });
   SM.SKIN_LOOK = {
+    cyberpink: { emissive: 1.3 }, plasma: { emissive: 1.4 }, nebula: { emissive: 0.8 }, aurora: { emissive: 0.7, metal: 0.4, rough: 0.3 }, sunforged: { metal: 1, rough: 0.2 }, bloodmoon: { metal: 0.4, rough: 0.35 }, ivory: { rough: 0.4 },
     chrome: { metal: 1, rough: 0.12 }, gold: { metal: 1, rough: 0.22 }, obsidian: { metal: 0.6, rough: 0.18 },
     carbon: { metal: 0.3, rough: 0.35 }, circuit: { emissive: 1.4 }, lava: { emissive: 1.6 }, galaxy: { emissive: 0.9 }, holo: { metal: 0.6, rough: 0.2, emissive: 0.35 },
     glacier: { metal: 0.2, rough: 0.25 },
   };
 
   const texCache = {};
-  SM.camoTexture = function (pattern, palette, size) {
+  SM.camoTexture = function (pattern, palette, size, grime) {
     const S = size || 256;
-    const key = pattern + ':' + palette.base + ':' + S;
+    const key = pattern + ':' + palette.base + ':' + S + (grime ? ':g' : '');
     if (texCache[key]) return texCache[key];
     const c = canvas(S, S), ctx = c.getContext('2d');
     const r = SM.rng(SM.hash(key));
     (PAT[pattern] || PAT.factory)(ctx, S, r, palette);
     if (pattern !== 'chrome' && pattern !== 'holo' && pattern !== 'gold') noise(ctx, S, r, 14);
+    if (grime) {
+      for (let i = 0; i < 26; i++) blob(ctx, S, r, r() * S, S * 0.55 + r() * S * 0.45, 8 + r() * 26, 'rgba(92,70,44,0.42)', 9);
+      for (let i = 0; i < 18; i++) blob(ctx, S, r, r() * S, r() * S, 3 + r() * 8, 'rgba(130,64,28,0.45)', 7);
+      for (let i = 0; i < 12; i++) blob(ctx, S, r, r() * S, r() * S, 6 + r() * 14, 'rgba(24,22,20,0.35)', 8);
+      ctx.strokeStyle = 'rgba(220,210,190,0.35)'; ctx.lineWidth = 1;
+      for (let i = 0; i < 30; i++) { const x = r() * S, y = r() * S; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + (r() - 0.5) * 20, y + (r() - 0.5) * 6); ctx.stroke(); }
+    }
     const t = new T.CanvasTexture(c);
     t.wrapS = t.wrapT = T.RepeatWrapping; t.encoding = T.sRGBEncoding; t.anisotropy = 4;
     texCache[key] = t;
@@ -201,6 +232,53 @@
     ctx.lineWidth = 4; ctx.strokeStyle = color; ctx.stroke();
     ctx.fillStyle = '#fff'; ctx.font = 'bold 34px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, 32, 34);
     const t = new T.CanvasTexture(c); return t;
+  };
+  SM.decalTexture = function (kind, fac, text) {
+    const key = 'decal:' + kind + ':' + fac + ':' + (text || '');
+    if (texCache[key]) return texCache[key];
+    const W = kind === 'killmarks' || kind === 'number' || kind === 'stripes' || kind === 'band' ? 256 : 128, H = 128;
+    const c = canvas(W, H), ctx = c.getContext('2d');
+    const f = SM.FACTION[fac] || SM.FACTIONS[0];
+    ctx.clearRect(0, 0, W, H);
+    ctx.lineJoin = 'round';
+    if (kind === 'insignia') {
+      ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(64, 64, 56, 0, 7); ctx.fill();
+      ctx.fillStyle = f.hue; ctx.beginPath(); ctx.arc(64, 64, 48, 0, 7); ctx.fill();
+      ctx.fillStyle = '#fff'; const n = { coalition: 5, federation: 5, concord: 8, syndicate: 6, legion: 3, helios: 12 }[f.id] || 5;
+      ctx.beginPath(); for (let i = 0; i < n * 2; i++) { const a = i / (n * 2) * Math.PI * 2 - Math.PI / 2, rr = i % 2 ? 16 : 38; ctx.lineTo(64 + Math.cos(a) * rr, 64 + Math.sin(a) * rr); } ctx.fill();
+    } else if (kind === 'number') {
+      ctx.font = 'bold 104px "Saira Condensed", Impact, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = 8; ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.strokeText(text, 128, 70); ctx.fillStyle = '#f2f2ea'; ctx.fillText(text, 128, 70);
+    } else if (kind === 'killmarks') {
+      for (let i = 0; i < 10; i++) { const x = 14 + i * 24, y = 40; ctx.fillStyle = '#f2f2ea'; ctx.beginPath(); for (let k = 0; k < 10; k++) { const a = k / 10 * Math.PI * 2 - Math.PI / 2, rr = k % 2 ? 4 : 10; ctx.lineTo(x + Math.cos(a) * rr, y + 20 + Math.sin(a) * rr); } ctx.fill(); }
+      ctx.fillStyle = '#c03a2a'; ctx.fillRect(4, 92, 248, 8);
+    } else if (kind === 'skull') {
+      ctx.fillStyle = '#f0ece0'; ctx.beginPath(); ctx.arc(64, 54, 36, 0, 7); ctx.fill(); ctx.fillRect(40, 70, 48, 30);
+      ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(50, 54, 10, 0, 7); ctx.arc(78, 54, 10, 0, 7); ctx.fill(); ctx.beginPath(); ctx.moveTo(64, 66); ctx.lineTo(58, 78); ctx.lineTo(70, 78); ctx.fill();
+      for (let i = 0; i < 4; i++) ctx.fillRect(46 + i * 10, 88, 3, 12);
+    } else if (kind === 'shark') {
+      ctx.fillStyle = '#c02a22'; ctx.beginPath(); ctx.moveTo(4, 64); ctx.quadraticCurveTo(64, 10, 124, 40); ctx.quadraticCurveTo(64, 110, 4, 64); ctx.fill();
+      ctx.fillStyle = '#fff'; for (let i = 0; i < 8; i++) { ctx.beginPath(); ctx.moveTo(14 + i * 13, 50 - i * 1.5); ctx.lineTo(20 + i * 13, 64); ctx.lineTo(26 + i * 13, 48 - i * 1.5); ctx.fill(); ctx.beginPath(); ctx.moveTo(14 + i * 13, 78 + i); ctx.lineTo(20 + i * 13, 64); ctx.lineTo(26 + i * 13, 80 + i); ctx.fill(); }
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(100, 40, 9, 0, 7); ctx.fill(); ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(102, 40, 4, 0, 7); ctx.fill();
+    } else if (kind === 'stripes') {
+      for (let i = 0; i < 5; i++) { ctx.fillStyle = i % 2 ? '#111' : '#f4f4ee'; ctx.fillRect(i * 51, 0, 51, H); }
+    } else if (kind === 'band') {
+      ctx.fillStyle = f.hue; ctx.fillRect(0, 34, W, 60); ctx.fillStyle = '#f4f4ee'; ctx.fillRect(0, 26, W, 6); ctx.fillRect(0, 96, W, 6);
+    } else if (kind === 'patch') {
+      ctx.fillStyle = f.hue; ctx.beginPath(); ctx.moveTo(64, 8); ctx.lineTo(116, 30); ctx.lineTo(108, 100); ctx.lineTo(64, 122); ctx.lineTo(20, 100); ctx.lineTo(12, 30); ctx.fill();
+      ctx.fillStyle = '#111'; ctx.font = 'bold 50px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(f.short[0], 64, 66);
+    }
+    const t = new T.CanvasTexture(c); t.encoding = T.sRGBEncoding; t.anisotropy = 4;
+    texCache[key] = t; return t;
+  };
+  SM.weatheredTexture = function () {
+    if (texCache.weathered) return texCache.weathered;
+    const S = 256, c = canvas(S, S), ctx = c.getContext('2d'), r = SM.rng(321);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, S, S);
+    for (let i = 0; i < 40; i++) blob(ctx, S, r, r() * S, S * 0.6 + r() * S * 0.4, 10 + r() * 30, 'rgba(110,85,55,0.35)', 9);
+    for (let i = 0; i < 30; i++) blob(ctx, S, r, r() * S, r() * S, 4 + r() * 10, 'rgba(120,60,30,0.35)', 7);
+    for (let i = 0; i < 20; i++) blob(ctx, S, r, r() * S, r() * S, 6 + r() * 16, 'rgba(30,26,24,0.3)', 8);
+    const t = new T.CanvasTexture(c); t.wrapS = t.wrapT = T.RepeatWrapping; texCache.weathered = t; return t;
   };
   SM.detailTexture = function () {
     if (texCache.detail) return texCache.detail;

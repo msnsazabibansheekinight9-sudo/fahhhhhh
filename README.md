@@ -2,7 +2,7 @@
 
 > Also in this repo: **[Ironclad](grimdark/)**, a procedural grimdark sci-fi FPS — see `grimdark/README.md`.
 > And **[Gridlock: Legends of Motorsport](racing/)**, a racing game with 18 disciplines, 566 cars and 270 tracks — see `racing/README.md`.
-> And **[Steel Meridian](meridian/)**, a 3D future-war RTS with 608 units, 20 maps with live weather, tech trees, a shop, crates and a battle pass — see `meridian/README.md`.
+> And **[Steel Meridian](meridian/)**, a 3D future-war RTS with 1,998 units across six factions, 32 maps with live weather, 36 stratagems, per-unit modification and customisation trees, a shop, crates and a battle pass — see `meridian/README.md`.
 
 A browser firearms simulator built with Three.js (r128). Everything is procedural: weapon models, textures, soldiers, maps and audio.
 

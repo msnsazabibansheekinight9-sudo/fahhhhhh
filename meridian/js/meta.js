@@ -356,3 +356,231 @@
     G.save();
   };
 })();
+
+// ======================================================================== expansion: customisation, stratagems, more rewards
+(function () {
+  const G = SM.G;
+  const baseLoad = G.load, baseDefault = G.defaultSave;
+  G.defaultSave = function () {
+    const s = baseDefault();
+    s.cust = {};
+    s.strat = { researched: {}, owned: {}, ups: {}, loadout: [] };
+    G.stratStarter(s);
+    return s;
+  };
+  G.stratStarter = function (s) {
+    SM.STRAT_BRANCHES.forEach(b => { const first = SM.STRATAGEMS.find(x => x.br === b.id && x.rank === 1); s.strat.researched[first.id] = true; if (['orbital', 'logistics', 'fort', 'airsup'].includes(b.id)) s.strat.owned[first.id] = true; });
+    if (!s.strat.loadout.length) s.strat.loadout = ['orb_rail', 'air_strafe', 'fort_mg', 'log_supply'];
+  };
+  G.load = function () {
+    const s = baseLoad();
+    if (!s.cust) s.cust = {};
+    if (!s.strat) { s.strat = { researched: {}, owned: {}, ups: {}, loadout: [] }; G.stratStarter(s); }
+    // every tech line starts with its first unit owned (covers lines and factions added after a save was made)
+    for (const f of SM.FACTIONS) for (const br of SM.BRANCHES) SM.TREE[f.id][br.id].forEach(l => { const id = l.nodes[0]; s.researched[id] = true; s.owned[id] = true; });
+    for (const f of SM.FACTIONS) if (!s.lineups[f.id] || !s.lineups[f.id].length) { const st = []; for (const br of SM.BRANCHES) SM.TREE[f.id][br.id].forEach(l => st.push(l.nodes[0])); s.lineups[f.id] = G.autoLineup(st); }
+    ['strats', 'mechs', 'naval'].forEach(k => { if (s.stats[k] === undefined) s.stats[k] = 0; });
+    G.save();
+    return s;
+  };
+
+  // ---------------------------------------------------------------- customisation
+  G.custOwned = id => (G.s.cust[id] && G.s.cust[id].owned) || [];
+  G.custEquipped = id => (G.s.cust && G.s.cust[id] && G.s.cust[id].eq) || [];
+  G.custStatus = function (u, c) {
+    const s = G.s, rec = s.cust[u.id] || { owned: [], eq: [] };
+    if (rec.eq.indexOf(c.id) >= 0) return 'equipped';
+    if (rec.owned.indexOf(c.id) >= 0) return 'owned';
+    if (!s.owned[u.id]) return 'nounit';
+    if (c.req && !u.exclusive && (s.mods[u.id] || []).indexOf(c.req) < 0) return 'needmod';
+    if (c.tier > 1) { const prev = SM.customsFor(u).filter(x => x.tier === c.tier - 1); if (!prev.some(x => rec.owned.indexOf(x.id) >= 0)) return 'needtier'; }
+    return 'open';
+  };
+  G.buyCust = function (u, cid) {
+    const c = SM.CUSTOM[cid], st = G.custStatus(u, c);
+    if (st === 'nounit') return 'Own this unit first.';
+    if (st === 'needmod') return 'Install the ' + (u.mods.find(m => m.id === c.req) || {}).name + ' modification first.';
+    if (st === 'needtier') return 'Buy a tier ' + (c.tier - 1) + ' customisation for this unit first.';
+    if (st !== 'open') return 'Already owned.';
+    const price = SM.customPrice(u, c);
+    if (G.s.credits < price) return 'Not enough credits.';
+    G.s.credits -= price;
+    const rec = G.s.cust[u.id] || (G.s.cust[u.id] = { owned: [], eq: [] });
+    rec.owned.push(cid);
+    G.equipCust(u, cid, true);
+    G.save(); return null;
+  };
+  G.equipCust = function (u, cid, on) {
+    const rec = G.s.cust[u.id]; if (!rec || rec.owned.indexOf(cid) < 0) return;
+    const c = SM.CUSTOM[cid];
+    const i = rec.eq.indexOf(cid);
+    if (on === undefined) on = i < 0;
+    if (!on) { if (i >= 0) rec.eq.splice(i, 1); }
+    else if (i < 0) { if (c.group) rec.eq = rec.eq.filter(x => SM.CUSTOM[x].group !== c.group); rec.eq.push(cid); }
+    G.save();
+  };
+  const baseEntries = G.lineupEntries;
+  G.lineupEntries = function (fac) { return baseEntries(fac).map(e => Object.assign(e, { cust: G.custEquipped(e.id) })); };
+
+  // ---------------------------------------------------------------- stratagems
+  G.stratStatus = function (id) {
+    const st = G.s.strat, d = SM.STRAT[id];
+    if (st.owned[id]) return 'owned';
+    if (st.researched[id]) return 'buy';
+    if (!d.parent || st.researched[d.parent]) return 'research';
+    return 'locked';
+  };
+  G.researchStrat = function (id) {
+    const d = SM.STRAT[id], s = G.s;
+    if (G.stratStatus(id) !== 'research') return 'Research the previous stratagem in this branch first.';
+    if (s.rp + s.freeXp < d.rp) return 'Not enough Research Points.';
+    let c = d.rp; const a = Math.min(s.rp, c); s.rp -= a; c -= a; s.freeXp -= c;
+    s.strat.researched[id] = true; G.save(); return null;
+  };
+  G.buyStrat = function (id) {
+    const d = SM.STRAT[id], s = G.s;
+    if (G.stratStatus(id) !== 'buy') return 'Research it first.';
+    if (s.credits < d.price) return 'Not enough credits.';
+    s.credits -= d.price; s.strat.owned[id] = true;
+    if (s.strat.loadout.length < 4) s.strat.loadout.push(id);
+    G.save(); return null;
+  };
+  G.stratUpStatus = function (id, up) {
+    const s = G.s.strat, have = s.ups[id] || [];
+    if (have.indexOf(up.id) >= 0) return 'done';
+    if (!s.owned[id]) return 'locked';
+    if (up.tier > 1) { const prev = SM.stratUpgrades(SM.STRAT[id]).filter(x => x.tier === up.tier - 1); if (!prev.some(x => have.indexOf(x.id) >= 0)) return 'locked'; }
+    return 'open';
+  };
+  G.buyStratUp = function (id, upId) {
+    const up = SM.stratUpgrades(SM.STRAT[id]).find(x => x.id === upId);
+    const st = G.stratUpStatus(id, up);
+    if (st === 'done') return 'Already installed.';
+    if (st !== 'open') return G.s.strat.owned[id] ? 'Install an upgrade from the previous tier first.' : 'Buy the stratagem first.';
+    if (G.s.credits < up.price) return 'Not enough credits.';
+    G.s.credits -= up.price;
+    (G.s.strat.ups[id] || (G.s.strat.ups[id] = [])).push(upId);
+    G.save(); return null;
+  };
+  G.toggleStratLoadout = function (id) {
+    const L = G.s.strat.loadout, i = L.indexOf(id);
+    if (i >= 0) { L.splice(i, 1); G.save(); return null; }
+    if (!G.s.strat.owned[id]) return 'Buy this stratagem first.';
+    if (L.length >= 4) return 'The loadout holds four stratagems. Remove one first.';
+    L.push(id); G.save(); return null;
+  };
+  G.stratEntries = () => G.s.strat.loadout.filter(id => G.s.strat.owned[id] && SM.STRAT[id]).map(id => ({ id, ups: G.s.strat.ups[id] || [] }));
+  G.enemyStrats = function (diff) {
+    const maxRank = { Recruit: 2, Veteran: 3, Elite: 5, Nightmare: 6 }[diff.name] || 3;
+    const pool = SM.STRATAGEMS.filter(s => s.rank <= maxRank && s.fx !== 'scan');
+    const out = [];
+    while (out.length < Math.min(3 + (maxRank >= 5 ? 1 : 0), pool.length)) {
+      const s = pool[Math.floor(Math.random() * pool.length)];
+      if (out.find(e => e.id === s.id)) continue;
+      const ups = SM.stratUpgrades(s).filter(u => u.tier <= (maxRank >= 5 ? 2 : 1) && Math.random() < 0.6).map(u => u.id);
+      out.push({ id: s.id, ups });
+    }
+    return out;
+  };
+
+  // ---------------------------------------------------------------- crates: customisation and stratagem pools
+  const baseRoll = G.crateRoll, baseGrant = G.grant;
+  G.crateRoll = function (crate, r) {
+    r = r || Math.random;
+    if (!crate.pool) return baseRoll(crate, r);
+    let roll = r() * 100, rar = 0;
+    for (let i = 0; i < crate.odds.length; i++) { roll -= crate.odds[i]; if (roll <= 0) { rar = i; break; } rar = i; }
+    return G.poolItem(crate.pool, rar, r);
+  };
+  G.poolItem = function (pool, rar, r) {
+    r = r || Math.random;
+    if (pool === 'cust') {
+      const units = Object.keys(G.s.owned).map(SM.getUnit).filter(Boolean);
+      for (let tries = 0; tries < 40; tries++) {
+        const u = units[Math.floor(r() * units.length)];
+        const cs = SM.customsFor(u).filter(c => c.tier === Math.min(5, rar + 1) && G.custOwned(u.id).indexOf(c.id) < 0);
+        if (cs.length) { const c = cs[Math.floor(r() * cs.length)]; return { rar, kind: 'cust', unit: u, cust: c.id, label: c.name }; }
+      }
+      return { rar, kind: 'credits', amount: 15000 * (rar + 1), label: 'Credits' };
+    }
+    if (pool === 'strat') {
+      const unowned = SM.STRATAGEMS.filter(s => !G.s.strat.owned[s.id] && s.rank <= rar + 2);
+      if (unowned.length && r() < 0.55) { const s = unowned[Math.floor(r() * unowned.length)]; return { rar, kind: 'strat', strat: s.id, label: s.name }; }
+      const owned = SM.STRATAGEMS.filter(s => G.s.strat.owned[s.id]);
+      for (let tries = 0; tries < 20 && owned.length; tries++) {
+        const s = owned[Math.floor(r() * owned.length)];
+        const up = SM.stratUpgrades(s).find(u => G.stratUpStatus(s.id, u) === 'open');
+        if (up) return { rar, kind: 'stratUp', strat: s.id, up: up.id, label: up.name };
+      }
+      return { rar, kind: 'cores', amount: 60 * (rar + 1), label: 'Cores' };
+    }
+    return G.crateItem(rar, r);
+  };
+  G.grant = function (item) {
+    const s = G.s;
+    if (item.kind === 'cust') { const rec = s.cust[item.unit.id] || (s.cust[item.unit.id] = { owned: [], eq: [] }); if (rec.owned.indexOf(item.cust) >= 0) { s.credits += 12000; return 'Duplicate part converted to 12,000 credits'; } rec.owned.push(item.cust); return SM.CUSTOM[item.cust].name + ' for ' + item.unit.name; }
+    if (item.kind === 'strat') { if (s.strat.owned[item.strat]) { s.credits += 40000; return 'Duplicate stratagem converted to 40,000 credits'; } s.strat.researched[item.strat] = true; s.strat.owned[item.strat] = true; return 'Stratagem: ' + SM.STRAT[item.strat].name; }
+    if (item.kind === 'stratUp') { const L = s.strat.ups[item.strat] || (s.strat.ups[item.strat] = []); if (L.indexOf(item.up) < 0) L.push(item.up); return SM.STRAT[item.strat].name + ': ' + item.label; }
+    return baseGrant(item);
+  };
+
+  // ---------------------------------------------------------------- battle pass: more vehicles, stratagems and parts
+  const baseBp = G.bpRewards;
+  G.bpRewards = function (season) {
+    const out = baseBp(season);
+    const extraPrem = { 5: 10, 18: 11, 32: 12, 45: 13 };
+    out.forEach(r => {
+      if (extraPrem[r.t] !== undefined) r.prem = { kind: 'unit', unitId: 'bp_' + season + '_' + extraPrem[r.t], label: 'Season Exclusive' };
+      if (r.t === 15) r.free = { kind: 'unit', unitId: 'bp_' + season + '_14', label: 'Season Vehicle' };
+      if (r.t === 12 || r.t === 38) r.free = { kind: 'stratPick', label: 'Stratagem' };
+      if (r.t === 22 || r.t === 34 || r.t === 48) r.prem = { kind: 'stratPick', label: 'Stratagem' };
+      if (r.t % 9 === 4) r.free = { kind: 'custPick', tier: 2, label: 'Custom Part' };
+      if (r.t % 8 === 6 && extraPrem[r.t] === undefined && r.prem.kind !== 'unit') r.prem = { kind: 'custPick', tier: 4, label: 'Elite Part' };
+    });
+    return out;
+  };
+  const baseBpGrant = G.bpGrant;
+  G.bpGrant = function (rw) {
+    if (rw.kind === 'stratPick') return G.grant(G.poolItem('strat', 3, Math.random));
+    if (rw.kind === 'custPick') return G.grant(G.poolItem('cust', rw.tier - 1, Math.random));
+    return baseBpGrant(rw);
+  };
+
+  // ---------------------------------------------------------------- giveaways: three a week
+  const baseGw = G.giveaways;
+  G.giveaways = function (now) {
+    const out = baseGw(now), w = SM.weekIndex(now);
+    const u = SM.getUnit('gw_' + w + '_2');
+    out.push({ id: u.id, unit: u, price: 42000, cur: 'cores', ends: out[0].ends });
+    return out;
+  };
+
+  // ---------------------------------------------------------------- daily orders: bigger pool
+  const extra = [
+    { id: 'strats', text: 'Call in {n} stratagems', n: [3, 6], stat: 'strats', xp: 800 },
+    { id: 'mechs', text: 'Destroy {n} mechs', n: [3, 6], stat: 'mechs', xp: 800 },
+    { id: 'naval', text: 'Sink {n} ships', n: [2, 4], stat: 'naval', xp: 900 },
+    { id: 'kills2', text: 'Destroy {n} enemy units in total', n: [40, 60], stat: 'kills', xp: 1300 },
+    { id: 'caps2', text: 'Capture {n} points in total', n: [15, 20], stat: 'captures', xp: 1200 },
+  ];
+  const baseRefresh = G.refreshMissions;
+  G.refreshMissions = function () {
+    const day = Math.floor(Date.now() / SM.DAY);
+    if (G.s.missions.day === day) return;
+    baseRefresh();
+    // swap one order for an expansion order
+    const r = SM.rng(day * 97 + 11);
+    const m = extra[Math.floor(r() * extra.length)];
+    const n = m.n[0] + Math.floor(r() * (m.n[1] - m.n[0] + 1));
+    G.s.missions.list.push({ id: m.id, text: m.text.replace('{n}', n), n, stat: m.stat, xp: m.xp, cr: 8000 + n * 300, prog: 0 });
+  };
+  const baseApply = G.applyRewards;
+  G.applyRewards = function (res, rw) {
+    const st = res.stats;
+    G.s.stats.strats = (G.s.stats.strats || 0) + (st.strats || 0);
+    G.s.stats.mechs = (G.s.stats.mechs || 0) + (st.mechs || 0);
+    G.s.stats.naval = (G.s.stats.naval || 0) + (st.naval || 0);
+    G.s.missions.list.forEach(m => { if (m.stat === 'strats' || m.stat === 'mechs' || m.stat === 'naval') m.prog = Math.min(m.n, m.prog + (st[m.stat] || 0)); });
+    baseApply(res, rw);
+  };
+})();

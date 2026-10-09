@@ -51,6 +51,10 @@
     taiga(x, z, N) { let h = 4 + 9 * N.fbm(x / 140, z / 140, 4); const l = N.fbm(x / 70, z / 70 + 30, 3); if (l > 0.3) h = h * (1 - smooth(0.3, 0.4, l)) - 1.2 * smooth(0.3, 0.4, l); return h; },
     swamp(x, z, N) { let h = 0.9 + 1.6 * N.fbm(x / 70, z / 70, 4); const p = N.fbm(x / 40 + 9, z / 40, 3); if (p > 0.15) h -= (p - 0.15) * 9; return h; },
     wreck(x, z, N) { return 3 + 7 * N.fbm(x / 120, z / 120, 4) + 3 * N.ridged(x / 50, z / 50, 2); },
+    rift(x, z, N) { const d = Math.abs(x - 25 * Math.sin(z / 120)); return 2 + 3 * N.fbm(x / 60, z / 60, 3) + smooth(62, 105, d) * (24 + 6 * N.fbm(x / 80, z / 80, 3)) - smooth(150, 230, d) * 8; },
+    atoll(x, z, N) { const rr = Math.hypot(x, z), th = Math.atan2(z, x); const ring = Math.exp(-Math.pow((rr - 215) / 48, 2)) * smooth(0.12, 0.38, Math.abs(Math.sin(th))); return -11 + 2 * N.fbm(x / 70, z / 70, 3) + ring * (17 + 4 * N.fbm(x / 40, z / 40, 3)); },
+    terraces(x, z, N) { const base = 7 + 16 * N.fbm(x / 130, z / 130, 4); const step = 2.4; let h = Math.floor(base / step) * step + (base % step) * 0.12; if (base < 3.2) h -= 2.2; return h; },
+    strait(x, z, N) { const land = 6 + 8 * N.fbm(x / 110, z / 110, 4); const d = Math.abs(z - 22 * Math.sin(x / 95)); return land * (1 - smooth(52, 28, d)) + (-13 + N.n2(x / 50, z / 50)) * smooth(52, 28, d); },
     glass(x, z, N, r, isl) { let h = 2 + 2.5 * N.fbm(x / 120, z / 120, 3); for (const c of isl) { const d = Math.hypot(x - c[0], z - c[1]) / c[2]; h -= c[3] * (d < 1 ? (1 - d * d) : 0) - c[3] * 0.3 * Math.exp(-Math.pow((d - 1) * 4, 2)); } return h; },
   };
 
@@ -193,14 +197,16 @@
       }
     };
     M.block = block;
-    if (biome.buildings) {
+    const bmode = def.buildings || biome.buildings;
+    if (bmode) {
+      const sparse = bmode === 'sparse';
       for (let bz = -260; bz <= 260; bz += 34) for (let bx = -280; bx <= 280; bx += 34) {
-        if (r() < 0.22) continue;
+        if (r() < (sparse ? 0.8 : 0.22)) continue;
         const x = bx + (r() - 0.5) * 8, z = bz + (r() - 0.5) * 8;
         const w = 10 + r() * 14, d = 10 + r() * 14;
         if (!clearOf(x, z, Math.max(w, d) / 2)) continue;
         if (W !== null && M.heightAt(x, z) < W + 0.5) continue;
-        const h = 8 + Math.pow(r(), 1.8) * 46;
+        const h = sparse ? 5 + r() * 6 : 8 + Math.pow(r(), 1.8) * (def.biome === 'ruins' ? 20 : 46);
         M.buildings.push({ x, z, w, d, h, y: M.heightAt(x, z), ruined: r() < 0.35, rot: 0 });
         block(x, z, w, d, 0);
       }
@@ -552,10 +558,10 @@
     const tm = SM.TIMES[time];
     const mat = new T.ShaderMaterial({
       side: T.BackSide, depthWrite: false,
-      uniforms: { uTop: { value: new T.Color(tm.top) }, uHor: { value: new T.Color(tm.horizon) }, uGround: { value: new T.Color(biome.fog).multiplyScalar(0.6) }, uSun: { value: new T.Vector3().fromArray(tm.sun).normalize() }, uSunCol: { value: new T.Color(tm.sunColor) }, uCloud: { value: 0.3 }, uTime: { value: 0 }, uAurora: { value: 0 }, uFlash: { value: 0 }, uFogCol: { value: new T.Color(biome.fog) }, uFogMix: { value: 0 }, uNight: { value: time === 'night' ? 1 : 0 }, uLight: { value: 1 } },
+      uniforms: { uTop: { value: new T.Color(tm.top) }, uHor: { value: new T.Color(tm.horizon) }, uGround: { value: new T.Color(biome.fog).multiplyScalar(0.6) }, uSun: { value: new T.Vector3().fromArray(tm.sun).normalize() }, uSunCol: { value: new T.Color(tm.sunColor) }, uCloud: { value: 0.3 }, uTime: { value: 0 }, uAurora: { value: 0 }, uFlash: { value: 0 }, uFogCol: { value: new T.Color(biome.fog) }, uFogMix: { value: 0 }, uNight: { value: time === 'night' || time === 'space' ? 1 : 0 }, uRed: { value: 0 }, uLight: { value: 1 } },
       vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); vec4 p = projectionMatrix*modelViewMatrix*vec4(position,1.0); gl_Position = p.xyww; }',
       fragmentShader: `
-        uniform vec3 uTop, uHor, uGround, uSun, uSunCol, uFogCol; uniform float uCloud, uTime, uAurora, uFlash, uFogMix, uNight, uLight; varying vec3 vD;
+        uniform vec3 uTop, uHor, uGround, uSun, uSunCol, uFogCol; uniform float uCloud, uTime, uAurora, uFlash, uFogMix, uNight, uLight, uRed; varying vec3 vD;
         float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
         float vn(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f); return mix(mix(hash(i),hash(i+vec2(1,0)),f.x), mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x), f.y); }
         float fbm(vec2 p){ float s=0.0,a=0.5; for(int i=0;i<5;i++){ s+=a*vn(p); p*=2.03; a*=0.5;} return s; }
@@ -572,8 +578,9 @@
             vec3 cc = mix(vec3(1.0), uHor*0.7, 0.4) * (0.55 + 0.45*uLight);
             cc = mix(cc, cc*0.45, uCloud*0.7);
             col = mix(col, cc, cov * smoothstep(0.0, 0.18, y));
-            if (uAurora > 0.0) { float band = sin(d.x*6.0 + uTime*0.25 + fbm(d.xz*4.0+uTime*0.05)*4.0); float a = smoothstep(0.2, 1.0, band) * smoothstep(0.1, 0.4, y) * smoothstep(0.85, 0.5, y); col += mix(vec3(0.1,1.0,0.5), vec3(0.6,0.2,1.0), fbm(d.xz*3.0)) * a * uAurora * 0.8; }
+            if (uAurora > 0.0) { float band = sin(d.x*6.0 + uTime*0.25 + fbm(d.xz*4.0+uTime*0.05)*4.0); float a = smoothstep(0.2, 1.0, band) * smoothstep(0.1, 0.4, y) * smoothstep(0.85, 0.5, y); col += mix(mix(vec3(0.1,1.0,0.5), vec3(0.6,0.2,1.0), fbm(d.xz*3.0)), vec3(1.0,0.12,0.08), uRed) * a * uAurora * 0.8; }
           }
+          if (uRed > 0.0) { float md = max(dot(d, normalize(vec3(-0.4, 0.45, -0.8))), 0.0); col += vec3(1.0, 0.18, 0.08) * (pow(md, 1600.0) * 4.0 + pow(md, 40.0) * 0.35) * uRed; }
           col = mix(col, uFogCol, uFogMix * smoothstep(0.5, -0.05, y));
           col += vec3(0.8,0.85,1.0) * uFlash;
           gl_FragColor = vec4(col, 1.0);

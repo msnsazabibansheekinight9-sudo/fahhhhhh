@@ -54,7 +54,7 @@
       scene.add(sun); scene.add(sun.target);
       // fog
       this.fogBase = new T.Color(M.biome.fog).lerp(new T.Color(tm.horizon), 0.35);
-      if (def.time === 'night') this.fogBase.multiplyScalar(0.25); else if (def.time === 'dusk') this.fogBase.multiplyScalar(0.75);
+      if (def.time === 'night') this.fogBase.multiplyScalar(0.25); else if (def.time === 'space') this.fogBase.setHex(0x0a0a10); else if (def.time === 'dusk') this.fogBase.multiplyScalar(0.75);
       scene.fog = new T.FogExp2(this.fogBase.clone(), 0.0015);
       // terrain
       this.terrain = SM.buildTerrainMesh(M); scene.add(this.terrain);
@@ -148,7 +148,7 @@
     spawnUnit(team, card, x, z, opts) {
       opts = opts || {};
       const def = card.def, cls = SM.CLASSES[def.cls];
-      const inst = SM.instantiate(def, card.mods || [], card.skin);
+      const inst = SM.instantiate(def, card.mods || [], card.skin, card.cust || []);
       const st = this.calcStats(def, card.mods, card.skin, team);
       const u = {
         id: ++this.uid, team, def, cls, card, obj: inst.obj, rig: inst.rig,
@@ -159,7 +159,8 @@
         recoil: 0, turretYaw: 0, torsoYaw: 0, buffs: {}, vis: [team === 0, team === 1], lastSeen: [0, 0], alive: true,
         abil: SM.unitAbilities(def, card.mods).map(id => ({ id, cd: 4 + Math.random() * 3 })),
         phase: Math.random() * 6, stuck: 0, lastHit: -99, kills: 0, dmgDone: 0, spawnT: this.time, alt: 0, bank: 0, pitch: 0, roll: 0,
-        anchor: null,
+        anchor: null, prevSpeed: 0, accel: 0, steer: 0,
+        tracer: (card.cust || []).map(c => SM.TRACER[c]).find(Boolean) || null, contrail: !!inst.obj.userData.contrail,
       };
       if (cls.move === 'plane') { u.loiter = cls.loiter || 60; u.alt = 70 + Math.random() * 15; u.speed = st.speed; }
       if (cls.move === 'heli') u.alt = opts.alt || 0;
@@ -174,7 +175,7 @@
       this.scene.add(u.ring);
       this.units.push(u);
       this.teams[team].pop += cls.pop;
-      if (!opts.free) { this.stats.deployed[def.id] = (this.stats.deployed[def.id] || 0) + (team === 0 ? 1 : 0); }
+      if (!opts.free && team === 0) { this.stats.deployed[def.id] = (this.stats.deployed[def.id] || 0) + 1; }
       return u;
     }
 
@@ -193,7 +194,7 @@
       const mv = u.cls.move;
       if (mv === 'naval' || mv === 'sub') return this.M.nav.naval;
       if (mv === 'hover' || mv === 'amphib') return this.M.nav.amphib;
-      if (mv === 'heli' || mv === 'plane') return null;
+      if (mv === 'heli' || mv === 'plane' || mv === 'static') return null;
       return this.M.nav.ground;
     }
 
@@ -252,7 +253,7 @@
 
     // ---------------------------------------------------------- orders
     order(u, o) {
-      if (!u.alive || u.isHQ) return;
+      if (!u.alive || u.isHQ || u.cls.move === 'static') return;
       u.order = o;
       u.forced = o.type === 'attack' ? o.target : null;
       u.path = null; u.pathIdx = 0; u.stuck = 0; u.anchor = null;
@@ -324,12 +325,13 @@
       this.capT -= dt; if (this.capT <= 0) { this.capT = 0.2; this.updateCapture(0.2); }
       this.bleedT -= dt; if (this.bleedT <= 0) { this.bleedT = 2; this.bleed(); }
       this.updateAI(dt);
+      if (this.stepStrat) this.stepStrat(dt, wm);
       // weather damage over time
       if (wm.burnInf > 0.01 || wm.corrode > 0.01) {
         for (const u of this.units) {
           if (u.isHQ || !u.alive) continue;
           let r = 0;
-          if (u.cls.move === 'inf') r += wm.burnInf * 0.0016;
+          if (u.cls.move === 'inf' && !u.cls.synthetic) r += wm.burnInf * 0.0016;
           if (!SM.isAir(u.cls)) r += wm.corrode * 0.0008;
           if (r > 0 && u.hp > u.maxHp * 0.12) u.hp = Math.max(u.maxHp * 0.12, u.hp - u.maxHp * r * dt);
           if (u.squad) this.syncSquad(u);
@@ -355,7 +357,7 @@
           if (!seen) for (const u of this.units) {
             if (u.team !== t || !u.alive) continue;
             const dx = u.pos.x - e.pos.x, dz = u.pos.z - e.pos.z, d = Math.sqrt(dx * dx + dz * dz);
-            let s = u.sight * wm.sight * (1 - (e.stealth || 0) * 2);
+            let s = u.sight * wm.sight * (1 - (e.stealth || 0) * 2) * (this.teams[t].blackoutT > 0 ? 0.5 : 1) * (e.cls.stealthy ? 1 - e.cls.stealthy : 1);
             if (air) s *= 1.35;
             if (smoke) s *= 0.45;
             if (cloaked) s = 14;
@@ -374,11 +376,13 @@
     updateUnit(u, dt, wm) {
       if (u.isHQ) { this.updateHQ(u, dt); return; }
       const b = u.buffs;
-      for (const k of ['speedT', 'shieldT', 'cloak', 'flares', 'overT', 'stun', 'ecmDebuff', 'revealed', 'repairT', 'firedT', 'healT']) if (b[k] > 0) b[k] -= dt;
+      for (const k of ['speedT', 'shieldT', 'cloak', 'flares', 'overT', 'stun', 'ecmDebuff', 'revealed', 'repairT', 'firedT', 'healT', 'overwatchT', 'rallyT', 'stimT', 'paintT', 'rootT', 'flameT', 'ammoT']) if (b[k] > 0) b[k] -= dt;
       if (b.shieldT <= 0) b.shield = 0;
       if (b.repairT > 0) { u.hp = Math.min(u.maxHp, u.hp + u.maxHp * 0.35 / 6 * dt); if (u.squad) this.syncSquad(u); }
       if (b.healT > 0) { u.hp = Math.min(u.maxHp, u.hp + u.maxHp * 0.25 / 5 * dt); if (u.squad) this.syncSquad(u); }
-      for (const a of u.abil) if (a.cd > 0) a.cd -= dt * (wm.energy > 1 && a.id === 'shield' ? 1.5 : 1);
+      for (const a of u.abil) if (a.cd > 0) a.cd -= dt * (wm.energy > 1 && a.id === 'shield' ? 1.5 : 1) * (wm.cdMul || 1);
+      if (u.cls.healAura && Math.random() < dt * 1.5) this.near(u.pos.x, u.pos.z, 28, o => { if (o.team === u.team && o.alive && o.squad && o.hp < o.maxHp) { o.hp = Math.min(o.maxHp, o.hp + u.cls.healAura * 1.4); this.syncSquad(o); o.repairFx = 0.5; } });
+      if (u.cls.jamAura && Math.random() < dt * 2) this.near(u.pos.x, u.pos.z, 42, o => { if (o.team !== u.team && o.alive) o.buffs.ecmDebuff = Math.max(o.buffs.ecmDebuff || 0, 0.8); });
       u.recoil = Math.max(0, u.recoil - dt * 3);
       // engineers repair nearby machines
       if (u.cls.repairAura && Math.random() < dt * 2) {
@@ -386,9 +390,13 @@
       }
       if (b.stun > 0) { u.speed = 0; this.place(u, dt); return; }
       const mv = u.cls.move;
+      u.accel = (u.speed - u.prevSpeed) / Math.max(dt, 0.001); u.prevSpeed = u.speed;
+      const y0 = u.yaw;
+      if (mv === 'static') { u.pos.y = this.M.groundAt(u.pos.x, u.pos.z); this.updateCombat(u, dt, wm); return; }
       if (mv === 'plane') this.updatePlane(u, dt, wm);
       else if (mv === 'heli') this.updateHeli(u, dt, wm);
       else this.updateGround(u, dt, wm);
+      u.steer += (SM.angDiff(u.yaw, y0) / Math.max(dt, 0.001) - u.steer) * Math.min(1, dt * 6);
       this.updateCombat(u, dt, wm);
     }
 
@@ -404,6 +412,10 @@
     speedMul(u, wm) {
       let m = 1;
       if (u.buffs.speedT > 0) m *= u.buffs.speedMul || 1.6;
+      if (u.buffs.rallyT > 0) m *= 1.2;
+      if (u.buffs.stimT > 0) m *= 1.5;
+      if (u.buffs.rootT > 0) m = 0;
+      if (u.team !== undefined && this.teams[u.team].fuelT > 0) m *= 1.4;
       const mv = u.cls.move;
       if (mv === 'naval' || mv === 'sub') m *= wm.navalSlow || 1;
       else if (mv !== 'heli' && mv !== 'plane' && mv !== 'hover') m *= wm.speed;
@@ -532,7 +544,7 @@
       const k = Math.min(1, j.t / j.dur);
       u.pos.x = j.x0 + (j.x1 - j.x0) * k; u.pos.z = j.z0 + (j.z1 - j.z0) * k;
       const g = this.M.groundAt(u.pos.x, u.pos.z);
-      u.pos.y = g + Math.sin(k * PI) * j.h;
+      u.pos.y = g + (j.drop ? (1 - k) * j.h : Math.sin(k * PI) * j.h);
       if (Math.random() < dt * 30) this.fx.fire.spawn(u.pos.x, u.pos.y + 0.5, u.pos.z, 0, -6, 0, 0.3, 1.5, 0.4, 0x8ad8ff, 1, 0, 0);
       if (k >= 1) { u.jump = null; u.pos.y = g; this.fx.dust(u.pos.x, g, u.pos.z, 1.5); u.order = { type: 'idle' }; u.anchor = { x: u.pos.x, z: u.pos.z }; }
     }
@@ -592,7 +604,7 @@
 
     // ---------------------------------------------------------- targeting
     effRange(u, t) {
-      let r = u.range * (u.buffs.siege ? 1.4 : 1);
+      let r = u.range * (u.buffs.siege ? 1.4 : 1) * (u.buffs.overwatchT > 0 ? 1.35 : 1) * (u.buffs.flameT > 0 ? 1.3 : 1);
       if (t && SM.isAir(t.cls) && !SM.isAir(u.cls)) r *= u.cls.aa === 2 ? 1.1 : 0.8;
       if (t && t.isHQ) r += 18;
       return r;
@@ -681,7 +693,7 @@
       } else if (mv === 'mech') u.torsoYaw += SM.clamp(-u.torsoYaw, -1 * dt, 1 * dt);
       u.aimPitch = t ? Math.atan2((t.pos.y + 1.5) - (u.pos.y + 2), Math.max(1, d)) : 0;
       u.firing = false;
-      if (u.reload > 0) u.reload -= dt * (u.buffs.overT > 0 ? 2 : 1);
+      if (u.reload > 0) u.reload -= dt * (u.buffs.overT > 0 ? 2 : 1) * (u.buffs.stimT > 0 ? 1.5 : 1) * (u.buffs.ammoT > 0 ? 1.4 : 1);
       if (!t || !aligned) return;
       const er = this.effRange(u, t);
       if (d > er) return;
@@ -705,6 +717,8 @@
       let p = u.acc;
       p *= SM.isAir(u.cls) ? wm.air : wm.acc;
       if (u.buffs.ecmDebuff > 0) p *= 0.6;
+      if (u.buffs.overwatchT > 0) p *= 1.15;
+      if (u.def.wt === 'flame') p = Math.max(p, 0.85);
       p *= 1 - 0.3 * Math.min(1, d / Math.max(1, u.range));
       if (t.speed > 3) p *= SM.isAir(t.cls) ? 0.8 : 0.88;
       if (u.speed > 3 && !(u.rig && u.rig.turrets.length)) p *= 0.85;
@@ -728,10 +742,14 @@
       if (u.buffs.cap) { dmg *= 3; pen *= 1.5; u.buffs.cap = false; }
       if (SM.isAir(t.cls) && !SM.isAir(u.cls) && u.cls.aa === 1) dmg *= 0.6;
       if (u.isHQ) { dmg = u.dmg; }
+      if (u.buffs.rallyT > 0) dmg *= 1.25;
+      if (wm.dmgMul) dmg *= wm.dmgMul;
+      if (wt === 'flame') { if (u.buffs.flameT > 0) dmg *= 2; if (t.squad) dmg *= 1.6; }
       u.recoil = 1; u.firing = true;
       u.buffs.firedT = 2.5;
       if (u.buffs.cloak > 0 && u.cls.move !== 'sub') u.buffs.cloak = 0;
       const shots = u.squad ? Math.max(1, this.aliveSoldiers(u)) : (wt === 'mg' ? 2 : 1);
+      const tcol = u.tracer;
       const p = this.hitChance(u, t, d, wm);
       const vol = this.vol(u.pos);
       SM.Audio.shot(wt, vol);
@@ -745,7 +763,7 @@
         const dest = hit ? to : miss;
         switch (wt) {
           case 'mg': case 'auto':
-            this.fx.tracer(src.x, src.y, src.z, dest.x, dest.y, dest.z, u.team ? 0xffa060 : 0xffe08a);
+            this.fx.tracer(src.x, src.y, src.z, dest.x, dest.y, dest.z, tcol || (u.team ? 0xffa060 : 0xffe08a));
             if (s === 0) this.fx.muzzle(src.x, src.y, src.z, fdx, fdz, wt === 'auto' ? 0.8 * big : 0.4, 0xffc070);
             this.later(Math.min(0.3, d / 340), () => {
               if (hit && t.alive) this.damage(t, dmg, pen, u, { kind: wt });
@@ -753,12 +771,16 @@
             });
             break;
           case 'rail': case 'laser': {
-            const col = wt === 'rail' ? (u.team ? 0xff7a9a : 0x7ad8ff) : (u.team ? 0xff4a6a : 0xff6ad8);
+            const col = tcol || (wt === 'rail' ? (u.team ? 0xff7a9a : 0x7ad8ff) : (u.team ? 0xff4a6a : 0xff6ad8));
             this.fx.beam(src.x, src.y, src.z, dest.x, dest.y, dest.z, col, wt === 'rail' ? 0.35 : 0.18);
             this.fx.glowAt(src.x, src.y, src.z, col, 4 * big);
             if (hit) this.damage(t, dmg, pen, u, { kind: wt }); this.fx.sparks(dest.x, dest.y, dest.z, col);
             break;
           }
+          case 'flame':
+            this.fx.flameJet(src.x, src.y, src.z, dest.x, dest.y, dest.z, u.squad ? 0.6 : 1.4);
+            if (hit) this.later(0.25, () => { if (t.alive) this.damage(t, dmg, pen, u, { kind: 'flame' }); });
+            break;
           default: this.spawnProjectile(u, t, wt, src, dest, hit, dmg, pen, big);
         }
       }
@@ -905,12 +927,14 @@
       let mult = armor <= 0 ? 1 : pen >= armor ? 1 : Math.max(0.05, Math.pow(pen / armor, 1.5));
       if (t.squad && !(opt && opt.aoe) && (opt && (opt.kind === 'cannon' || opt.kind === 'rail' || opt.kind === 'missile' || opt.kind === 'rocket' || opt.kind === 'torpedo'))) mult *= 0.45;
       let v = dmg * mult;
+      if (t.buffs.paintT > 0) v *= 1.3;
+      if (this.zones.length) for (const zn of this.zones) if (zn.kind === 'dome' && zn.team === t.team && Math.hypot(zn.x - t.pos.x, zn.z - t.pos.z) < zn.r) { v *= 0.5; break; }
       if (t.buffs.shield > 0) { const a = Math.min(t.buffs.shield, v); t.buffs.shield -= a; v -= a; this.fx.sparks(t.pos.x, t.pos.y + 2, t.pos.z, 0x7ad8ff); }
       if (v <= 0) return;
       t.hp -= v; t.lastHit = this.time; t.lastAttacker = from;
       if (from && from.team !== undefined && from.team >= 0) {
         this.stats.dmg[from.team] += v;
-        if (from.def && from.team === 0) this.stats.unitScore[from.def.id] = (this.stats.unitScore[from.def.id] || 0) + v;
+        if (from.def && from.def.id && from.team === 0) this.stats.unitScore[from.def.id] = (this.stats.unitScore[from.def.id] || 0) + v;
       }
       if (t.squad) this.syncSquad(t);
       if (t.isHQ && t.team === 0 && t.hp < t.maxHp * 0.6) { if (!this.hqWarn) { this.hqWarn = true; this.addFeed('Our headquarters is under attack!', '#ff8a7a'); SM.Audio.alert(); } }
@@ -921,6 +945,7 @@
       const alive = this.aliveSoldiers(u);
       let n = 0;
       for (const s of u.rig.soldiers) { if (s.alive) { n++; if (n > alive) s.alive = false; } }
+      if (n < alive && u.alive) for (const s of u.rig.soldiers) { if (n >= alive) break; if (!s.alive) { s.alive = true; s.die = 0; s.g.visible = true; s.g.rotation.set(0, 0, 0); n++; } }
     }
 
     killUnit(u, by) {
@@ -938,6 +963,8 @@
           if (by.team === 0) {
             const k = u.squad ? 'inf' : SM.isAir(u.cls) ? 'air' : 'veh';
             this.stats[k]++;
+            if (u.cls.move === 'mech') this.stats.mechs = (this.stats.mechs || 0) + 1;
+            if (u.cls.move === 'naval' || u.cls.move === 'sub') this.stats.naval = (this.stats.naval || 0) + 1;
             if (by.def && by.def.id) this.stats.unitScore[by.def.id] = (this.stats.unitScore[by.def.id] || 0) + u.def.cp * 2;
           }
         }
@@ -1106,6 +1133,18 @@
           if (team === 0) this.addFeed('Squad dismounted.', '#9fd4ff');
           break;
         }
+        case 'flameburst': b.flameT = 5; break;
+        case 'overwatch': b.overwatchT = 10; break;
+        case 'stim': b.stimT = 6; u.hp = Math.max(1, u.hp - u.maxHp * 0.1); if (u.squad) this.syncSquad(u); break;
+        case 'rally': this.near(u.pos.x, u.pos.z, 35, o => { if (o.team === team && o.alive && !o.isHQ) o.buffs.rallyT = 10; }); this.fx.glowAt(u.pos.x, u.pos.y + 3, u.pos.z, 0xffd36a, 30); break;
+        case 'heal': this.near(u.pos.x, u.pos.z, 30, o => { if (o.team === team && o.alive && o.squad) { o.hp = Math.min(o.maxHp, o.hp + o.maxHp * 0.4); this.syncSquad(o); o.repairFx = 2; } }); this.fx.glowAt(u.pos.x, u.pos.y + 2, u.pos.z, 0x7aff9a, 28); break;
+        case 'hack': this.fx.explosion(x, this.M.groundAt(x, z), z, 0.8, 'emp'); this.near(x, z, 14, o => { if (o.team !== team && o.alive && !o.isHQ && !o.squad) o.buffs.stun = 5; }); break;
+        case 'lockdown': for (let i = 0; i < 24; i++) { const a = i / 24 * Math.PI * 2; this.fx.fire.spawn(x + Math.cos(a) * 16, this.M.groundAt(x, z) + 1, z + Math.sin(a) * 16, 0, 2, 0, 4, 2, 1, 0x7ab0ff, 0.9, 0, 0); } this.near(x, z, 16, o => { if (o.team !== team && o.alive && !SM.isAir(o.cls)) o.buffs.rootT = 4; }); break;
+        case 'paint': this.near(x, z, 12, o => { if (o.team !== team && o.alive) { o.buffs.paintT = 12; o.buffs.revealed = 12; o.buffs.revealedBy = team; } }); this.fx.beam(u.pos.x, u.pos.y + 2, u.pos.z, x, this.M.groundAt(x, z) + 1, z, 0xff3030, 0.6); break;
+        case 'chaff': this.near(u.pos.x, u.pos.z, 25, o => { if (o.team === team && o.alive) o.buffs.flares = 5; }); for (let i = 0; i < 30; i++) this.fx.fire.spawn(u.pos.x, u.pos.y + 2, u.pos.z, (Math.random() - 0.5) * 18, Math.random() * 8, (Math.random() - 0.5) * 18, 2, 0.6, 0.3, 0xdde8ff, 1, 1, 3); break;
+        case 'barrier': this.addDome(team, u.pos.x, u.pos.z, 14, 8); break;
+        case 'depth': for (let i = 0; i < 5; i++) this.later(0.4 + i * 0.25, () => { const px = x + (Math.random() - 0.5) * 14, pz = z + (Math.random() - 0.5) * 14; this.fx.splash(px, this.M.water || 0, pz, 1.6); SM.Audio.boom(1, this.vol({ x: px, z: pz })); this.near(px, pz, 9, o => { if (o.team !== team && o.alive && (o.cls.move === 'sub' || o.cls.move === 'naval')) this.damage(o, o.cls.move === 'sub' ? 260 : 80, 150, u, { aoe: true }); }); }); break;
+        case 'airdrop': { const fac = this.teams[team].fac; const ck = u.def.rank >= 5 ? 'exo' : 'rifle'; const sd = SM.UNIT_LIST.find(d => d.fac === fac && d.cls === ck && d.rank >= Math.min(6, u.def.rank)) || SM.UNIT_LIST.find(d => d.fac === fac && d.cls === 'rifle'); const s2 = this.spawnUnit(team, { def: sd, mods: [], skin: null }, u.pos.x, u.pos.z, { free: true }); this.teams[team].pop -= s2.cls.pop; s2.summon = true; s2.jump = { x0: u.pos.x, z0: u.pos.z, x1: u.pos.x + (Math.random() - 0.5) * 10, z1: u.pos.z + (Math.random() - 0.5) * 10, t: 0, dur: 1.6, h: Math.max(4, u.pos.y - this.M.groundAt(u.pos.x, u.pos.z)), drop: true }; if (team === 0) this.addFeed('Squad air-dropped.', '#9fd4ff'); break; }
         case 'torpedo': for (let i = -1; i <= 1; i++) { const px = x + i * 8, pz = z; const p = this.spawnProjectile(u, null, 'torpedo', new T.Vector3(u.pos.x, (this.M.water || 0) - 1, u.pos.z), new T.Vector3(px, (this.M.water || 0) - 1, pz), false, u.dmg * 0.8, u.pen, 1); p.aoe = 7; } break;
       }
       return true;
@@ -1147,7 +1186,7 @@
           if (boom) { this.damage(boom, 260, 200, z.from, { aoe: true }); this.fx.explosion(z.x, this.M.groundAt(z.x, z.z), z.z, 1.2); SM.Audio.boom(1.2, this.vol({ x: z.x, z: z.z })); z.t = 0; }
           if (z.mesh) z.mesh.visible = z.team === 0;
         }
-        if (z.t <= 0 && (z.kind !== 'orbital' || z.fired)) { if (z.mesh) { this.scene.remove(z.mesh); z.mesh.geometry.dispose(); z.mesh.material.dispose(); } this.zones.splice(i, 1); }
+        if (z.t <= 0 && (z.kind !== 'orbital' || z.fired)) { if (z.mesh) { this.scene.remove(z.mesh); if (z.mesh.geometry !== this.ringGeo && z.mesh.geometry !== this.domeGeo) z.mesh.geometry.dispose(); z.mesh.material.dispose(); } this.zones.splice(i, 1); }
       }
       // decoys and drones expire
       for (const u of this.units) if (u.decoyT !== undefined) { u.decoyT -= dt; if (u.decoyT <= 0) { if (u.isDecoy) this.killUnit(u, null); else { this.fx.sparks(u.pos.x, u.pos.y, u.pos.z); this.removeUnit(u); } } }
@@ -1310,6 +1349,13 @@
             case 'drones': case 'dismount': use = !!t; break;
             case 'decoy': use = recent; px = u.pos.x + (Math.random() - 0.5) * 30; pz = u.pos.z + (Math.random() - 0.5) * 30; break;
             case 'jumpjets': if (u.aiGoal && u.order.type !== 'idle') { const d = Math.hypot(u.aiGoal.x - u.pos.x, u.aiGoal.z - u.pos.z); if (d > 40) { const k = Math.min(1, 55 / d); px = u.pos.x + (u.aiGoal.x - u.pos.x) * k; pz = u.pos.z + (u.aiGoal.z - u.pos.z) * k; use = this.M.nav.ground[SM.cellOf(this.M, px, pz)] === 1; } } break;
+            case 'flameburst': use = !!t && Math.hypot(t.pos.x - u.pos.x, t.pos.z - u.pos.z) < 32; break;
+            case 'overwatch': case 'stim': case 'rally': case 'airdrop': use = !!t; break;
+            case 'chaff': case 'barrier': use = recent; break;
+            case 'heal': { let n = 0; this.near(u.pos.x, u.pos.z, 30, o => { if (o.team === team && o.alive && o.squad && o.hp < o.maxHp * 0.6) n++; }); use = n >= 1; break; }
+            case 'hack': case 'lockdown': case 'paint': case 'depth':
+              if (t && Math.hypot(t.pos.x - u.pos.x, t.pos.z - u.pos.z) < (A.range || 60) && !SM.isAir(t.cls) && (a.id !== 'depth' || t.cls.move === 'sub' || t.cls.move === 'naval') && (a.id !== 'hack' || !t.squad)) { use = true; px = t.pos.x; pz = t.pos.z; }
+              break;
             case 'barrage': case 'orbital': case 'napalm': case 'carpet': case 'grenade': case 'mines': case 'torpedo':
               if (t && Math.hypot(t.pos.x - u.pos.x, t.pos.z - u.pos.z) < (A.range || 60) && !SM.isAir(t.cls)) { if (a.id === 'torpedo' && !(t.cls.move === 'naval' || t.cls.move === 'sub')) break; use = true; px = t.pos.x; pz = t.pos.z; }
               break;

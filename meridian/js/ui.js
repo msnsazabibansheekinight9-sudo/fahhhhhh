@@ -33,10 +33,11 @@
 
   // ---------------------------------------------------------------- portraits
   const P = { r: null, scene: null, cam: null, cache: {}, queue: [], busy: false };
-  SM.portrait = function (u, mods, skin, cb) {
-    const key = u.id + '|' + (mods || []).join(',') + '|' + (skin || '');
+  SM.portrait = function (u, mods, skin, cb, cust) {
+    if (cust === undefined && SM.G && SM.G.s && SM.G.custEquipped) cust = SM.G.custEquipped(u.id);
+    const key = u.id + '|' + (mods || []).join(',') + '|' + (skin || '') + '|' + (cust || []).join(',');
     if (P.cache[key]) { cb(P.cache[key]); return; }
-    P.queue.push({ u, mods, skin, cb, key });
+    P.queue.push({ u, mods, skin, cb, key, cust });
     if (!P.busy) { P.busy = true; requestAnimationFrame(portraitPump); }
   };
   function portraitInit() {
@@ -54,7 +55,7 @@
     while (P.queue.length && performance.now() - t0 < 14) {
       const q = P.queue.shift();
       if (P.cache[q.key]) { q.cb(P.cache[q.key]); continue; }
-      const inst = SM.instantiate(q.u, q.mods || [], q.skin);
+      const inst = SM.instantiate(q.u, q.mods || [], q.skin, q.cust || []);
       P.scene.add(inst.obj);
       const cls = SM.CLASSES[q.u.cls];
       SM.animateUnit(inst.rig, cls, { speed: 0 }, 0.016, 1);
@@ -117,9 +118,10 @@
       this.canvas.style.width = w + 'px'; this.canvas.style.height = h + 'px';
       this.cam.aspect = w / h; this.cam.updateProjectionMatrix();
     }
-    show(u, mods, skin) {
+    show(u, mods, skin, cust) {
       if (this.cur) { this.holder.remove(this.cur.obj); this.cur.rig.tracks.forEach(t => t.dispose()); }
-      const inst = SM.instantiate(u, mods || [], skin);
+      if (cust === undefined) cust = SM.G.custEquipped(u.id);
+      const inst = SM.instantiate(u, mods || [], skin, cust);
       inst.obj.traverse(o => { if (o.isMesh) { o.castShadow = true; } });
       const cls = SM.CLASSES[u.cls];
       this.cls = cls; this.unit = u;
@@ -230,7 +232,7 @@
     const diffs = Object.keys(G.DIFF).map(k => `<button class="seg${s.settings.diff === k ? ' on' : ''}" data-diff="${k}">${G.DIFF[k].name}<small>×${G.DIFF[k].mult} rewards</small></button>`).join('');
     const enemies = SM.FACTIONS.filter(f => f.id !== s.faction);
     UI.modal(`<div class="setup"><div class="setup-head"><div><span class="eyebrow">Battle setup</span><h2>Choose a theatre</h2></div><button class="btn ghost" data-close>Close</button></div>
-      <div class="map-grid"><button class="map-card${s.settings.lastMap === 'random' ? ' on' : ''}" data-map="random"><div class="rand">?</div><b>Random theatre</b><span>Any of the 20 maps</span></button>${thumbs}</div>
+      <div class="map-grid"><button class="map-card${s.settings.lastMap === 'random' ? ' on' : ''}" data-map="random"><div class="rand">?</div><b>Random theatre</b><span>Any of the 32 maps</span></button>${thumbs}</div>
       <div class="setup-foot"><div><span class="eyebrow">Enemy commander</span><div class="segs">${diffs}</div></div>
       <div><span class="eyebrow">Opponent</span><div class="segs" id="oppSeg"><button class="seg on" data-opp="random">Random</button>${enemies.map(f => `<button class="seg" data-opp="${f.id}">${f.short}</button>`).join('')}</div></div>
       <div class="go"><span class="muted small" id="mapDesc"></span><button class="btn primary huge" id="btnGo">Deploy</button></div></div></div>`, 'wide');
@@ -273,7 +275,7 @@
         root.hidden = false; $('#app').hidden = true;
         const b = new SM.Battle(Object.assign({
           renderer: UI.br, root, mapId, playerFaction: fac, enemyFaction: enemy, lineup,
-          enemyLineup: G.enemyLineup(enemy, avg, diff, !!map.naval), diff, quality: s.settings.quality, resScale: s.settings.res, edgePan: s.settings.edgePan,
+          enemyLineup: G.enemyLineup(enemy, avg, diff, !!map.naval), diff, strats: G.stratEntries(), enemyStrats: G.enemyStrats(diff), quality: s.settings.quality, resScale: s.settings.res, edgePan: s.settings.edgePan,
           onEnd: res => UI.endBattle(res, lineup),
         }, extra || {}));
         b.init();
@@ -390,7 +392,7 @@
       <div class="br-tabs big">${SM.BRANCHES.map(b => `<button class="${br === b.id ? 'on' : ''}" data-rbr="${b.id}">${b.name}</button>`).join('')}</div>
       <div class="tree-wrap"><div class="tree" style="--cols:${lines.length}">
         <div class="corner"></div>${lines.map(l => `<div class="line-name">${esc(l.line.name)}</div>`).join('')}
-        ${[1, 2, 3, 4, 5, 6].map(rk => `<div class="rank">${SM.ROMAN[rk]}</div>` + lines.map(l => `<div class="cell${rk === 6 ? ' last' : ''}">${l.nodes.filter(id => SM.getUnit(id).rank === rk).map(id => UI.node(id)).join('')}</div>`).join('')).join('')}
+        ${[1, 2, 3, 4, 5, 6, 7].map(rk => `<div class="rank">${SM.ROMAN[rk]}</div>` + lines.map(l => `<div class="cell${rk === 7 ? ' last' : ''}">${l.nodes.filter(id => SM.getUnit(id).rank === rk).map(id => UI.node(id)).join('')}</div>`).join('')).join('')}
       </div></div></div>`;
     $$('[data-rfac]', el).forEach(b => b.onclick = () => { UI.fac = b.dataset.rfac; UI.render.research(); });
     $$('[data-rbr]', el).forEach(b => b.onclick = () => { UI.branch = b.dataset.rbr; UI.render.research(); });
@@ -507,7 +509,7 @@
     const item = G.crateRoll(c);
     const strip = [];
     for (let i = 0; i < 46; i++) strip.push(i === 40 ? item : G.crateItem(UI.fillerRarity(c), Math.random));
-    const art = it => it.kind === 'skin' ? `<img src="${SM.skinSwatch(it.pattern, it.unit.fac)}" alt="">` : it.kind === 'unit' || it.kind === 'unlock' ? `<img data-pid="${it.unit.id}" alt="">` : `<div class="art-boost">${it.kind === 'credits' ? 'CR' : it.kind === 'cores' ? '◆' : '×' + it.boost.mult}</div>`;
+    const art = it => it.kind === 'skin' ? `<img src="${SM.skinSwatch(it.pattern, it.unit.fac)}" alt="">` : it.kind === 'unit' || it.kind === 'unlock' || it.kind === 'cust' ? `<img data-pid="${it.unit.id}" alt="">` : it.kind === 'strat' || it.kind === 'stratUp' ? `<div class="art-boost strat-art" style="--bc:${SM.STRAT_BRANCHES.find(b => b.id === SM.STRAT[it.strat].br).color}">${UI.stratIcon(SM.STRAT[it.strat])}</div>` : `<div class="art-boost">${it.kind === 'credits' ? 'CR' : it.kind === 'cores' ? '◆' : '×' + it.boost.mult}</div>`;
     UI.modal(`<div class="opening"><span class="eyebrow">${esc(c.name)}</span><div class="reel"><div class="marker"></div><div class="strip" id="strip">${strip.map(it => `<div class="ri" style="--rc:${SM.RARITY[it.rar].color}">${art(it)}<span>${esc(it.label)}</span></div>`).join('')}</div></div><div class="reveal" id="reveal" hidden></div></div>`, 'wide');
     $$('#modal [data-pid]').forEach(img => { const u = SM.getUnit(img.dataset.pid); SM.portrait(u, [], null, url => img.src = url); });
     const st = $('#strip');
@@ -548,11 +550,12 @@
       let art = '';
       if (x.kind === 'unit') art = `<img data-pid="${x.unitId}" alt="">`;
       else if (x.kind === 'skinPick') art = `<img src="${SM.skinSwatch(x.pattern, s.faction)}" alt="">`;
-      else art = `<div class="art-boost">${x.kind === 'credits' ? 'CR' : x.kind === 'cores' ? '◆' : x.kind === 'crate' ? '▣' : '×' + x.boost.mult}</div>`;
+      else art = `<div class="art-boost">${x.kind === 'credits' ? 'CR' : x.kind === 'cores' ? '◆' : x.kind === 'crate' ? '▣' : x.kind === 'stratPick' ? '⌖' : x.kind === 'custPick' ? '✦' : '×' + x.boost.mult}</div>`;
       const label = x.kind === 'unit' ? SM.getUnit(x.unitId).name : x.kind === 'skinPick' ? SM.SKINS[x.pattern].name : x.kind === 'credits' ? fmt(x.amount) + ' cr' : x.kind === 'cores' ? x.amount + ' cores' : x.label;
       return `<button class="bp-c ${track}${claimed ? ' got' : ok ? ' ready' : ''}${x.kind === 'unit' ? ' veh' : ''}" data-bp="${r.t}" data-track="${track}" ${!ok || claimed ? 'disabled' : ''} title="${esc(label)}">${art}<span>${esc(label)}</span></button>`;
     };
-    const vehs = rw.filter(r => r.prem.kind === 'unit' || r.free.kind === 'unit').map(r => r.prem.kind === 'unit' ? r.prem.unitId : r.free.unitId);
+    const vehs = [];
+    rw.forEach(r => { if (r.free.kind === 'unit') vehs.push(r.free.unitId); if (r.prem.kind === 'unit') vehs.push(r.prem.unitId); });
     el.innerHTML = `<div class="pass">
       <div class="pass-head"><div><span class="eyebrow">Season ${season + 1} · new season every two weeks</span><h2>${esc(name)}</h2><p class="muted">Ends in <b data-countdown="${SM.seasonEnds(now)}"></b>. Earn pass XP from battles and daily orders.</p></div>
         <div class="pass-prog"><b>Tier ${tier}</b><div class="bpbar big"><i style="width:${tier >= G.BP_TIERS ? 100 : (s.bp.xp % G.BP_XP) / G.BP_XP * 100}%"></i></div><span>${fmt(s.bp.xp % G.BP_XP)} / ${fmt(G.BP_XP)} XP</span>
@@ -576,7 +579,7 @@
     el.innerHTML = `<div class="profile"><div class="panel"><span class="eyebrow">Service record</span><div class="res-stats">
       <div><b>${st.battles}</b><span>Battles</span></div><div><b>${st.wins}</b><span>Victories</span></div><div><b>${st.battles ? Math.round(st.wins / st.battles * 100) : 0}%</b><span>Win rate</span></div><div><b>${fmt(st.kills)}</b><span>Enemies destroyed</span></div><div><b>${fmt(st.losses)}</b><span>Units lost</span></div><div><b>${fmt(st.captures)}</b><span>Points captured</span></div><div><b>${fmt(st.air)}</b><span>Aircraft downed</span></div><div><b>${h}h ${m}m</b><span>Time in battle</span></div></div></div>
       <div class="panel"><span class="eyebrow">Tech tree progress</span>${prog.map(p => `<div class="fprog" style="--fc:${p.f.hue}"><b>${esc(p.f.name)}</b><div class="bpbar"><i style="width:${p.have / p.all * 100}%"></i></div><span>${p.have} / ${p.all}</span></div>`).join('')}
-        <p class="muted small">${SM.UNIT_LIST.filter(u => !u.exclusive).length} units across four factions, five branches and six ranks. Each unit has its own 10-node modification tree.</p></div>
+        <p class="muted small">${SM.UNIT_LIST.filter(u => !u.exclusive).length} units across six factions, five branches and seven ranks. Each unit has its own 10-node modification tree.</p></div>
       <div class="panel"><span class="eyebrow">Exclusive collection · ${excl.length}</span><div class="excl-row">${excl.map(u => `<div class="ex have" title="${esc(u.name)}"><img data-pid="${u.id}" alt=""></div>`).join('') || '<p class="muted small">None yet. Giveaways, crates and the battle pass carry them.</p>'}</div></div></div>`;
     $$('[data-pid]', el).forEach(img => { const u = SM.getUnit(img.dataset.pid); SM.portrait(u, [], null, url => img.src = url); });
   };
