@@ -1,8 +1,8 @@
 # Dropfall
 
-A top-down co-op squad shooter in the browser: drop onto alien planets, type arrow codes to call in orbital strikes and supplies, complete objectives, and extract. All names, factions, weapons and art are original. Everything is drawn and synthesized in code, with no image or audio files.
+A first-person co-op squad shooter in the browser, built on Three.js. Drop onto alien planets, type arrow codes on your wrist computer to call in orbital strikes and supplies, complete objectives, and extract. All names, factions, weapons and art are original. Every model, animation, texture and sound is generated in code, with no asset files.
 
-Open `index.html` in a browser. Keyboard and mouse required.
+Open `index.html` in a browser with WebGL. Keyboard and mouse required. Click the game once to capture the mouse; Esc releases it and pauses.
 
 ## What's in it
 
@@ -16,6 +16,14 @@ Open `index.html` in a browser. Keyboard and mouse required.
 
 Progress saves to the browser's local storage.
 
+## 3D and animation
+
+- First-person weapon models for all 33 guns, gloved hands placed on each weapon with two-bone inverse kinematics, and animations for bob, sway, recoil, aim down sights, sprint, weapon swap, grenade throw, stims, beacon throw, and reloads that differ by type (magazine swap, shell-by-shell, revolver cylinder, heat-sink eject, launcher tube load).
+- A wrist computer that shows the call-in codes as you type them.
+- Jointed enemy models for all 29 types: multi-legged bugs with tripod gaits and snapping mandibles, stomping robots and walkers, tanks with turrets and moving treads, hovering gunships, robed Veil casters with swaying robes and shield bubbles, a three-legged boss. Each has a death animation.
+- Squadmates rendered with armor sets and capes that sway, with hands placed on their guns by inverse kinematics; drivable exosuits (cockpit view) and a buggy (chase camera).
+- Terrain with rolling height and scorch decals, instanced scenery per biome, a gradient sky with a ringed planet and stars, image-based lighting from the sky, sun shadows, a helmet lamp at night, 3D weather, fog tied to hazards, fireballs, tracers, beams and dynamic lights.
+
 ## Code layout
 
-`js/data.js` content tables · `world.js` map generation · `sim.js` state, damage, explosions · `combat.js` weapons, projectiles, call-ins · `enemies.js` enemy AI · `update.js` per-frame logic, objectives, extraction · `render.js` drawing and HUD · `hub.js` menus and progression · `main.js` loop and input.
+`js/data.js` content tables · `world.js` map generation · `sim.js` state, damage, explosions · `combat.js` weapons, projectiles, call-ins · `enemies.js` enemy AI · `update.js` per-frame logic, objectives, extraction · `render.js` HUD, minimap and the 2D codex fallback · `models.js` procedural 3D models and rigs · `gfx.js` scene, terrain, effects and entity sync · `viewmodel.js` first-person weapon and hands · `hub.js` menus and progression · `main.js` loop and input.

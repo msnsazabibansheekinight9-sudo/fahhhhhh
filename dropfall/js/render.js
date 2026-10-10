@@ -874,7 +874,7 @@
     // damage vignette
     if (g.dmgFlash > 0) { const gr = ctx.createRadialGradient(Wd / 2, Ht / 2, Math.min(Wd, Ht) * 0.3, Wd / 2, Ht / 2, Math.max(Wd, Ht) * 0.7); gr.addColorStop(0, 'rgba(160,0,0,0)'); gr.addColorStop(1, 'rgba(160,0,0,' + (g.dmgFlash * 0.6) + ')'); ctx.fillStyle = gr; ctx.fillRect(0, 0, Wd, Ht); }
     if (P.alive && P.hp < P.maxhp * 0.3) { ctx.fillStyle = 'rgba(120,0,0,' + (0.12 + Math.sin(g.t * 5) * 0.06) + ')'; ctx.fillRect(0, 0, Wd, Ht); }
-    if (g.lastHitT > 0 && g.lastHitDir != null && P.alive) { const a = g.lastHitDir; ctx.save(); ctx.translate(Wd / 2, Ht / 2); ctx.rotate(a); ctx.fillStyle = 'rgba(255,60,40,' + g.lastHitT * 0.7 + ')'; ctx.beginPath(); ctx.moveTo(90, -14); ctx.lineTo(110, 0); ctx.lineTo(90, 14); ctx.closePath(); ctx.fill(); ctx.restore(); }
+    if (g.lastHitT > 0 && g.lastHitDir != null && P.alive) { const a = R.fps ? g.lastHitDir - R.facing - Math.PI / 2 : g.lastHitDir; ctx.save(); ctx.translate(Wd / 2, Ht / 2); ctx.rotate(a); ctx.fillStyle = 'rgba(255,60,40,' + g.lastHitT * 0.7 + ')'; ctx.beginPath(); ctx.moveTo(90, -14); ctx.lineTo(110, 0); ctx.lineTo(90, 14); ctx.closePath(); ctx.fill(); ctx.restore(); }
 
     // objectives (top-left)
     const ox = 14, oy = 14;
@@ -907,7 +907,7 @@
     R.drawMinimap(g, Wd - mm - 14, 14, mm);
 
     // messages
-    g.msgs.forEach((m, i) => { const a = Math.min(1, m.t / 0.5); ctx.globalAlpha = a; txt(m.text, Wd / 2, 40 + i * 22, small ? 12 : 15, m.col, 'center', '700'); ctx.globalAlpha = 1; });
+    g.msgs.forEach((m, i) => { const a = Math.min(1, m.t / 0.5); ctx.globalAlpha = a; txt(m.text, Wd / 2, (R.fps ? 84 : 40) + i * 22, small ? 12 : 15, m.col, 'center', '700'); ctx.globalAlpha = 1; });
 
     // call-in list (left middle)
     drawCallins(g, small);
@@ -975,8 +975,10 @@
   function bar2(x, y, w, k, col) { ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(x, y, w, 8); ctx.fillStyle = col; ctx.fillRect(x, y, w * U.clamp(k, 0, 1), 8); }
 
   function edgeMarker(g, m) {
-    const s = R.worldToScreen(m.x, m.y), pad = 40;
-    const onScreen = s.x > pad && s.y > pad && s.x < Wd - pad && s.y < Ht - pad;
+    let s = R.fps ? DF.Gfx.project(m.x, DF.Gfx.h(m.x, m.y) + 60, m.y) : R.worldToScreen(m.x, m.y);
+    const pad = 40;
+    if (s.behind) s = { x: Wd - s.x, y: Ht + 1000 };
+    const onScreen = !s.behind && s.x > pad && s.y > pad && s.x < Wd - pad && s.y < Ht - pad;
     const dist = Math.round(Math.hypot(m.x - g.player.x, m.y - g.player.y) / 10);
     let x = s.x, y = s.y;
     if (!onScreen) { const a = Math.atan2(s.y - Ht / 2, s.x - Wd / 2); const k = Math.min((Wd / 2 - pad) / Math.abs(Math.cos(a) || 1e-3), (Ht / 2 - pad) / Math.abs(Math.sin(a) || 1e-3)); x = Wd / 2 + Math.cos(a) * k; y = Ht / 2 + Math.sin(a) * k; }
@@ -994,7 +996,7 @@
     ctx.beginPath();
     ctx.moveTo(m.x - gap - 7, m.y); ctx.lineTo(m.x - gap, m.y); ctx.moveTo(m.x + gap, m.y); ctx.lineTo(m.x + gap + 7, m.y);
     ctx.moveTo(m.x, m.y - gap - 7); ctx.lineTo(m.x, m.y - gap); ctx.moveTo(m.x, m.y + gap); ctx.lineTo(m.x, m.y + gap + 7); ctx.stroke();
-    if (g.ready) { const pr = R.worldToScreen(P.x, P.y), maxD = 270 * (P.passive === 'servo' ? 1.5 : 1) * g.cam.z; ctx.strokeStyle = 'rgba(255,210,122,0.3)'; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.arc(pr.x, pr.y, maxD, 0, TAU); ctx.stroke(); ctx.setLineDash([]); }
+    if (g.ready && !R.fps) { const pr = R.worldToScreen(P.x, P.y), maxD = 270 * (P.passive === 'servo' ? 1.5 : 1) * g.cam.z; ctx.strokeStyle = 'rgba(255,210,122,0.3)'; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.arc(pr.x, pr.y, maxD, 0, TAU); ctx.stroke(); ctx.setLineDash([]); }
     if (g.hitMark > 0) {
       ctx.strokeStyle = g.hitKind === 'kill' ? '#ff5a4a' : g.hitKind === 'bounce' ? '#9a9a9a' : g.hitKind === 'glance' ? '#ffb07a' : g.hitKind === 'shield' ? '#b39cff' : '#ffffff';
       ctx.lineWidth = 2; ctx.beginPath(); for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { ctx.moveTo(m.x + a * 5, m.y + b * 5); ctx.lineTo(m.x + a * 10, m.y + b * 10); } ctx.stroke();
@@ -1039,6 +1041,59 @@
     for (let i = 0; i < s.length; i++) { ctx.fillStyle = i < t.pos ? 'rgba(255,210,122,0.25)' : 'rgba(255,255,255,0.05)'; ctx.fillRect(sx + i * cw - 14, y + 38, 28, 34); txt(ARROW[s[i]], sx + i * cw, y + 63, 22, i < t.pos ? '#ffd27a' : t.err > 0 ? '#ff6b5a' : '#e8e2c8', 'center', '700'); }
     txt('Arrow keys or WASD · Esc to step away', Wd / 2, y + 96, 11, '#a8a290', 'center', '500');
     if (t.err > 0) t.err -= 1 / 60;
+  }
+
+  // ---------------------------------------------------------------- first-person overlay
+  R.drawOverlay = function (g, showMap, active) {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, Wd, Ht);
+    if (R.fps) drawWorldTags(g);
+    drawHUD(g, { x: Wd / 2, y: Ht / 2 });
+    if (R.fps) drawCompass(g);
+    if (showMap) R.drawMap(g, true);
+    if (!active && g.player.alive) { panel(Wd / 2 - 160, Ht / 2 + 40, 320, 34); txt('Click to take control of the camera', Wd / 2, Ht / 2 + 62, 13, '#ffd27a', 'center', '700'); }
+  };
+
+  function drawWorldTags(g) {
+    const X = DF.Gfx, P = g.player;
+    for (const e of g.enemies) {
+      if (e.dead || e.def.tier < 2) continue;
+      const d = Math.hypot(e.x - P.x, e.y - P.y); if (d > 1100) continue;
+      const top = e.def.draw === 'tripod' ? 150 * e.r / 40 : e.def.flying ? 110 : e.r * 3.2;
+      const s = X.project(e.x, X.h(e.x, e.y) + top, e.y); if (s.behind || s.x < 0 || s.x > Wd || s.y < 0 || s.y > Ht) continue;
+      const w = Math.max(40, Math.min(140, 9000 / Math.max(80, d)));
+      bar(s.x, s.y, w, e.hp / e.maxhp, '#ff6b5a');
+      if (e.maxShield) { ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(s.x - w / 2 - 1, s.y - 6, w + 2, 4); ctx.fillStyle = '#b39cff'; ctx.fillRect(s.x - w / 2, s.y - 5, w * e.shield / e.maxShield, 2); }
+      if (e.isTarget) txt('TARGET', s.x, s.y - 10, 11, '#ffd27a', 'center', '700');
+    }
+    for (const b of g.divers) {
+      if (!b.bot || !b.alive || b.veh) continue;
+      const s = X.project(b.x, X.h(b.x, b.y) + 50, b.y); if (s.behind || s.x < 0 || s.x > Wd) continue;
+      txt(b.name, s.x, s.y, 11, '#9fe07a', 'center', '700'); bar(s.x, s.y + 4, 34, b.hp / b.maxhp, '#9fe07a');
+    }
+    for (const it of g.items) {
+      if (!it.alive || (it.kind !== 'weapon' && it.kind !== 'pack' && it.kind !== 'supply' && it.kind !== 'blackbox')) continue;
+      const d = Math.hypot(it.x - P.x, it.y - P.y); if (d > 400) continue;
+      const s = X.project(it.x, X.h(it.x, it.y) + 22, it.y); if (s.behind) continue;
+      txt(it.kind === 'weapon' ? it.w.d.name : it.kind === 'pack' ? it.pack.name : it.kind === 'supply' ? 'Supplies' : 'Flight recorder', s.x, s.y, 10, '#e8e2c8', 'center', '600');
+    }
+  }
+
+  function drawCompass(g) {
+    const P = g.player, w = Math.min(520, Wd * 0.5), x0 = Wd / 2 - w / 2, y = 14, fov = Math.PI * 0.9;
+    ctx.fillStyle = 'rgba(10,12,14,0.5)'; ctx.fillRect(x0, y, w, 22);
+    const head = R.facing; // sim angle; north is -y
+    const toX = a => { const d = U.angDiff(head, a); return Math.abs(d) > fov / 2 ? null : Wd / 2 + d / (fov / 2) * w / 2; };
+    for (let deg = 0; deg < 360; deg += 15) {
+      const a = (deg - 90) * Math.PI / 180, x = toX(a); if (x == null) continue;
+      const lbl = { 0: 'N', 90: 'E', 180: 'S', 270: 'W' }[deg];
+      ctx.fillStyle = lbl ? '#ffd27a' : 'rgba(232,226,200,0.5)'; ctx.fillRect(x, y + (lbl ? 2 : 14), 1, lbl ? 6 : 6);
+      if (lbl) txt(lbl, x, y + 19, 11, '#ffd27a', 'center', '700');
+    }
+    const mark = (wx, wy, col, l) => { const x = toX(Math.atan2(wy - P.y, wx - P.x)); if (x == null) return; ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(x, y + 22); ctx.lineTo(x - 5, y + 30); ctx.lineTo(x + 5, y + 30); ctx.fill(); txt(l, x, y + 42, 10, col, 'center', '700'); };
+    for (const o of g.M.objectives) if (!o.done) mark(o.x, o.y, '#ffd27a', '!');
+    if (S.mainDone() || g.M.extract.state !== 'idle') mark(g.M.extract.x, g.M.extract.y, '#9fe07a', 'EX');
+    for (const b of g.beacons) mark(b.x, b.y, b.col, '•');
   }
 
   // ---------------------------------------------------------------- maps

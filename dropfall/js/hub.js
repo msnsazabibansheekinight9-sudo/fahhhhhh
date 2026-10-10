@@ -16,7 +16,7 @@
       owned: { weapons: ['ar7', 'p2'], grenades: ['g_frag'], callins: ['mg50', 'os1', 'o_precision', 'a_strafe'], armors: ['a_recruit'], capes: ['c_none', 'c_issue'], cards: ['k_default'], titles: [], boosters: [] },
       passes: { p_field: { owned: true, claimed: [], spent: 0 } }, modules: [],
       loadout: { primary: 'ar7', secondary: 'p2', grenade: 'g_frag', callins: ['mg50', 'o_precision', 'a_strafe', 'os1'], armor: 'a_recruit', cape: 'c_issue', booster: null, card: 'k_default', title: null },
-      planets, stats: { missions: 0, wins: 0, kills: 0, deaths: 0, extracts: 0 }, settings: { vol: 0.6, bots: 3 }, major: { planet: 'morrow', reward: 40, done: false }
+      planets, stats: { missions: 0, wins: 0, kills: 0, deaths: 0, extracts: 0 }, settings: { vol: 0.6, bots: 3, sens: 1, fov: 75 }, major: { planet: 'morrow', reward: 40, done: false }
     };
   }
   H.load = function () {
@@ -184,7 +184,7 @@
     const wInfo = id => { const d = DF.WEAPONS[id]; return `${d.cls} · dmg ${d.dmg || d.dps + '/s'} · pen ${d.pen}${d.rpm ? ' · ' + d.rpm + ' rpm' : ''}<br>${esc(d.desc || '')}`; };
     b.innerHTML = `
       <div class="lo">
-        <div class="lo-prev"><canvas id="prev" width="300" height="300" aria-label="Diver preview"></canvas>
+        <div class="lo-prev"><canvas id="prev" width="300" height="360" aria-label="Diver preview"></canvas>
           <div class="card" style="background:linear-gradient(135deg,${DF.CARDS[L.card].c1},${DF.CARDS[L.card].c2})"><b>${esc(save.name)}</b><span>${titleFor(save.level)}${L.title ? ' · ' + esc(DF.EXTRA_TITLES[L.title]) : ''}</span><i>Level ${save.level}</i></div>
           <div class="stats"><div><span>Armor rating</span><b>${cls.rating}</b></div><div><span>Speed</span><b>${Math.round(cls.speed * 100)}%</b></div><div><span>Stamina</span><b>${Math.round(cls.stamina * 100)}%</b></div></div>
           <p class="passive"><b>${DF.PASSIVES[arm.passive].name}:</b> ${DF.PASSIVES[arm.passive].desc}</p></div>
@@ -202,11 +202,9 @@
             <div><label for="l_name">Call sign</label><input id="l_name" maxlength="16" value="${esc(save.name)}"></div></div>
         </div>
       </div>`;
-    const prev = $('#prev').getContext('2d');
-    const d = { arm, capeId: L.cape, weapons: [{ d: DF.WEAPONS[L.primary] }], cur: 0, vx: 0, vy: 0, walk: 0, id: 1, pack: null };
-    prev.fillStyle = '#1a1d20'; prev.fillRect(0, 0, 300, 300);
-    prev.strokeStyle = 'rgba(232,226,200,0.06)'; for (let i = 0; i < 300; i += 20) { prev.beginPath(); prev.moveTo(i, 0); prev.lineTo(i, 300); prev.moveTo(0, i); prev.lineTo(300, i); prev.stroke(); }
-    DF.Render.drawDiverAt(prev, d, 150, 150, -Math.PI / 2 + 0.3, 0, 7);
+    if (H._stopTT) H._stopTT();
+    try { H._stopTT = DF.Gfx.turntable($('#prev'), () => DF.Models.diver(arm, L.cape, { gunCls: DF.WEAPONS[L.primary].cls })); }
+    catch (e) { const prev = $('#prev').getContext('2d'); const d = { arm, capeId: L.cape, weapons: [{ d: DF.WEAPONS[L.primary] }], cur: 0, vx: 0, vy: 0, walk: 0, id: 1, pack: null }; DF.Render.drawDiverAt(prev, d, 150, 150, -Math.PI / 2 + 0.3, 0, 7); }
     const bind = (id, fn) => { const el = $('#' + id); if (el) el.onchange = e => { fn(e.target.value); H.save(); A.play('ui'); renderBody(); }; };
     bind('l_primary', v => L.primary = v); bind('l_secondary', v => L.secondary = v); bind('l_grenade', v => L.grenade = v);
     for (let i = 0; i < 4; i++) bind('l_ci' + i, v => { if (v && L.callins.includes(v)) L.callins[L.callins.indexOf(v)] = ''; L.callins[i] = v; });
@@ -340,7 +338,7 @@
     const tierN = ['Light', 'Medium', 'Heavy', 'Command'];
     b.innerHTML = `<div class="codex">
       <section class="controls"><h3>Controls</h3><dl>
-        <dt>WASD</dt><dd>Move</dd><dt>Mouse</dt><dd>Aim · Left click fire · Right click aim down sights</dd><dt>Shift</dt><dd>Sprint</dd><dt>Space</dt><dd>Dive</dd>
+        <dt>WASD</dt><dd>Move</dd><dt>Mouse</dt><dd>Look · Left click fire · Right click aim down sights. Click the game once to capture the mouse.</dd><dt>Shift</dt><dd>Sprint</dd><dt>Space</dt><dd>Dive</dd>
         <dt>R</dt><dd>Reload</dd><dt>1 2 3 / scroll</dt><dd>Primary, secondary, support weapon</dd><dt>G</dt><dd>Throw grenade (drops cargo while carrying)</dd><dt>F</dt><dd>Stim</dd>
         <dt>Hold Q</dt><dd>Open call-ins, then type the code with WASD or arrow keys. Release and left-click to throw the beacon. Arrow keys also work while holding Ctrl.</dd>
         <dt>E</dt><dd>Interact, pick up, enter and leave vehicles</dd><dt>B</dt><dd>Use backpack (leap pack, supply pack)</dd><dt>M / Tab</dt><dd>Tactical map</dd><dt>Esc</dt><dd>Pause</dd></dl>
@@ -348,15 +346,22 @@
         <h3>Friendly fire</h3><p>Explosions, fire, arcs, drop pods and orbital strikes hurt divers. Watch where you throw.</p></section>
       ${['brood', 'foundry', 'veil'].map(f => `<section><h3 style="color:${DF.FACTIONS[f].color}">${DF.FACTIONS[f].name}</h3><p>${DF.FACTIONS[f].desc}</p><div class="enemies">${fac(f).map(([id, e]) => `
         <div class="en"><canvas data-e="${id}" width="90" height="90" aria-label="${esc(e.name)}"></canvas><div><b>${esc(e.name)}</b><span>${tierN[e.tier]} · HP ${e.hp} · armor ${e.armor}${e.back != null ? ' (rear ' + e.back + ')' : ''}${e.shield ? ' · shield ' + e.shield : ''}${e.flying ? ' · flying' : ''}</span><p>${esc(e.desc || '')}</p></div></div>`).join('')}</div></section>`).join('')}</div>`;
-    b.querySelectorAll('canvas[data-e]').forEach(cv => DF.Render.drawEnemyIcon(cv, cv.dataset.e));
+    b.querySelectorAll('canvas[data-e]').forEach(cv => {
+      try { const m = DF.Models.enemy(cv.dataset.e); if (m.update) m.update({ vx: 0, vy: 0, state: 'idle', id: 1, ang: 0 }, 0.016, 1); const url = DF.Gfx.thumb(m.root, 180, 180); const img = new Image(); img.src = url; img.width = 90; img.height = 90; img.alt = DF.ENEMIES[cv.dataset.e].name; img.className = 'thumb'; cv.replaceWith(img); }
+      catch (e) { DF.Render.drawEnemyIcon(cv, cv.dataset.e); }
+    });
   }
 
   function settings(b) {
     b.innerHTML = `<div class="settings"><div class="field"><label for="vol">Volume</label><input type="range" id="vol" min="0" max="1" step="0.05" value="${save.settings.vol}"></div>
+      <div class="field"><label for="sens">Mouse sensitivity</label><input type="range" id="sens" min="0.2" max="3" step="0.05" value="${save.settings.sens || 1}"></div>
+      <div class="field"><label for="fov">Field of view</label><input type="range" id="fov" min="60" max="100" step="1" value="${save.settings.fov || 75}"></div>
       <p class="lede">Progress is saved in this browser only. Clearing site data resets it.</p>
       <div class="row"><button class="btn" id="resetAsk">Reset all progress</button><span id="resetC" hidden>Are you sure? <button class="btn danger" id="resetYes">Yes, reset</button> <button class="btn" id="resetNo">Cancel</button></span></div>
       <h3>Training funds</h3><p class="lede">Testing the game and want to skip the grind? This grants resources and levels instantly.</p><button class="btn" id="grant">Grant test resources</button></div>`;
     $('#vol').oninput = e => { save.settings.vol = +e.target.value; A.setVol(save.settings.vol); H.save(); };
+    $('#sens').oninput = e => { save.settings.sens = +e.target.value; H.save(); };
+    $('#fov').oninput = e => { save.settings.fov = +e.target.value; H.save(); };
     $('#resetAsk').onclick = () => { $('#resetC').hidden = false; };
     $('#resetNo').onclick = () => { $('#resetC').hidden = true; };
     $('#resetYes').onclick = () => { H.reset(); toast('Progress reset'); H.show('war'); };
