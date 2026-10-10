@@ -1,6 +1,7 @@
 # Ironsight Armory
 
 > Also in this repo: **[Ironclad](grimdark/)**, a procedural grimdark sci-fi FPS — see `grimdark/README.md`.
+> And **[Dropfall](dropfall/)**, a top-down orbital-drop squad shooter with 3 factions, 50 call-ins and a full progression hub. See `dropfall/README.md`.
 > And **[Gridlock: Legends of Motorsport](racing/)**, a racing game with 18 disciplines, 566 cars and 270 tracks — see `racing/README.md`.
 
 A browser firearms simulator built with Three.js (r128). Everything is procedural: weapon models, textures, soldiers, maps and audio.

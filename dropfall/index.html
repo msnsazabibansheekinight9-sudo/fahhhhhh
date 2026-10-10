@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dropfall</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Saira+Stencil+One&display=swap">
+<style>
+/* Layout: one full-screen canvas for missions; the ship hub is a command console laid over a dark bulkhead. Single dark look, by design. */
+:root {
+  --bg: #0d1013; --panel: #151a1e; --panel2: #1b2126; --line: rgba(232,226,200,.12);
+  --ink: #e8e2c8; --dim: #a8a290; --signal: #d8a33a; --good: #9fe07a; --bad: #ff6b5a; --shard: #b39cff;
+  --display: "Saira Stencil One", "Chakra Petch", Impact, sans-serif;
+  --body: "Chakra Petch", "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 14px; }
+body { overflow: hidden; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+select, input { background: var(--panel2); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 7px 8px; font: inherit; width: 100%; }
+h1, h2, h3 { margin: 0; text-wrap: balance; }
+.btn { background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 9px 16px; font-weight: 600; letter-spacing: .03em; }
+.btn:hover:not(:disabled) { border-color: var(--signal); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn.primary { background: var(--signal); color: #15120a; border-color: var(--signal); }
+.btn.primary:hover:not(:disabled) { background: #e8b54a; }
+.btn.danger { background: #6a1f1a; border-color: var(--bad); }
+.btn.big { padding: 13px 22px; font-size: 16px; text-transform: uppercase; letter-spacing: .08em; }
+.lede { color: var(--dim); max-width: 70ch; line-height: 1.5; margin: 0 0 14px; }
+.note { color: var(--dim); font-size: 12px; margin: 6px 0; }
+.sc { color: #7fd0ff; } .sr { color: #ff9a3a; } .ss { color: #e06bff; }
+.own { color: var(--good); font-size: 11px; text-transform: uppercase; letter-spacing: .1em; font-weight: 700; }
+.lock { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .1em; }
+.feat { color: var(--signal); font-size: 11px; text-transform: uppercase; letter-spacing: .1em; font-weight: 700; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+
+/* title */
+#title { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px;
+  background: radial-gradient(ellipse at 50% 120%, #3a2a14 0%, transparent 60%), repeating-linear-gradient(135deg, #0d1013 0 22px, #10141a 22px 23px), var(--bg); }
+#title .t-in { max-width: 640px; }
+#title h1 { font-family: var(--display); font-weight: 400; font-size: clamp(56px, 13vw, 132px); line-height: .9; letter-spacing: .02em; color: var(--ink); }
+#title h1 span { color: var(--signal); }
+#title .tag { font-size: clamp(15px, 2.4vw, 19px); color: var(--dim); margin: 14px 0 24px; line-height: 1.5; max-width: 52ch; }
+#title .feats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px 18px; margin: 0 0 28px; padding: 0; list-style: none; }
+#title .feats li { border-left: 2px solid var(--signal); padding-left: 10px; font-size: 13px; color: var(--ink); }
+#title .feats b { display: block; font-size: 20px; color: var(--signal); }
+#touchNote { color: var(--bad); margin-top: 16px; }
+
+/* hub */
+#hub { position: fixed; inset: 0; display: flex; flex-direction: column; background: var(--bg); }
+#top { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; padding: 12px 18px; border-bottom: 1px solid var(--line); background: #0a0d10; }
+.who { display: flex; gap: 12px; align-items: center; min-width: 0; }
+.who .lvl { font-family: var(--display); font-size: 30px; color: var(--signal); width: 48px; height: 48px; display: grid; place-items: center; border: 2px solid var(--signal); border-radius: 4px; }
+.who b { font-size: 16px; display: block; } .who span { color: var(--dim); font-size: 12px; }
+.xp { width: 180px; height: 4px; background: rgba(255,255,255,.08); margin-top: 6px; } .xp i { display: block; height: 100%; background: var(--signal); }
+.cur { display: flex; gap: 18px; flex-wrap: wrap; color: var(--dim); font-size: 13px; font-variant-numeric: tabular-nums; }
+.cur b { color: var(--ink); }
+#tabs { display: flex; gap: 2px; padding: 0 12px; border-bottom: 1px solid var(--line); overflow-x: auto; background: #0a0d10; }
+.tab { background: none; border: 0; padding: 12px 14px; color: var(--dim); text-transform: uppercase; letter-spacing: .1em; font-size: 12px; font-weight: 700; border-bottom: 2px solid transparent; white-space: nowrap; }
+.tab.on { color: var(--ink); border-bottom-color: var(--signal); }
+#body { flex: 1; overflow: auto; padding: 18px; }
+
+.war { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr); gap: 18px; }
+.galaxy { position: relative; min-width: 0; }
+.galaxy canvas { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 4px; cursor: pointer; display: block; }
+.major { position: absolute; left: 12px; top: 12px; background: rgba(10,13,16,.86); border: 1px solid var(--signal); padding: 8px 12px; max-width: 70%; }
+.major small { display: block; color: var(--signal); letter-spacing: .14em; font-weight: 700; font-size: 10px; }
+.major b { display: block; } .major span { color: var(--dim); font-size: 12px; }
+.major.done { border-color: var(--good); }
+.brief { background: var(--panel); border: 1px solid var(--line); padding: 16px; min-width: 0; }
+.pl-head { display: flex; gap: 12px; align-items: center; }
+.pl-head i { width: 14px; height: 40px; }
+.pl-head h2 { font-family: var(--display); font-weight: 400; font-size: 30px; }
+.pl-head span { color: var(--dim); }
+.libbar { position: relative; height: 18px; background: rgba(255,255,255,.06); margin: 12px 0; }
+.libbar i { display: block; height: 100%; opacity: .6; } .libbar span { position: absolute; left: 8px; top: 1px; font-size: 12px; font-weight: 700; }
+.hz, .fdesc { color: var(--dim); line-height: 1.5; margin: 6px 0; }
+.brief h3 { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--signal); margin: 16px 0 8px; }
+.ops { display: grid; gap: 6px; }
+.op { text-align: left; background: var(--panel2); border: 1px solid var(--line); padding: 9px 11px; border-radius: 4px; }
+.op b { display: block; } .op span { color: var(--dim); font-size: 12px; }
+.op.on { border-color: var(--signal); background: rgba(216,163,58,.1); }
+.diffs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+.df { background: var(--panel2); border: 1px solid var(--line); padding: 6px 2px; border-radius: 4px; text-align: center; }
+.df b { display: block; font-size: 18px; } .df span { font-size: 10px; color: var(--dim); }
+.df.on { border-color: var(--signal); background: rgba(216,163,58,.14); }
+.df:disabled { opacity: .3; cursor: not-allowed; }
+.brief .row label { color: var(--dim); } .brief .row select { width: 80px; }
+.brief .big { width: 100%; margin-top: 16px; }
+
+.lo { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 18px; }
+.lo-prev canvas { width: 100%; max-width: 300px; aspect-ratio: 1; border: 1px solid var(--line); display: block; }
+.card { margin-top: 10px; padding: 14px; border-radius: 4px; max-width: 300px; }
+.card b { display: block; font-size: 18px; text-shadow: 0 1px 3px #000; } .card span, .card i { display: block; font-size: 12px; text-shadow: 0 1px 3px #000; font-style: normal; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; max-width: 300px; }
+.stats div { background: var(--panel); border: 1px solid var(--line); padding: 6px; } .stats span { display: block; font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: .08em; } .stats b { font-size: 18px; font-variant-numeric: tabular-nums; }
+.passive { color: var(--dim); line-height: 1.5; max-width: 300px; } .passive b { color: var(--ink); }
+.lo-form { display: grid; gap: 12px; min-width: 0; }
+.field label { display: block; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--signal); margin-bottom: 5px; font-weight: 700; }
+.field small { display: block; color: var(--dim); margin-top: 4px; line-height: 1.45; }
+.field.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.ci4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; }
+.code { color: var(--signal); letter-spacing: .1em; }
+
+.shop .filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.chip { background: var(--panel2); border: 1px solid var(--line); border-radius: 20px; padding: 5px 12px; font-size: 12px; }
+.chip.on { border-color: var(--signal); color: var(--signal); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.item { background: var(--panel); border: 1px solid var(--line); padding: 12px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.item.owned { opacity: .62; }
+.it-h { display: flex; justify-content: space-between; gap: 8px; }
+.kind { font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: .12em; }
+.item b { font-size: 15px; } .item p { color: var(--dim); margin: 0; font-size: 12px; line-height: 1.45; flex: 1; }
+.item .buy { align-self: flex-start; }
+.sw { width: 44px; height: 44px; border-radius: 4px; background: var(--panel2); display: grid; place-items: center; font-size: 20px; color: var(--signal); border: 1px solid var(--line); flex: none; }
+.sw.big { width: 100%; height: 56px; }
+
+.bays { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.bay { background: var(--panel); border: 1px solid var(--line); padding: 12px; }
+.bay h3 { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--signal); margin-bottom: 8px; }
+.mod { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.mod p { margin: 2px 0; color: var(--dim); font-size: 12px; } .mod small { font-size: 12px; color: var(--dim); }
+.mod.owned b { color: var(--good); }
+
+.passes { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 18px; }
+.plist { display: grid; gap: 6px; align-content: start; }
+.pass-b { text-align: left; background: var(--panel); border: 1px solid var(--line); padding: 10px 12px; display: flex; justify-content: space-between; gap: 8px; }
+.pass-b span { color: var(--dim); font-size: 12px; } .pass-b.on { border-color: var(--signal); }
+.pbody h2 { font-family: var(--display); font-weight: 400; font-size: 32px; margin-bottom: 6px; }
+.page { margin-top: 16px; } .page h3 { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--signal); margin-bottom: 8px; }
+.page.closed { opacity: .5; }
+.pitems { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.pi { background: var(--panel); border: 1px solid var(--line); padding: 10px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.pi b { font-size: 13px; } .pi.owned { border-color: rgba(159,224,122,.4); }
+
+.codex { display: grid; gap: 20px; }
+.codex section > h3 { font-family: var(--display); font-weight: 400; font-size: 26px; margin-bottom: 4px; }
+.codex section > p { color: var(--dim); max-width: 75ch; line-height: 1.5; }
+.controls dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; max-width: 760px; }
+.controls dt { color: var(--signal); font-weight: 700; } .controls dd { margin: 0; color: var(--ink); }
+.controls h3 { font-size: 14px !important; font-family: var(--body) !important; font-weight: 700 !important; color: var(--signal); margin-top: 14px; letter-spacing: .1em; text-transform: uppercase; }
+.enemies { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px; }
+.en { display: flex; gap: 10px; background: var(--panel); border: 1px solid var(--line); padding: 8px; min-width: 0; }
+.en canvas { flex: none; width: 90px; height: 90px; }
+.en span { display: block; color: var(--dim); font-size: 11px; margin: 2px 0; } .en p { margin: 0; font-size: 12px; color: var(--dim); line-height: 1.4; }
+
+.settings { max-width: 520px; } .settings h3 { margin: 20px 0 6px; }
+
+/* drop & results */
+#drop, #results { position: fixed; inset: 0; overflow: auto; padding: 24px 16px; background: var(--bg); }
+.drop-wrap { max-width: 600px; margin: 0 auto; }
+.drop-wrap h2 { font-family: var(--display); font-weight: 400; font-size: 26px; }
+.drop-wrap p { color: var(--dim); }
+#dropmap { border: 1px solid var(--line); cursor: crosshair; display: block; max-width: 100%; }
+.res { max-width: 760px; margin: 0 auto; }
+.res h1 { font-family: var(--display); font-weight: 400; font-size: clamp(36px, 7vw, 64px); margin-bottom: 6px; }
+.res h1.ok { color: var(--good); } .res h1.bad { color: var(--bad); }
+.res h3 { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--signal); margin: 18px 0 8px; }
+.rgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
+.rgrid div { background: var(--panel); border: 1px solid var(--line); padding: 10px; }
+.rgrid span { display: block; color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+.rgrid b { font-size: 20px; font-variant-numeric: tabular-nums; }
+.rew div { border-color: rgba(216,163,58,.4); }
+.up { color: var(--signal); font-weight: 700; }
+.res .big { margin-top: 20px; }
+
+/* game */
+#game { position: fixed; inset: 0; }
+#cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: none; }
+#pause { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(5,6,8,.7); padding: 16px; }
+#pause .p-in { background: var(--panel); border: 1px solid var(--line); padding: 22px; max-width: 520px; width: 100%; }
+#pause h2 { font-family: var(--display); font-weight: 400; font-size: 34px; }
+#pause dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; font-size: 13px; margin: 14px 0; }
+#pause dt { color: var(--signal); font-weight: 700; } #pause dd { margin: 0; }
+#toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--signal); color: #15120a; padding: 10px 18px; font-weight: 700; border-radius: 4px; z-index: 50; }
+
+@media (max-width: 860px) {
+  .war, .lo, .passes { grid-template-columns: minmax(0, 1fr); }
+  .field.two { grid-template-columns: 1fr; }
+  #body { padding: 12px 16px; }
+  .xp { width: 120px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<section id="title">
+  <div class="t-in">
+    <h1>DROP<span>FALL</span></h1>
+    <p class="tag">Orbital drop infantry against three alien fronts. Type the codes, throw the beacons, call down fire, and get to the dropship before the planet eats you.</p>
+    <ul class="feats">
+      <li><b>3</b>enemy factions, 29 enemy types</li>
+      <li><b>12</b>planets, 9 biomes, 9 hazards</li>
+      <li><b>33</b>guns and launchers, 8 grenades</li>
+      <li><b>50</b>call-ins: orbitals, raptors, sentries, vehicles</li>
+    </ul>
+    <button class="btn primary big" id="tStart">Enlist</button>
+    <p id="touchNote" hidden>Dropfall needs a keyboard and mouse.</p>
+  </div>
+</section>
+<section id="hub" hidden><header id="top"></header><nav id="tabs" aria-label="Ship sections"></nav><main id="body"></main></section>
+<section id="drop" hidden></section>
+<section id="results" hidden></section>
+<section id="game" hidden><canvas id="cv"></canvas>
+  <div id="pause" hidden><div class="p-in"><h2>Paused</h2><p class="lede" id="pauseInfo"></p>
+    <dl><dt>WASD</dt><dd>Move · Shift sprint · Space dive</dd><dt>Mouse</dt><dd>Aim · Left fire · Right aim / exosuit rockets</dd><dt>Hold Q</dt><dd>Call-ins: type the code with WASD or arrows, then left-click to throw</dd><dt>R · G · F</dt><dd>Reload · grenade · stim</dd><dt>E · B</dt><dd>Interact · backpack</dd><dt>1 2 3</dt><dd>Switch weapon</dd><dt>M</dt><dd>Map</dd></dl>
+    <div class="row"><button class="btn primary" id="resume">Resume</button><button class="btn danger" id="abandon">Abandon mission</button></div></div></div>
+</section>
+<div id="toast" hidden></div>
+<script src="js/data.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/util.js"></script>
+<script src="js/world.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/combat.js"></script>
+<script src="js/enemies.js"></script>
+<script src="js/update.js"></script>
+<script src="js/render.js"></script>
+<script src="js/hub.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
