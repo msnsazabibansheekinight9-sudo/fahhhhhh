@@ -434,7 +434,7 @@
     G.touchFireP = false;
     // exploration & safe-room state
     const cell = L.cellOf(P.x, P.z);
-    if (cell >= 0) {
+    if (cell >= 0 && L.kind[cell]) {
       const a = L.area[cell], area = L.areas[a];
       G.curArea = area;
       G.playerInSafe = G.safeAreas.has(a);

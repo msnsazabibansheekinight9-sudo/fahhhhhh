@@ -807,5 +807,6 @@
     hitSpheres() { if (!this.alive) return []; const v = V(); this.body.getWorldPosition(v); return [{ x: v.x, y: v.y, z: v.z, r: .32, part: 'body' }]; }
   }
 
+  K.ctex = ctex;
   K.Stalker = Stalker; K.Husk = Husk; K.Crawler = Crawler;
 })();

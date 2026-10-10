@@ -137,7 +137,7 @@
         c = c + dx + dz * L.W;
         if (r.chance(.25)) dir = r.int(0, 3);
       }
-      if (r.chance(.5)) { const [x, z] = L.cellCenter(c); const p = put(x, z, r.range(0, 6)); K.props.corpse(p, r, ctx); }
+      if (r.chance(.5)) { const [x, z] = L.cellCenter(c); const p = put(x, z, r.range(0, 6)); K.props.corpse(p, r, ctx, { floor: true }); }
     }
     // --- extra corpses in corridors
     for (let t = 0; t < (st ? 26 : 20); t++) {

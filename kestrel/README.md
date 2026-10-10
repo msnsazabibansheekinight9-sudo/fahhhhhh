@@ -54,6 +54,7 @@ Both maps are generated from a seed each new game, then validated so the key-and
 | `util.js` | RNG, procedural textures, baked-light material, geometry builder, two-bone IK |
 | `levelgen.js` | Grid level generator (rooms, A* corridors, sectors, lock-and-key validation, vents), LOS, raycasts and pathfinding. No Three.js dependency, so it can be tested in Node |
 | `props.js` | Prop library and room furnishing per room type |
+| `corpses.js` | Articulated corpses: a jointed skeleton posed into death poses (slumped, prone, supine, fetal, crawling), floor-snapped, with textured coveralls and skin, skulls with jaws and teeth, fingers, boots, burst ribcages, head and throat wounds, missing limbs |
 | `detail.js` | Architectural detail: ducts, cable trays, conduits, posters, stencils, hatches |
 | `horror.js` | Environmental horror dressing and infested nests |
 | `build.js` | Chunked merged geometry, walls, doors, windows, fixtures, light baking, halos, lockers, physics props |

@@ -41,11 +41,12 @@
     for (let i = 0; i < 60; i++) { const a = r() * K.TAU, d = Math.pow(r(), 1.6) * 100, rad = (1 - d / 110) * r.range(4, 26); x.fillStyle = `rgba(${60 + r() * 30},${4 + r() * 6},${4},${.75 + r() * .25})`; x.beginPath(); x.arc(128 + Math.cos(a) * d, 128 + Math.sin(a) * d, rad, 0, K.TAU); x.fill(); }
     for (let i = 0; i < 14; i++) { const a = r() * K.TAU; x.strokeStyle = 'rgba(70,6,4,.8)'; x.lineWidth = r.range(1, 4); x.beginPath(); x.moveTo(128, 128); x.lineTo(128 + Math.cos(a) * r.range(80, 125), 128 + Math.sin(a) * r.range(80, 125)); x.stroke(); }
     const bt = K.tex(c); bt.wrapS = bt.wrapT = THREE.ClampToEdgeWrapping;
-    M.blood = K.bakeMat({ map: bt, transparent: true, roughness: .2, metalness: .1, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+    M.blood = K.bakeMat({ map: bt, color: 0x6e4646, transparent: true, roughness: .2, metalness: .1, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
     // acid / alien resin
     M.resin = K.bakeMat({ color: 0x14161a, roughness: .25, metalness: .4, envMap: M.wall.envMap });
     M.liquid = new THREE.MeshStandardMaterial({ color: 0x3aff9a, emissive: 0x0c5a34, transparent: true, opacity: .35, roughness: .1, depthWrite: false });
     M.liquidS = M.liquid;
+    K.initCorpseMats && K.initCorpseMats(M);
     M.hull = K.bakeMat({ color: 0x55585c, map: T.wallC.map, roughness: .6, metalness: .5 });
     M.paper = K.bakeMat({ color: 0xdcd6c4, roughness: .9, side: THREE.DoubleSide });
     // leaf texture
@@ -227,18 +228,7 @@
     },
     extinguisher(p) { p.box('red', 0, 1.2, .05, .32, .6, .1).cyl('red', 0, 1.15, .14, .07, .42).box('white', 0, 1.47, .05, .32, .06, .1); },
     intercom(p) { p.box('plastic', 0, 1.4, .03, .3, .4, .06).box('dark', 0, 1.45, .065, .2, .12, .01).box('ledR', .08, 1.3, .065, .03, .03, .01); },
-    corpse(p, r, ctx) {
-      const pose = r.int(0, 2), cloth = r.pick(['fabric', 'fabricR', 'orange']);
-      p.geo(P.plane, 'blood', R(r, -.2, .2), .012, .1, -Math.PI / 2, 0, R(r, 0, 3), R(r, 1.6, 2.6), R(r, 1.6, 2.6));
-      if (pose === 0) { // slumped against wall
-        p.box(cloth, 0, .45, .3, .42, .6, .24, -.25, 0, 0).sph('flesh', 0, .86, .36, .19, .22, .2).box(cloth, -.25, .55, .4, .1, .45, .1, .3, 0, .4).box(cloth, .25, .5, .45, .1, .45, .1, .6, 0, -.3);
-        p.box(cloth, -.12, .12, .75, .14, .14, .8).box(cloth, .14, .12, .7, .14, .14, .75, 0, .3, 0).box('rubber', -.12, .15, 1.18, .14, .16, .22);
-      } else { // face down on the floor
-        p.box(cloth, 0, .14, 1, .45, .24, .62).sph('flesh', 0, .16, .58, .19, .18, .22).box(cloth, -.36, .1, .8, .5, .1, .12, 0, .6, 0).box(cloth, .33, .1, 1.2, .5, .1, .12, 0, -.3, 0);
-        p.box(cloth, -.12, .1, 1.62, .15, .15, .75, 0, .1, 0).box(cloth, .14, .1, 1.6, .15, .15, .75, 0, -.25, 0);
-      }
-      if (r.chance(.5)) p.geo(P.plane, 'blood', 0, 1.1, .02, 0, 0, R(r, 0, 3), 1.4, 1.4);
-    },
+    corpse(p, r, ctx, opts) { K.buildCorpse(p, r, opts); },
     papers(p, r) { for (let k = 0; k < r.int(3, 8); k++) p.geo(P.plane, 'paper', R(r, -.8, .8), .006 + k * .001, R(r, .2, 1.4), -Math.PI / 2, 0, R(r, 0, 3), .21, .29); },
     bench(p) { p.box('fabric', 0, .45, .25, 1.8, .08, .5).box('metal', -.8, .22, .25, .06, .44, .4).box('metal', .8, .22, .25, .06, .44, .4).box('fabric', 0, .8, .03, 1.8, .6, .06); p.col(0, .25, 1.8, .5, .5); },
     plantPot(p, r) { p.cyl('plastic', 0, .3, 0, .3, .6).cyl('soil', 0, .6, 0, .27, .01); for (let k = 0; k < 4; k++) p.geo(P.plane, 'leaf', 0, 1.0, 0, 0, k * .8, 0, .7, .8); p.col(0, 0, .6, .6, 1); },
