@@ -233,7 +233,7 @@
     const B = (o) => K.bakeMat(Object.assign({ envMap, envMapIntensity: .35 }, o));
     const rep = (t, x, y) => { const c = t.clone(); c.needsUpdate = true; c.repeat.set(x, y); return c; };
     const M = {
-      wall: B({ map: st ? T.wallS.map : T.wallC.map, bumpMap: st ? T.wallS.bump : T.wallC.bump, bumpScale: .035, roughness: st ? .62 : .48, metalness: st ? .08 : .45 }),
+      wall: B({ color: st ? 0xb4afa4 : 0xc0c4c8, map: st ? T.wallS.map : T.wallC.map, bumpMap: st ? T.wallS.bump : T.wallC.bump, bumpScale: .035, roughness: st ? .62 : .48, metalness: st ? .08 : .45 }),
       floor: B({ map: T.floorS.map, bumpMap: T.floorS.bump, bumpScale: .03, roughness: .8, metalness: .1 }),
       grate: B({ map: T.grate.map, bumpMap: T.grate.bump, bumpScale: .05, roughness: .5, metalness: .7, color: st ? 0xffffff : 0xb9c2cc }),
       ceil: B({ map: T.ceil.map, bumpMap: T.ceil.bump, bumpScale: .03, roughness: .8, metalness: .2 }),

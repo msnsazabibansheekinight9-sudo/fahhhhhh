@@ -22,7 +22,7 @@
     R.shadowMap.enabled = true; R.shadowMap.type = THREE.PCFSoftShadowMap;
     document.getElementById('view').appendChild(R.domElement);
     G.scene = new THREE.Scene(); G.scene.background = new THREE.Color(0);
-    G.scene.fog = new THREE.FogExp2(0x020304, .05);
+    G.scene.fog = new THREE.FogExp2(0x010203, .058);
     G.cam = new THREE.PerspectiveCamera(G.settings.fov, 1, .04, 1500); G.cam.rotation.order = 'YXZ';
     G.scene.add(G.cam);
     G.makeEnv(); G.makeSky(); G.makePost();
@@ -101,7 +101,7 @@
     const isW2 = G.renderer.capabilities.isWebGL2;
     G.rt = new THREE.WebGLRenderTarget(4, 4, { type: isW2 ? THREE.HalfFloatType : THREE.UnsignedByteType, depthBuffer: true });
     const mat = new THREE.ShaderMaterial({
-      uniforms: { tDiffuse: { value: G.rt.texture }, time: { value: 0 }, res: { value: new THREE.Vector2(1, 1) }, hurt: { value: 0 }, low: { value: 0 }, black: { value: 0 }, white: { value: 0 }, exposure: { value: 1.12 }, ab: { value: .0015 }, grain: { value: .07 }, fear: { value: 0 }, red: { value: 0 } },
+      uniforms: { tDiffuse: { value: G.rt.texture }, time: { value: 0 }, res: { value: new THREE.Vector2(1, 1) }, hurt: { value: 0 }, low: { value: 0 }, black: { value: 0 }, white: { value: 0 }, exposure: { value: .82 }, ab: { value: .0015 }, grain: { value: .07 }, fear: { value: 0 }, red: { value: 0 } },
       vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.0,1.0); }',
       fragmentShader: `uniform sampler2D tDiffuse; uniform float time, hurt, low, black, white, exposure, ab, grain, fear, red; uniform vec2 res; varying vec2 vUv;
         float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453); }
@@ -990,14 +990,14 @@
       for (const it of G.items) if (!it.taken) it.mesh.visible = Math.hypot(it.x - P.x, it.z - P.z) < 30;
       // nearest flickering/lit fixtures drive the dynamic light pool
       const near = []; const list = W.fixHash.get(G.L.cellOf(P.x, P.z)) || [];
-      for (const id of list) { const f = W.fixtures[id]; if (!W.fixOn(f) || f.kind === 'screen') continue; const d = Math.hypot(f.x - P.x, f.z - P.z); if (d < 11) near.push([d - (f.flicker ? 4 : 0), f]); }
+      for (const id of list) { const f = W.fixtures[id]; if (!W.fixOn(f) || f.kind === 'screen') continue; const d = Math.hypot(f.x - P.x, f.z - P.z); if (d < 11 && G.L.los(P.x, P.z, f.x, f.z)) near.push([d - (f.flicker ? 4 : 0), f]); }
       near.sort((a, b) => a[0] - b[0]); G.poolF = near.slice(0, 3).map(n => n[1]);
     }
     G.pool.forEach((l, i) => {
       const f = G.poolF && G.poolF[i];
       if (!f) { l.intensity = 0; return; }
       l.position.set(f.x, f.y - .2, f.z); l.color.setRGB(f.c[0], f.c[1], f.c[2]); l.distance = f.range * .9;
-      let k = f.kind === 'emerg' ? .5 : .55;
+      let k = f.kind === 'emerg' ? .45 : .38;
       if (f.flicker) { const n = Math.sin(G.time * 23 + f.id) + Math.sin(G.time * 7.3 + f.id * 3); k *= n > 1.2 ? .1 : n < -1.5 ? 0 : 1; W.setHalo(f, k * .6); if (k < .2 && Math.random() < .02) G.audio.spark(f.x, f.y, f.z); }
       l.intensity = f.int * k;
     });

@@ -7,6 +7,12 @@
 
   K.buildWorld = function (L, M) {
     const r = K.rng(L.seed ^ 0x5eed);
+    { const rb = K.rng(L.seed ^ 0xb1ac);
+      for (const a of L.areas) {
+        const keep = a.isRoom && (a.room === L.startRoom || a.room.type === 'save' || a.room.hub);
+        a.dark = !keep && rb.chance(a.isRoom ? .28 : .33);
+      }
+    }
     const st = L.theme === 'station';
     const root = new THREE.Group();
     const chunks = new Map();
@@ -28,7 +34,7 @@
         const c = L.cellOf(x, z);
         const f = { id: W.fixtures.length, x, y, z, c: color, int, range, kind: o.kind || 'main', area: c >= 0 ? L.area[c] : -1, level: 0, broken: false, flicker: false, grow: o.grow, reactor: o.reactor, chunk: chunkKey(x, z) };
         f.level = f.area >= 0 ? L.areas[f.area].level : 0;
-        if (f.kind === 'main' && !o.reactor && !o.grow) { f.broken = r.chance(.1); f.flicker = !f.broken && r.chance(.1); }
+        if (f.kind === 'main' && !o.reactor && !o.grow) { const dark = f.area >= 0 && L.areas[f.area].dark; f.broken = dark ? r.chance(.92) : r.chance(.18); f.flicker = !f.broken && r.chance(dark ? .6 : .12); }
         W.fixtures.push(f); return f.id;
       },
       addCollider(x0, z0, x1, z1, h) {
@@ -134,7 +140,7 @@
         const ns = eE !== 0 && eW !== 0, ew = eN !== 0 && eS !== 0;
         const lit = (i + j) % 2 === 0;
         if (lit) {
-          const fid = ctx.addFixture(cx, h - .08, cz, st ? [1, .9, .74] : [.72, .85, 1], st ? 1.5 : 1.3, 6.5);
+          const fid = ctx.addFixture(cx, h - .08, cz, st ? [1, .9, .74] : [.72, .85, 1], st ? 1.05 : .9, 6);
           const along = ns ? 0 : Math.PI / 2;
           B.addGeom(K.prim.box, 'trim', K.mat4(cx, h - .05, cz, 0, along, 0, .3, .08, 1.9));
           B.addGeom(K.prim.box, 'lamp', K.mat4(cx, h - .1, cz, 0, along, 0, .18, .03, 1.75), fid);
@@ -154,7 +160,7 @@
         if ((i * 7 + j * 3) % 6 === 0) {
           for (const [dx, dz] of DIRS) if (L.edge(i, j, dx, dz) === 1) {
             const lx = cx + dx * (S / 2 - WT - .05), lz = cz + dz * (S / 2 - WT - .05);
-            const fid = ctx.addFixture(lx - dx * .2, h - .5, lz - dz * .2, [1, .09, .04], .8, 4.5, { kind: 'emerg' });
+            const fid = ctx.addFixture(lx - dx * .2, h - .5, lz - dz * .2, [1, .09, .04], .6, 4.5, { kind: 'emerg' });
             B.addGeom(K.prim.box, 'lamp', boxM(lx, h - .5, lz, .14, .2, .14), fid);
             B.addGeom(K.prim.box, 'dark', boxM(lx + dx * .04, h - .38, lz + dz * .04, .2, .05, .2));
             break;
@@ -185,12 +191,12 @@
         const B = chunkAt(x, z).B;
         if (h > 5) { // hanging industrial lamps
           const y = Math.min(h - 1.2, 4.2);
-          const fid = ctx.addFixture(x, y - .2, z, tint, 2.4, 9);
+          const fid = ctx.addFixture(x, y - .2, z, tint, 1.7, 8.5);
           B.addGeom(K.prim.cyl8, 'dark', K.mat4(x, (y + h) / 2, z, 0, 0, 0, .03, h - y, .03));
           B.addGeom(K.shadeGeo || (K.shadeGeo = K.lathe([[.05, .3], [.2, .25], [.45, 0], [.47, -.03]], 14)), 'dark', K.mat4(x, y, z, 0, 0, 0, 1, 1, 1));
           B.addGeom(K.prim.sph, 'lamp', K.mat4(x, y - .02, z, 0, 0, 0, .35, .12, .35), fid);
         } else {
-          const fid = ctx.addFixture(x, h - .12, z, tint, room.type === 'save' ? 1.6 : 1.9, Math.max(6.5, h * 1.9));
+          const fid = ctx.addFixture(x, h - .12, z, tint, room.type === 'save' ? 1.5 : 1.3, Math.max(6, h * 1.8));
           B.addGeom(K.prim.box, 'trim', boxM(x, h - .05, z, 1.4, .1, .72));
           B.addGeom(K.prim.box, 'lamp', boxM(x, h - .11, z, 1.28, .025, .6), fid);
         }
@@ -343,9 +349,9 @@
     const areaFill = new Float32Array(L.areas.length * 3);
     W.computeFill = () => {
       areaFill.fill(0);
-      for (const f of W.fixtures) if (W.fixOn(f) && f.area >= 0 && f.kind !== 'screen') { const k = f.area * 3, n = Math.sqrt(L.areas[f.area].cells.length) + 1, s = f.int * .035 / n; areaFill[k] += f.c[0] * s; areaFill[k + 1] += f.c[1] * s; areaFill[k + 2] += f.c[2] * s; }
+      for (const f of W.fixtures) if (W.fixOn(f) && f.area >= 0 && f.kind !== 'screen') { const k = f.area * 3, n = Math.sqrt(L.areas[f.area].cells.length) + 1, s = f.int * .022 / n; areaFill[k] += f.c[0] * s; areaFill[k + 1] += f.c[1] * s; areaFill[k + 2] += f.c[2] * s; }
     };
-    const amb = st ? [.007, .0068, .0075] : [.005, .0058, .0075];
+    const amb = st ? [.0035, .0034, .004] : [.0026, .003, .0042];
     W.light = function (px, py, pz, nx, ny, nz, out) {
       const c = L.cellOf(px + nx * .2, pz + nz * .2);
       out[0] = amb[0]; out[1] = amb[1]; out[2] = amb[2];
