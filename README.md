@@ -1,6 +1,7 @@
 # Ironsight Armory
 
 > Also in this repo: **[Ironclad](grimdark/)**, a procedural grimdark sci-fi FPS — see `grimdark/README.md`.
+> And **[Kestrel: Dead Orbit](kestrel/)**, a procedural sci-fi survival horror FPS across a huge space station and cruiser — see `kestrel/README.md`.
 > And **[Gridlock: Legends of Motorsport](racing/)**, a racing game with 18 disciplines, 566 cars and 270 tracks — see `racing/README.md`.
 
 A browser firearms simulator built with Three.js (r128). Everything is procedural: weapon models, textures, soldiers, maps and audio.
