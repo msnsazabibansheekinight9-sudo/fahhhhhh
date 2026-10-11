@@ -1,6 +1,7 @@
 # Ironsight Armory
 
 > Also in this repo: **[Ironclad](grimdark/)**, a procedural grimdark sci-fi FPS — see `grimdark/README.md`.
+> And **[Starfront: Legions of the Galaxy](starfront/)**, a sci-fi battlefront-style shooter with 74 battlefields, 28 modes, 34 legends and 8 battle passes — see `starfront/README.md`.
 > And **[Gridlock: Legends of Motorsport](racing/)**, a racing game with 18 disciplines, 566 cars and 270 tracks — see `racing/README.md`.
 
 A browser firearms simulator built with Three.js (r128). Everything is procedural: weapon models, textures, soldiers, maps and audio.
