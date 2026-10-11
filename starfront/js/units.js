@@ -69,6 +69,10 @@ var SF = window.SF || (window.SF = {});
     this.hp = this.maxHp;
     this.speedK = (spec.speed || 1) * (this.has('sprinter') ? 1.1 : 1);
     this.weapon = typeof this.weaponSpec === 'string' ? Dd.weapons[this.weaponSpec] : null;
+    if (o.mods !== undefined) this.mods = o.mods;
+    if (o.look !== undefined) this.look = o.look;
+    if (this.weapon && this.mods && !this.isHero) this.weapon = SF.Custom.applyMods(this.weapon, this.mods);
+    if (!this.look && !this.isHero && !this.native && !this.isPlayer) this.look = SF.Custom.randomLook(this.faction, this.classId);
     this.blade = typeof this.weaponSpec === 'object' ? this.weaponSpec : null;
     this.melee = !!this.blade || (this.weapon && this.weapon.kind === 'melee');
     this.abilities = this.abilityIds.map(function (id) { return { id: id, t: 0, cd: (Dd.abilities[id] || { cd: 10 }).cd }; });
@@ -89,8 +93,8 @@ var SF = window.SF || (window.SF = {});
     var R;
     if (this.isHero) R = SF.Models.legend(this.spec, this.skin);
     else if (this.native) R = SF.Models.native(this.faction);
-    else R = SF.Models.trooper(this.faction, this.classId, this.skin);
-    SF.Models.arm(R, this.weaponSpec, D().factions[this.faction] ? D().factions[this.faction].pal[1] : 0x666666);
+    else R = SF.Models.trooper(this.faction, this.classId, this.skin, this.look);
+    SF.Models.arm(R, this.weaponSpec, D().factions[this.faction] ? D().factions[this.faction].pal[1] : 0x666666, this.isHero ? null : this.mods);
     this.rig = R;
     this.height = R.height;
     R.root.userData.unit = this;
@@ -106,7 +110,7 @@ var SF = window.SF || (window.SF = {});
     this.hp = this.maxHp; this.alive = true; this.deadT = 0; this.buffs = {}; this.heat = 0; this.overT = 0;
     this.blockEnergy = 100; this.jetFuel = 100; this.streak = 0;
     this.abilities.forEach(function (a) { a.t = 0; });
-    this.anim.deathT = 0; this.anim.knockT = 0; this.anim.swingT = -1; this.anim.emote = null;
+    this.anim.deathT = 0; this.anim.knockT = 0; this.anim.swingT = -1; this.anim.emote = null; this.anim.dv = null; this.anim.blendInit = false; this.rig.root.scale.setScalar(1);
     this.rig.root.visible = true; this.rig.root.rotation.set(0, yaw || 0, 0); this.rig.body.position.set(0, 0, 0); this.rig.body.rotation.set(0, 0, 0);
     this.setCloak(false);
     this.regenT = 99; this.lastHitBy = null; this.onGround = true;
@@ -225,6 +229,7 @@ var SF = window.SF || (window.SF = {});
     for (var k in b) if (typeof b[k] === 'number' && b[k] > 0) { b[k] -= dt; if (b[k] <= 0) { b[k] = 0; if (k === 'cloak') this.setCloak(false); } }
     for (var i = 0; i < this.abilities.length; i++) if (this.abilities[i].t > 0) this.abilities[i].t -= dt;
     if (this.anim.knockT > 0) this.anim.knockT -= dt;
+    if (this.anim.deflectT > 0) this.anim.deflectT -= dt;
     if (b.dashT > 0) { this.vel.x = this.dashV.x; this.vel.z = this.dashV.z; if (this.dashHit) this.dashHit(); }
   };
 
@@ -278,6 +283,7 @@ var SF = window.SF || (window.SF = {});
   UP.boltColor = function () {
     var F = D().factions[this.faction];
     if (this.weapon && this.weapon.disintegrate) return 0x9ad8ff;
+    if (this.weapon && this.weapon.boltColor) return this.weapon.boltColor;
     return F ? F.bolt : 0xff3322;
   };
 
@@ -290,9 +296,10 @@ var SF = window.SF || (window.SF = {});
     if (a.swingT >= 0) {
       a.swingT += dt / swingDur;
       if (a.swingT > 0.35 && a.swingT < 0.75 && !this.swingHitDone) { this.swingHitDone = true; SF.Combat.meleeSwing(this, this.heavySwing ? 180 : 75 * (b.fury > 0 ? 1.35 : 1), this.heavySwing ? 3.6 : (this.spec.body && this.spec.body.kind === 'small' ? 2.4 : 2.9), this.heavySwing ? -0.3 : 0.25); this.heavySwing = false; }
-      if (a.swingT >= 1) { a.swingT = inp.fire ? 0 : -1; a.swingIdx = (a.swingIdx + 1) % 3; this.swingHitDone = false; if (a.swingT === 0) SF.Audio.swing(this.pos, 1 + a.swingIdx * 0.1); }
+      if (a.swingT >= 1) { a.swingT = inp.fire ? 0 : -1; a.swingIdx = (a.swingIdx + 1) % 4; this.swingHitDone = false; if (a.swingT === 0) SF.Audio.swing(this.pos, 1 + a.swingIdx * 0.1); }
     } else if (inp.fire) {
       a.swingT = 0; this.swingHitDone = false; SF.Audio.swing(this.pos, 1 + a.swingIdx * 0.1);
+      if (this.onGround) { var lf2 = this.forward(tmp3); this.vel.x += lf2.x * 2.5; this.vel.z += lf2.z * 2.5; }
       if (this.cloaked()) { this.setCloak(false); this.buffs.cloak = 0; }
     }
   };
@@ -345,7 +352,8 @@ var SF = window.SF || (window.SF = {});
     this.hp -= amt;
     this.regenT = 0;
     if (src && src !== this) this.lastHitBy = src;
-    this.anim.hitT = 0.18;
+    this.anim.hitT = 0.22;
+    if (src && src.pos) this.anim.hitDir = Math.atan2(src.pos.x - this.pos.x, src.pos.z - this.pos.z) - Math.atan2(-Math.sin(this.yaw), -Math.cos(this.yaw));
     if (hitPos && kind !== 'fire') SF.FX.blood(hitPos, this.faction === 'syndicate' || (this.spec.body && (this.spec.body.kind === 'cyborg' || this.spec.body.kind === 'shadowunit')));
     if (src && src.isPlayer && src !== this) { g.hitMarker = 0.15; SF.Audio.hit(); }
     if (this.isPlayer) { g.dmgFlash = Math.min(1, (g.dmgFlash || 0) + amt / 80); if (src && src.pos) g.dmgFrom = src.pos.clone(); }
@@ -357,7 +365,7 @@ var SF = window.SF || (window.SF = {});
   UP.die = function (src, kind) {
     if (!this.alive) return;
     var g = G();
-    this.alive = false; this.deadT = 0; this.anim.deathT = 0.0001; this.anim.swingT = -1;
+    this.alive = false; this.deadT = 0; this.anim.deathT = 0.0001; this.anim.swingT = -1; this.anim.dv = null;
     this.buffs = {}; this.setCloak(false);
     this.deaths++; this.streak = 0;
     this.deathKind = kind;
@@ -372,193 +380,332 @@ var SF = window.SF || (window.SF = {});
   // ------------------------------------------------------------------ animation
   function lerp(a, b, t) { return a + (b - a) * t; }
   function ease(t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
-  // blade swing keyframes: [rUA.x, rUA.z, rEl.x, spine.y, lUA.x]
-  var SWINGS = [
-    [[2.7, -0.9, 0.7, -0.7, 0.4], [0.5, 0.7, 0.9, 0.7, 0.3]],
-    [[1.4, 1.1, 0.8, 0.8, 0.3], [1.5, -1.0, 0.5, -0.8, 0.5]],
-    [[3.1, -0.2, 0.6, 0.0, 0.8], [0.6, 0.1, 0.7, 0.1, 0.2]]
+  // Saber combo keyframes per swing: [windup, strike-end]. Each: [rUA.x, rUA.z, rEl.x, spine.y, chest.x, lThigh.x, rThigh.x]
+  var COMBO = [
+    [[2.6, -1.0, 0.9, -0.85, -0.15, 0.1, -0.1], [0.35, 0.85, 0.7, 0.75, 0.25, 0.55, -0.35]],   // high right → low left diagonal
+    [[1.3, 1.25, 0.9, 0.95, 0.0, -0.1, 0.3], [1.45, -1.15, 0.35, -0.9, 0.1, 0.45, -0.3]],      // backhand horizontal
+    [[3.15, -0.15, 1.3, 0.1, -0.35, 0.0, 0.0], [0.45, 0.05, 0.35, 0.05, 0.45, 0.75, -0.45]],   // overhead chop
+    [[0.5, -0.6, 1.5, -0.5, 0.1, 0.0, 0.2], [1.7, 0.2, 0.05, 0.3, 0.15, 0.85, -0.55]]          // rising thrust
   ];
+  var BLEND_BONES = ['hips', 'spine', 'chest', 'neck', 'head', 'lUA', 'rUA', 'lEl', 'rEl', 'lThigh', 'rThigh', 'lKnee', 'rKnee', 'lFoot', 'rFoot', 'body'];
+  function savePose(R) {
+    for (var i = 0; i < BLEND_BONES.length; i++) {
+      var b = R[BLEND_BONES[i]]; if (!b) continue;
+      var p = b.userData.p || (b.userData.p = [b.rotation.x, b.rotation.y, b.rotation.z, b.position.y]);
+      p[0] = b.rotation.x; p[1] = b.rotation.y; p[2] = b.rotation.z; p[3] = b.position.y;
+    }
+  }
+  function blendPose(R, k, kArms) {
+    for (var i = 0; i < BLEND_BONES.length; i++) {
+      var b = R[BLEND_BONES[i]]; if (!b || !b.userData.p) continue;
+      var p = b.userData.p, kk = i >= 5 && i <= 8 ? kArms : k;
+      b.rotation.x = p[0] + (b.rotation.x - p[0]) * kk;
+      b.rotation.y = p[1] + (b.rotation.y - p[1]) * kk;
+      b.rotation.z = p[2] + (b.rotation.z - p[2]) * kk;
+      if (i === 0 || i === 15) b.position.y = p[3] + (b.position.y - p[3]) * k;
+    }
+  }
+  function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+
   UP.animate = function (dt) {
     var R = this.rig, a = this.anim, inp = this.input;
     if (!R) return;
     var g = G();
     R.root.position.copy(this.pos);
-    // LOD by camera distance
+    var dc = 0;
     if (g.camPos) {
-      var dc = g.camPos.distanceToSquared(this.pos);
+      dc = g.camPos.distanceToSquared(this.pos);
       SF.Models.setDetail(R, dc < 70 * 70);
-      R.root.visible = (this.alive || a.deathT < 6) && dc < 450 * 450 && !(this.isPlayer && g.firstPerson && !this.vehicle) && !(this.vehicle && this.vehicle.hideDriver);
-      if (dc > 160 * 160 && this.alive && (g.frame + this.id) % 3) return; // cheaper far animation
+      R.root.visible = (this.alive || a.deathT < 7) && dc < 450 * 450 && !(this.isPlayer && g.firstPerson && !this.vehicle) && !(this.vehicle && this.vehicle.hideDriver);
+      if (dc > 160 * 160 && this.alive && (g.frame + this.id) % 3) return;
     }
     var t = g.time;
-    // death
-    if (!this.alive) {
-      a.deathT += dt;
-      var k = Math.min(1, a.deathT / 0.7);
-      if (this.disintegrated) { R.root.scale.setScalar(Math.max(0.01, 1 - a.deathT * 1.5)); if (Math.random() < 0.5) SF.FX.add.emit(this.pos.x, this.pos.y + 1, this.pos.z, 0, 2, 0, 0x9ad8ff, 0.4, 0.3, 0, 0, 0); return; }
-      R.root.rotation.set(0, this.deathDir + Math.PI, 0);
-      R.body.rotation.x = -ease(k) * Math.PI / 2 * 0.98;
-      R.body.position.y = ease(k) * 0.18;
-      R.lUA.rotation.set(-k * 2.4, 0, -k * 0.6); R.rUA.rotation.set(-k * 2.2, 0, k * 0.6);
-      R.lEl.rotation.x = 0.4 * k; R.rEl.rotation.x = 0.3 * k;
-      R.lThigh.rotation.x = 0.3 * k; R.rThigh.rotation.x = -0.1 * k; R.lKnee.rotation.x = -0.6 * k; R.rKnee.rotation.x = -0.2 * k;
-      R.spine.rotation.set(0, 0, 0); R.chest.rotation.set(0, 0, 0); R.hips.rotation.set(0, 0, 0);
-      if (R.cape) R.cape.rotation.x = 0.1;
-      return;
-    }
+    if (!this.alive) { this.animDeath(R, a, dt); return; }
     R.root.scale.setScalar(1);
+    savePose(R);
     R.root.rotation.set(0, this.yaw, 0);
     R.body.rotation.set(0, 0, 0); R.body.position.set(0, 0, 0);
     var hv = Math.hypot(this.vel.x, this.vel.z);
     var crouch = inp.crouch && this.onGround;
-    a.ph += dt * (hv * 1.65 / Math.max(0.6, R.s)) * (this.sprinting ? 1.05 : 1);
+    var run = Math.min(1, Math.max(0, (hv - 3) / 4));       // 0 walk … 1 run
+    a.ph += dt * (hv * (1.75 - run * 0.35) / Math.max(0.6, R.s));
     var ph = a.ph;
-    var amp = Math.min(1, hv / 5) * (this.sprinting ? 1.25 : 1);
-    // local movement direction relative to facing
-    var mvA = hv > 0.5 ? Math.atan2(-(this.vel.x * Math.cos(this.yaw) - this.vel.z * Math.sin(this.yaw)), -(-this.vel.x * Math.sin(this.yaw) - this.vel.z * Math.cos(this.yaw))) : 0;
-    var back = Math.abs(mvA) > Math.PI / 2;
+    var amp = Math.min(1, hv / 4.5) * (1 + run * 0.25 + (this.sprinting ? 0.15 : 0));
+    // local move direction
+    var cy = Math.cos(this.yaw), sy = Math.sin(this.yaw);
+    var lf = -this.vel.x * sy - this.vel.z * cy, ls = this.vel.x * cy - this.vel.z * sy;   // forward / right speeds
+    var mvA = hv > 0.5 ? Math.atan2(-ls, lf) : 0;
+    var back = lf < -0.5 && Math.abs(lf) > Math.abs(ls) * 0.6;
     var hipYaw = 0;
-    if (hv > 0.5) { hipYaw = back ? (mvA > 0 ? mvA - Math.PI : mvA + Math.PI) : mvA; hipYaw = Math.max(-0.9, Math.min(0.9, hipYaw)) * 0.8; }
+    if (hv > 0.5) { hipYaw = back ? (mvA > 0 ? mvA - Math.PI : mvA + Math.PI) : mvA; hipYaw = Math.max(-0.85, Math.min(0.85, hipYaw)) * 0.85; }
     var dirSign = back ? -1 : 1;
+    // turn & acceleration lean
+    var yawRate = SF.angDiff(this.yaw, a.lastYaw == null ? this.yaw : a.lastYaw) / Math.max(dt, 1e-3); a.lastYaw = this.yaw;
+    a.turn = (a.turn || 0) + (Math.max(-3, Math.min(3, yawRate)) - (a.turn || 0)) * Math.min(1, dt * 6);
+    var acc = (lf - (a.lastLf || 0)) / Math.max(dt, 1e-3); a.lastLf = lf;
+    a.accLean = (a.accLean || 0) + (Math.max(-12, Math.min(12, acc)) - (a.accLean || 0)) * Math.min(1, dt * 5);
+    a.exert = Math.min(1, Math.max(0, (a.exert || 0) + (this.sprinting ? dt * 0.25 : -dt * 0.12)));
 
-    // ---- legs
-    var lT, rT, lK, rK;
+    // ---------------- legs
+    var lT, rT, lK, rK, lF = 0, rF = 0;
+    var bladeStance = this.melee && !this.vehicle && hv < 1.5;
     if (!this.onGround && !this.vehicle) {
-      lT = this.jetting ? 0.15 : 0.6; rT = this.jetting ? 0.1 : -0.25; lK = this.jetting ? -0.25 : -0.9; rK = this.jetting ? -0.2 : -0.4;
+      var rising = this.vel.y > 0;
+      lT = this.jetting ? 0.15 : rising ? 0.95 : 0.35; rT = this.jetting ? 0.05 : rising ? -0.15 : 0.1;
+      lK = this.jetting ? -0.3 : rising ? -1.3 : -0.55; rK = this.jetting ? -0.25 : rising ? -0.6 : -0.45;
     } else if (this.vehicle) {
       var pose = this.vehicle.riderPose || 'sit';
       lT = rT = pose === 'stand' ? 0.05 : 1.45; lK = rK = pose === 'stand' ? -0.05 : -1.5;
       if (pose === 'bike') { lT = rT = 1.1; lK = rK = -1.9; }
     } else {
-      var s1 = Math.sin(ph) * dirSign, s2 = Math.sin(ph + Math.PI) * dirSign;
-      lT = s1 * 0.75 * amp; rT = s2 * 0.75 * amp;
-      lK = -(Math.max(0, Math.sin(ph + 1.4)) * 1.1 + 0.05) * amp; rK = -(Math.max(0, Math.sin(ph + Math.PI + 1.4)) * 1.1 + 0.05) * amp;
-      if (crouch) { lT += 1.25; rT += 0.55; lK += -1.9; rK += -0.9; }
+      // gait: contact → passing → toe-off shaped curves; knees flex on the recovery swing
+      var s1 = Math.sin(ph) * dirSign, s2 = -s1;
+      var swingK = 0.75 + run * 0.35;
+      lT = s1 * swingK * amp; rT = s2 * swingK * amp;
+      var fl1 = Math.max(0, Math.sin(ph + 1.35)), fl2 = Math.max(0, Math.sin(ph + Math.PI + 1.35));
+      lK = -(fl1 * (0.9 + run * 0.9) + 0.06) * amp; rK = -(fl2 * (0.9 + run * 0.9) + 0.06) * amp;
+      lF = -lT * 0.45 - lK * 0.55 + Math.max(0, -Math.cos(ph)) * 0.3 * amp; rF = -rT * 0.45 - rK * 0.55 + Math.max(0, Math.cos(ph)) * 0.3 * amp;
+      if (crouch) { lT += 1.3; rT += 0.6; lK += -2.0; rK += -1.05; }
+      else if (hv < 0.4) { lK = rK = -0.08; lT = 0.05; rT = -0.05; }
     }
-    R.lThigh.rotation.set(lT, 0, 0); R.rThigh.rotation.set(rT, 0, 0);
-    R.lKnee.rotation.x = lK; R.rKnee.rotation.x = rK;
-    R.lFoot.rotation.x = -(lT + lK) * 0.5; R.rFoot.rotation.x = -(rT + rK) * 0.5;
-    var bob = this.onGround ? Math.abs(Math.sin(ph)) * 0.06 * amp : 0;
-    var hy = R.hipsY + bob - (crouch ? 0.42 * R.s : 0) - (a.land > 0 ? a.land * 0.8 : 0);
+    R.lThigh.rotation.set(lT, 0, bladeStance ? 0.14 : 0.03); R.rThigh.rotation.set(rT, 0, bladeStance ? -0.14 : -0.03);
+    R.lKnee.rotation.set(lK, 0, 0); R.rKnee.rotation.set(rK, 0, 0);
+    R.lFoot.rotation.set(lF || -(lT + lK) * 0.5, 0, 0); R.rFoot.rotation.set(rF || -(rT + rK) * 0.5, 0, 0);
+    var bob = this.onGround ? (Math.abs(Math.cos(ph)) - 0.4) * (0.05 + run * 0.06) * amp : 0;
+    var hy = R.hipsY + bob - (crouch ? 0.42 * R.s : 0) - (a.land > 0 ? a.land * 1.2 : 0) - (bladeStance ? 0.06 : 0) - (this.onGround && hv < 0.4 && !this.melee ? 0.015 : 0);
+    // foot placement on uneven ground (near camera only)
+    if (this.onGround && !this.vehicle && dc < 40 * 40 && hv < 6 && !g.noIK) {
+      var w = g.world, side = 0.1 * R.s;
+      var gl = w.groundAt(this.pos.x - cy * side, this.pos.z + sy * side, this.pos.y + 0.6) - this.pos.y;
+      var gr = w.groundAt(this.pos.x + cy * side, this.pos.z - sy * side, this.pos.y + 0.6) - this.pos.y;
+      gl = Math.max(-0.45, Math.min(0.45, gl)); gr = Math.max(-0.45, Math.min(0.45, gr));
+      var low = Math.min(gl, gr);
+      hy += low;
+      var lu = gl - low, ru = gr - low;
+      R.lThigh.rotation.x += lu * 1.6; R.lKnee.rotation.x -= lu * 3.2; R.lFoot.rotation.x += lu * 1.6;
+      R.rThigh.rotation.x += ru * 1.6; R.rKnee.rotation.x -= ru * 3.2; R.rFoot.rotation.x += ru * 1.6;
+    }
     if (this.vehicle) hy = R.hipsY * (this.vehicle.riderPose === 'stand' ? 1 : 0.55);
     R.hips.position.y = hy;
     if (a.land > 0) a.land -= dt;
-    R.hips.rotation.set(0, hipYaw, 0);
-    R.spine.rotation.set((crouch ? 0.35 : 0) + (this.sprinting ? 0.18 : 0), -hipYaw, 0);
-    R.chest.rotation.set(0, 0, Math.sin(ph) * 0.05 * amp);
-    R.neck.rotation.set(0, 0, 0);
-    R.head.rotation.set(-this.pitch * 0.5, 0, 0);
+    var idle = hv < 0.4 && this.onGround && !this.vehicle;
+    R.hips.rotation.set(0, hipYaw, idle ? Math.sin(t * 0.7 + this.id) * 0.025 : Math.sin(ph) * 0.06 * amp);
+    var lean = (crouch ? 0.35 : 0) + run * 0.12 + (this.sprinting ? 0.12 : 0) + Math.max(-0.15, Math.min(0.22, a.accLean * 0.015));
+    R.spine.rotation.set(lean, -hipYaw * 0.9 + Math.sin(ph) * 0.07 * amp * (this.melee ? 1 : 0.5), -Math.max(-0.25, Math.min(0.25, a.turn * 0.05 * Math.min(1, hv / 3))));
+    var breath = Math.sin(t * (1.6 + a.exert * 2.2) + this.id) * (0.015 + a.exert * 0.03);
+    R.chest.rotation.set(breath, -Math.sin(ph) * 0.1 * amp * (this.melee ? 0.4 : 0.25), Math.sin(ph) * 0.04 * amp);
+    R.neck.rotation.set(-lean * 0.5, 0, 0);
+    R.head.rotation.set(-this.pitch * 0.45 - breath, Math.sin(t * 0.37 + this.id * 3) * (idle ? 0.12 : 0.03), 0);
+    R.body.rotation.z = Math.max(-0.2, Math.min(0.2, -a.turn * 0.03 * Math.min(1, hv / 4)));
 
-    // ---- arms
+    // ---------------- arms
     var pitch = this.pitch;
     var lUA = R.lUA.rotation, rUA = R.rUA.rotation, lEl = R.lEl.rotation, rEl = R.rEl.rotation;
     lUA.set(0, 0, 0); rUA.set(0, 0, 0); lEl.set(0, 0, 0); rEl.set(0, 0, 0);
     var b = this.buffs;
-    a.recoil = Math.max(0, a.recoil - dt * 9);
+    a.recoil = Math.max(0, a.recoil - dt * 10);
+    var sway = Math.sin(t * 1.3 + this.id) * 0.02 + Math.sin(ph * 2) * 0.03 * amp;
+    var fast = false;
     if (b.lifted > 0) {
-      // choked: dangling, clawing at throat
-      lUA.set(2.4, 0, 0.2); rUA.set(2.4, 0, -0.2); lEl.x = 1.6; rEl.x = 1.6;
-      R.lThigh.rotation.x = Math.sin(t * 9) * 0.3; R.rThigh.rotation.x = Math.sin(t * 9 + 2) * 0.3;
-      R.lKnee.rotation.x = -0.3; R.rKnee.rotation.x = -0.3;
+      lUA.set(2.5 + Math.sin(t * 11) * 0.2, 0, 0.25); rUA.set(2.5 + Math.cos(t * 13) * 0.2, 0, -0.25); lEl.x = 1.7; rEl.x = 1.7;
+      R.lThigh.rotation.x = Math.sin(t * 9) * 0.35; R.rThigh.rotation.x = Math.sin(t * 9 + 2) * 0.35;
+      R.lKnee.rotation.x = -0.4 + Math.sin(t * 9) * 0.3; R.rKnee.rotation.x = -0.4; R.head.rotation.x = 0.4;
     } else if (a.knockT > 0) {
-      var kk = Math.min(1, a.knockT / 0.9);
-      R.body.rotation.x = -Math.sin(kk * Math.PI) * 1.2;
-      lUA.set(1.5, 0, -0.6); rUA.set(1.5, 0, 0.6);
+      var kk = Math.min(1, a.knockT / 1.0);
+      R.body.rotation.x = -Math.sin(kk * Math.PI) * 1.3; R.body.position.y = Math.sin(kk * Math.PI) * 0.15;
+      lUA.set(1.6, 0, -0.7); rUA.set(1.6, 0, 0.7); lEl.x = 0.5; rEl.x = 0.5;
+      R.lThigh.rotation.x = 0.6 * kk; R.lKnee.rotation.x = -1.0 * kk;
+    } else if (b.stun > 0) {
+      lUA.set(0.6, 0, 0.5); rUA.set(0.6, 0, -0.5); lEl.x = 1.4; rEl.x = 1.4; R.head.rotation.z = Math.sin(t * 6) * 0.25; R.spine.rotation.x = 0.3;
     } else if (a.emote && !this.vehicle) {
       this.animEmote(R, a, t, dt);
     } else if (this.melee) {
-      this.animBlade(R, a, t, pitch, amp, ph);
+      fast = this.animBlade(R, a, t, pitch, amp, ph, dt);
     } else if (a.throwT > 0) {
-      a.throwT -= dt;
+      a.throwT -= dt; fast = true;
       var tk = 1 - a.throwT / 0.35;
-      rUA.set(lerp(2.9, 0.9, ease(Math.min(1, tk))), 0, -0.2); rEl.x = lerp(0.9, 0.1, tk);
-      lUA.set(1.2, 0, 0.3); lEl.x = 0.4;
+      rUA.set(tk < 0.35 ? lerp(1.2, 3.0, tk / 0.35) : lerp(3.0, 0.7, easeOut((tk - 0.35) / 0.65)), 0, -0.25); rEl.x = tk < 0.35 ? 1.2 : lerp(1.2, 0.05, (tk - 0.35) / 0.65);
+      lUA.set(1.3, 0, 0.35); lEl.x = 0.5; R.spine.rotation.y += tk < 0.35 ? -0.4 : lerp(-0.4, 0.35, (tk - 0.35) / 0.65);
     } else if (a.castT > 0) {
       a.castT -= dt;
-      lUA.set(1.55 + pitch, 0, 0.15); lEl.x = 0.05;
-      if (a.castKind === 'both') { rUA.set(1.55 + pitch, 0, -0.15); rEl.x = 0.05; }
-      else { rUA.set(0.2, 0, -0.1); rEl.x = 0.5; }
+      lUA.set(1.55 + pitch, 0, 0.15); lEl.x = 0.05; R.spine.rotation.y += 0.25; R.lHand.rotation.x = -0.6;
+      if (a.castKind === 'both') { rUA.set(1.55 + pitch, 0, -0.15); rEl.x = 0.05; R.spine.rotation.y -= 0.25; }
+      else { rUA.set(0.3, 0, -0.15); rEl.x = 0.6; }
     } else if (this.vehicle && this.vehicle.riderPose !== 'stand') {
       lUA.set(1.0, 0, 0.3); rUA.set(1.0, 0, -0.3); lEl.x = 0.6; rEl.x = 0.6;
     } else {
       var wk = R.weaponKind;
       var oneHand = wk === 'pistol' || wk === 'hpistol';
       var twin = !!R.gun2;
-      if (this.sprinting && !inp.fire) {
-        if (oneHand || twin) {
-          lUA.x = -Math.sin(ph) * 0.9; rUA.x = Math.sin(ph) * 0.9; lEl.x = 1.1; rEl.x = 1.1;
-        } else { rUA.set(0.55, 0, -0.35); rEl.x = 1.35; lUA.set(0.9, 0, 0.55); lEl.x = 1.25; R.chest.rotation.y = 0.3; }
+      if (this.overT > 0 && !inp.fire && !twin) {
+        // venting: weapon tipped up, off hand slaps the heat sink
+        rUA.set(0.9, 0, -0.3); rEl.x = 1.3; lUA.set(1.1, 0, 0.6); lEl.x = 1.0 + Math.max(0, Math.sin(t * 14)) * 0.3;
+        R.rHand.rotation.z = -0.6;
+      } else if (this.sprinting && !inp.fire) {
+        R.rHand.rotation.z = 0;
+        if (oneHand || twin) { lUA.x = -Math.sin(ph) * 1.0; rUA.x = Math.sin(ph) * 1.0; lEl.x = 1.25; rEl.x = 1.25; lUA.z = 0.1; rUA.z = -0.1; }
+        else { rUA.set(0.5 + Math.sin(ph) * 0.12, 0, -0.35); rEl.x = 1.45; lUA.set(0.95 - Math.sin(ph) * 0.12, 0, 0.6); lEl.x = 1.3; R.chest.rotation.y += 0.32; }
       } else {
-        var rec = a.recoil * 0.12;
+        R.rHand.rotation.z = 0;
+        var rec = a.recoil * (wk === 'sniper' || wk === 'launcher' || wk === 'shotgun' ? 0.3 : 0.12);
+        if (a.recoil > 0.5) fast = true;
         if (oneHand || twin) {
-          rUA.set(1.5 + pitch - rec, 0, -0.08); rEl.x = 0.05;
-          if (twin) { lUA.set(1.5 + pitch - rec * 0.5, 0, 0.08); lEl.x = 0.05; }
+          rUA.set(1.5 + pitch - rec + sway, 0, -0.08); rEl.x = 0.05 + rec;
+          if (twin) { lUA.set(1.5 + pitch - rec * 0.6 - sway, 0, 0.08); lEl.x = 0.05 + rec * 0.5; }
           else { lUA.set(1.25 + pitch, 0, 0.55); lEl.x = 0.35; }
         } else if (wk === 'launcher') {
           rUA.set(0.6 + pitch, 0, -0.45); rEl.x = 0.6; lUA.set(1.2 + pitch, 0, 0.55); lEl.x = 0.6;
-          R.rHand.children.forEach(function (c) { c.rotation.y = 0; });
         } else {
-          rUA.set(1.08 + pitch - rec, 0, -0.18); rEl.x = 0.5 + rec * 0.5;
-          lUA.set(1.25 + pitch - rec, 0, 0.6); lEl.x = 0.55;
+          var aimK = inp.aim ? 1 : 0;
+          rUA.set(1.08 + pitch - rec + sway, 0, -0.18 - aimK * 0.05); rEl.x = 0.5 + rec * 0.6 - aimK * 0.08;
+          lUA.set(1.25 + pitch - rec + sway, 0, 0.6 + aimK * 0.05); lEl.x = 0.55;
+          if (inp.aim) R.head.rotation.z = 0.12;
         }
-        R.chest.rotation.x = pitch * 0.25;
+        R.chest.rotation.x += pitch * 0.25 - rec * 0.3;
       }
     }
-    // hit flinch
-    if (a.hitT > 0) { a.hitT -= dt; R.chest.rotation.x -= a.hitT * 1.2; }
+    // directional hit reaction
+    if (a.hitT > 0) {
+      a.hitT -= dt;
+      var hk = a.hitT / 0.22, hd = a.hitDir || 0;
+      R.chest.rotation.x -= Math.cos(hd) * hk * 0.35; R.chest.rotation.z += Math.sin(hd) * hk * 0.3; R.head.rotation.x -= hk * 0.3;
+      fast = true;
+    }
+    // blend from the previous pose for smooth transitions
+    var k = 1 - Math.exp(-dt * (this.vehicle ? 10 : 15)), kArms = fast ? 1 - Math.exp(-dt * 45) : 1 - Math.exp(-dt * 18);
+    if (!a.blendInit) { a.blendInit = true; k = kArms = 1; }
+    blendPose(R, k, kArms);
     // jetpack flames
     if (this.jetting && R.jetNozzles) {
       R.chest.updateMatrixWorld();
       for (var i = 0; i < R.jetNozzles.length; i++) { tmp2.copy(R.jetNozzles[i]).applyMatrix4(R.chest.matrixWorld); SF.FX.jet(tmp2); }
       SF.Audio.jet(this.pos);
     }
-    if (R.cape) R.cape.rotation.x = 0.08 + Math.min(0.9, hv * 0.09) + Math.sin(t * 3 + this.id) * 0.04 + (!this.onGround ? 0.4 : 0);
+    // cloth & secondary motion
+    if (R.cape) {
+      a.capeV = a.capeV || 0; a.capeA = a.capeA == null ? 0.1 : a.capeA;
+      var target = 0.08 + Math.min(1.0, hv * 0.1) + (!this.onGround ? 0.45 : 0) + Math.sin(t * 2.3 + this.id) * 0.04 + Math.max(0, -a.accLean * 0.02);
+      a.capeV += (target - a.capeA) * 40 * dt; a.capeV *= Math.exp(-dt * 6); a.capeA += a.capeV * dt;
+      R.cape.rotation.x = a.capeA; R.cape.rotation.z = -a.turn * 0.04;
+    }
     if (R.wings) { var fl = !this.onGround ? Math.sin(t * 40) * 0.6 : 0.1; R.wings[0].rotation.y = 0.3 + fl; R.wings[1].rotation.y = -0.3 - fl; }
-    // second pair of arms mirrors blade swing with an offset
     if (R.lUA2) {
-      var sw = a.swingT >= 0 ? Math.sin(a.swingT * Math.PI) : 0;
-      R.lUA2.rotation.set(0.9 + sw * 1.2 + Math.sin(t * 2) * 0.1, 0, 0.5 + sw * 0.6); R.lEl2.rotation.x = 0.8;
-      R.rUA2.rotation.set(0.9 + sw * 1.4 + Math.sin(t * 2 + 1) * 0.1, 0, -0.5 - sw * 0.6); R.rEl2.rotation.x = 0.8;
+      var swv = a.swingT >= 0 ? Math.sin(a.swingT * Math.PI) : 0;
+      R.lUA2.rotation.set(0.9 + swv * 1.3 + Math.sin(t * 2) * 0.1, 0, 0.5 + swv * 0.7); R.lEl2.rotation.x = 0.8 - swv * 0.4;
+      R.rUA2.rotation.set(0.9 + swv * 1.5 + Math.sin(t * 2 + 1) * 0.1, 0, -0.5 - swv * 0.7); R.rEl2.rotation.x = 0.8 - swv * 0.4;
     }
   };
-  UP.animBlade = function (R, a, t, pitch, amp, ph) {
+
+  // physically tumbling deaths with several variants
+  UP.animDeath = function (R, a, dt) {
+    var g = G();
+    if (a.deathT === 0.0001 || !a.dv) {
+      var k = this.deathKind;
+      var dirx = Math.sin(this.deathDir), dirz = Math.cos(this.deathDir);
+      a.dv = { x: dirx * (k === 'explosive' ? 7 : 1.2) + this.vel.x * 0.5, y: k === 'explosive' ? 7 + Math.random() * 3 : (k === 'fall' ? 0 : 0.6), z: dirz * (k === 'explosive' ? 7 : 1.2) + this.vel.z * 0.5, off: new THREE.Vector3(), spin: (Math.random() - 0.5) * (k === 'explosive' ? 9 : 1.5), ground: false };
+      a.variant = k === 'explosive' ? 4 : k === 'melee' && Math.random() < 0.5 ? 1 : (Math.random() * 4) | 0;
+      a.flop = [Math.random(), Math.random(), Math.random(), Math.random()];
+    }
+    a.deathT += dt;
+    if (this.disintegrated) { R.root.scale.setScalar(Math.max(0.01, 1 - a.deathT * 1.5)); if (Math.random() < 0.5) SF.FX.add.emit(this.pos.x, this.pos.y + 1, this.pos.z, 0, 2, 0, 0x9ad8ff, 0.4, 0.3, 0, 0, 0); return; }
+    var d = a.dv;
+    // ballistic slide of the body
+    if (!d.ground) {
+      d.y -= 20 * dt;
+      d.off.x += d.x * dt; d.off.y += d.y * dt; d.off.z += d.z * dt;
+      var gy = g.world.groundAt(this.pos.x + d.off.x, this.pos.z + d.off.z, this.pos.y + d.off.y + 1) - this.pos.y;
+      if (d.off.y <= gy && d.y < 0) { d.off.y = gy; d.ground = true; if (a.deathT > 0.2 && g.camPos && g.camPos.distanceTo(this.pos) < 30) SF.FX.dust(tmp2.copy(this.pos).add(d.off), 0x8a8070, 4); }
+    } else { d.x *= Math.exp(-dt * 6); d.z *= Math.exp(-dt * 6); d.off.x += d.x * dt; d.off.z += d.z * dt; }
+    R.root.position.set(this.pos.x + d.off.x, this.pos.y + d.off.y, this.pos.z + d.off.z);
+    var t = Math.min(1, a.deathT / 0.75), e = t * t * (3 - 2 * t);
+    var v = a.variant, f = a.flop;
+    R.root.rotation.set(0, this.deathDir + Math.PI + (v === 2 ? e * 1.4 : 0) + (v === 4 ? a.deathT * d.spin * (d.ground ? 0 : 1) : 0), 0);
+    R.hips.rotation.set(0, 0, 0); R.spine.rotation.set(0, 0, 0); R.chest.rotation.set(0, 0, 0); R.neck.rotation.set(0, 0, 0);
+    R.head.rotation.set(0, 0, 0);
+    var settle = Math.max(0, 1 - a.deathT * 1.5);
+    var wob = function (i) { return Math.sin(a.deathT * (9 + f[i] * 5) + f[i] * 6) * 0.35 * settle; };
+    if (v === 0 || v === 4) { // thrown backwards
+      R.body.rotation.x = -e * 1.52; R.body.position.y = e * 0.16;
+      R.lUA.rotation.set(-e * 2.5 + wob(0), 0, -e * 0.7); R.rUA.rotation.set(-e * 2.2 + wob(1), 0, e * 0.8);
+      R.lEl.rotation.x = 0.5 * e; R.rEl.rotation.x = 0.3 * e;
+      R.lThigh.rotation.set(0.35 * e + wob(2), 0, 0.15 * e); R.rThigh.rotation.set(-0.05 * e + wob(3), 0, -0.2 * e); R.lKnee.rotation.x = -0.7 * e; R.rKnee.rotation.x = -0.2 * e;
+      R.head.rotation.x = -0.5 * e;
+    } else if (v === 1) { // knees buckle, fall forward
+      var k1 = Math.min(1, a.deathT / 0.45), k2 = Math.max(0, Math.min(1, (a.deathT - 0.4) / 0.5));
+      R.hips.position.y = R.hipsY * (1 - k1 * 0.5);
+      R.lThigh.rotation.x = 1.3 * k1 - 1.2 * k2; R.rThigh.rotation.x = 1.1 * k1 - 1.0 * k2; R.lKnee.rotation.x = -2.2 * k1 + 1.8 * k2; R.rKnee.rotation.x = -2.0 * k1 + 1.6 * k2;
+      R.body.rotation.x = k2 * 1.45; R.body.position.y = k2 * 0.12;
+      R.lUA.rotation.set(0.4 + k2 * 2.6 + wob(0), 0, 0.2); R.rUA.rotation.set(0.3 + k2 * 2.4 + wob(1), 0, -0.2); R.lEl.rotation.x = 0.3; R.rEl.rotation.x = 0.4;
+      R.spine.rotation.x = 0.5 * k1; R.head.rotation.x = 0.4 * k1 - 0.8 * k2;
+    } else if (v === 2) { // spin and fall sideways
+      R.body.rotation.z = e * 1.5; R.body.position.y = e * 0.18;
+      R.lUA.rotation.set(0.2 + wob(0), 0, -e * 2.2); R.rUA.rotation.set(0.6 + wob(1), 0, e * 0.6); R.lEl.rotation.x = 0.4; R.rEl.rotation.x = 1.0 * e;
+      R.lThigh.rotation.set(0.5 * e + wob(2), 0, 0); R.rThigh.rotation.set(-0.2 * e, 0, 0); R.lKnee.rotation.x = -0.9 * e; R.rKnee.rotation.x = -0.3 * e;
+      R.spine.rotation.z = 0.3 * e;
+    } else { // clutch and collapse backward slowly
+      var c1 = Math.min(1, a.deathT / 0.6), c2 = Math.max(0, Math.min(1, (a.deathT - 0.5) / 0.6));
+      R.lUA.rotation.set(1.3 * (1 - c2) - 2.0 * c2, 0, 0.6); R.rUA.rotation.set(0.8 - 1.8 * c2 + wob(1), 0, -0.3); R.lEl.rotation.x = 1.8 * (1 - c2); R.rEl.rotation.x = 0.5;
+      R.spine.rotation.x = 0.4 * c1 * (1 - c2); R.hips.position.y = R.hipsY * (1 - 0.3 * c1);
+      R.lKnee.rotation.x = -0.9 * c1 * (1 - c2); R.rKnee.rotation.x = -0.7 * c1 * (1 - c2); R.lThigh.rotation.x = 0.5 * c1 * (1 - c2); R.rThigh.rotation.x = 0.4 * c1 * (1 - c2);
+      R.body.rotation.x = -c2 * 1.5; R.body.position.y = c2 * 0.15;
+    }
+    if (R.cape) R.cape.rotation.x = 0.1 + settle * 0.5;
+  };
+
+  UP.animBlade = function (R, a, t, pitch, amp, ph, dt) {
     var lUA = R.lUA.rotation, rUA = R.rUA.rotation, lEl = R.lEl.rotation, rEl = R.rEl.rotation;
     if (this.weapon && this.weapon.kind === 'melee') {
-      // spear: held forward two-handed, thrust on swing
-      var th = a.swingT >= 0 ? Math.sin(a.swingT * Math.PI) : 0;
+      var th = a.swingT >= 0 ? (a.swingT < 0.35 ? -a.swingT / 0.35 * 0.4 : Math.sin((a.swingT - 0.35) / 0.65 * Math.PI)) : 0;
       rUA.set(1.0 + th * 0.6, 0, -0.2); rEl.x = 0.9 - th * 0.8; lUA.set(1.1 + th * 0.5, 0, 0.5); lEl.x = 0.8 - th * 0.6;
-      return;
+      R.spine.rotation.y += th * 0.4;
+      return a.swingT >= 0;
     }
+    var dual = this.blade.style === 'dual' || this.blade.style === 'quad', dbl = this.blade.style === 'double';
     if (a.swingT >= 0) {
-      var sw = SWINGS[a.swingIdx];
-      var k = ease(Math.min(1, a.swingT * 1.15));
-      rUA.set(lerp(sw[0][0], sw[1][0], k), 0, lerp(sw[0][1], sw[1][1], k));
-      rEl.x = lerp(sw[0][2], sw[1][2], k);
-      R.spine.rotation.y += lerp(sw[0][3], sw[1][3], k);
-      if (this.blade.style === 'dual' || this.blade.style === 'quad') { lUA.set(lerp(sw[1][0], sw[0][0], k), 0, -lerp(sw[1][1], sw[0][1], k)); lEl.x = 0.7; }
-      else if (this.blade.style === 'double') { lUA.set(lerp(sw[0][0], sw[1][0], k) * 0.8, 0, lerp(sw[0][1], sw[1][1], k) * 0.6 + 0.4); lEl.x = 0.8; }
-      else { lUA.set(sw[0][4] + 0.4, 0, 0.3); lEl.x = 0.6; }
-      // blade trail sparks at the tip for flair
-      if (this.rig.bladeObjs[0] && G().camPos && G().camPos.distanceToSquared(this.pos) < 900) {
+      var sw = COMBO[a.swingIdx % COMBO.length];
+      var st = a.swingT, P;
+      // windup (0-0.3) → strike (0.3-0.62, fast) → follow-through hold
+      if (st < 0.3) { var w = easeOut(st / 0.3); P = sw[0].map(function (x, i) { return x * w + GUARD[i] * (1 - w); }); }
+      else { var s = easeOut(Math.min(1, (st - 0.3) / 0.32)); P = sw[0].map(function (x, i) { return x + (sw[1][i] - x) * s; }); }
+      rUA.set(P[0], 0, P[1]); rEl.x = P[2];
+      R.spine.rotation.y += P[3]; R.chest.rotation.x += P[4];
+      R.lThigh.rotation.x += P[5] * 0.6; R.rThigh.rotation.x += P[6] * 0.6; R.lKnee.rotation.x -= Math.abs(P[5]) * 0.5; R.rKnee.rotation.x -= Math.abs(P[6]) * 0.6;
+      R.hips.position.y -= 0.08 * Math.sin(Math.min(1, st) * Math.PI);
+      if (dual) { lUA.set(P[0] * 0.85 + 0.2, 0, -P[1] * 0.8); lEl.x = P[2] * 0.9; }
+      else if (dbl) { lUA.set(P[0] * 0.75, 0, P[1] * 0.5 + 0.45); lEl.x = 0.85; }
+      else { lUA.set(0.5 + st * 0.3, 0, 0.45 + st * 0.2); lEl.x = 0.7; }
+      // blade trail at the tip
+      if (this.rig.bladeObjs[0] && G().camPos && G().camPos.distanceToSquared(this.pos) < 900 && st > 0.25 && st < 0.75) {
         var bo = this.rig.bladeObjs[0].blades[0];
-        bo.updateMatrixWorld(); tmp2.set(0, 0.4, 0).applyMatrix4(bo.matrixWorld);
-        SF.FX.add.emit(tmp2.x, tmp2.y, tmp2.z, 0, 0, 0, this.blade.blade, 0.22, 0.12, 0, 0, -0.6);
+        bo.updateMatrixWorld(); tmp2.set(0, 0.45, 0).applyMatrix4(bo.matrixWorld);
+        SF.FX.add.emit(tmp2.x, tmp2.y, tmp2.z, 0, 0, 0, this.blade.blade, 0.32, 0.16, 0, 0, -0.5);
+        tmp2.set(0, 0.05, 0).applyMatrix4(bo.matrixWorld);
+        SF.FX.add.emit(tmp2.x, tmp2.y, tmp2.z, 0, 0, 0, this.blade.blade, 0.22, 0.12, 0, 0, -0.5);
       }
-    } else if (this.blocking) {
-      rUA.set(1.2, 0, 0.45); rEl.x = 1.25; lUA.set(1.0, 0, 0.5); lEl.x = 1.1;
-      if (this.blade.style === 'dual') { lUA.set(1.3, 0, -0.2); lEl.x = 1.2; }
-    } else if (this.sprinting) {
-      rUA.set(-0.5, 0, -0.3); rEl.x = 0.3; lUA.x = -Math.sin(ph) * 0.9; lEl.x = 0.8;
-      if (this.blade.style === 'dual') { lUA.set(-0.5, 0, 0.3); lEl.x = 0.3; }
-    } else {
-      // guard stance with slow idle sway
-      var s = Math.sin(t * 1.6 + this.id) * 0.05;
-      rUA.set(0.75 + s, 0, -0.25); rEl.x = 0.95; lUA.set(0.6 - s, 0, 0.45); lEl.x = 0.9;
-      if (this.blade.style === 'dual') { lUA.set(0.75 + s, 0, 0.25); lEl.x = 0.95; }
-      if (a.castT > 0) { a.castT -= G().dt; lUA.set(1.55 + pitch, 0, 0.1); lEl.x = 0.05; if (a.castKind === 'both') { rUA.set(1.55 + pitch, 0, -0.1); rEl.x = 0.05; } }
-      if (a.throwT > 0) { a.throwT -= G().dt; var tk = 1 - a.throwT / 0.35; rUA.set(lerp(2.6, 1.2, tk), 0, -0.5); rEl.x = 0.2; }
+      return true;
     }
+    if (this.blocking) {
+      var jit = a.deflectT > 0 ? Math.sin(t * 60) * 0.15 : 0;
+      rUA.set(1.25 + pitch * 0.5 + jit, 0, 0.5); rEl.x = 1.25; lUA.set(1.0, 0, 0.5); lEl.x = 1.1;
+      R.spine.rotation.y += 0.25;
+      if (dual) { lUA.set(1.3, 0, -0.25); lEl.x = 1.2; }
+      return a.deflectT > 0;
+    }
+    if (this.sprinting) {
+      rUA.set(-0.6 + Math.sin(ph) * 0.2, 0, -0.35); rEl.x = 0.35; lUA.x = -Math.sin(ph) * 1.0; lEl.x = 1.0;
+      if (dual) { lUA.set(-0.6 - Math.sin(ph) * 0.2, 0, 0.35); lEl.x = 0.35; }
+      return false;
+    }
+    var s2 = Math.sin(t * 1.6 + this.id) * 0.05;
+    rUA.set(GUARD[0] + s2, 0, GUARD[1]); rEl.x = GUARD[2]; lUA.set(0.6 - s2, 0, 0.45); lEl.x = 0.9;
+    R.spine.rotation.y += 0.2;
+    if (dual) { lUA.set(0.75 + s2, 0, 0.25); lEl.x = 0.95; }
+    if (a.castT > 0) { a.castT -= G().dt; lUA.set(1.55 + pitch, 0, 0.1); lEl.x = 0.05; R.lHand.rotation.x = -0.6; if (a.castKind === 'both') { rUA.set(1.55 + pitch, 0, -0.1); rEl.x = 0.05; } }
+    if (a.throwT > 0) { a.throwT -= G().dt; var tk = 1 - a.throwT / 0.35; rUA.set(tk < 0.4 ? lerp(0.8, 2.7, tk / 0.4) : lerp(2.7, 1.1, (tk - 0.4) / 0.6), 0, -0.5); rEl.x = 0.2; return true; }
+    return false;
   };
+  var GUARD = [0.78, -0.28, 0.98, 0.2, 0, 0, 0];
+
   UP.animEmote = function (R, a, t, dt) {
     a.emoteT += dt;
     var lUA = R.lUA.rotation, rUA = R.rUA.rotation, lEl = R.lEl.rotation, rEl = R.rEl.rotation;

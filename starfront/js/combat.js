@@ -149,7 +149,7 @@ var SF = window.SF || (window.SF = {});
         if (hit && hit.type === 'unit' && (hit.blocking || hit.buffs.deflect > 0) && p.kind === 'bolt' && deflects(hit, p)) {
           // reflect
           SF.Audio.deflect(hp); SF.FX.sparks(hp, p.color, 6, 4);
-          hit.blockEnergy -= hit.buffs.deflect > 0 ? 0 : 7;
+          hit.blockEnergy -= hit.buffs.deflect > 0 ? 0 : 7; hit.anim.deflectT = 0.15;
           var back = p.owner && p.owner.alive && p.owner.chest ? tmp.subVectors(p.owner.chest(tmp3), hp).normalize() : p.vel.clone().negate().normalize();
           var accurate = hit.isPlayer ? 0.35 : 0.5;
           back.x += (Math.random() - 0.5) * accurate; back.y += (Math.random() - 0.5) * accurate * 0.5; back.z += (Math.random() - 0.5) * accurate; back.normalize();

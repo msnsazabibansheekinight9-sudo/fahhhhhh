@@ -2,7 +2,7 @@
 var SF = window.SF || (window.SF = {});
 
 (function () {
-  var M = SF.Models = {};
+  var M = SF.Models = { rounded: true };
   var G = M.geo = {
     box: new THREE.BoxGeometry(1, 1, 1),
     cyl: new THREE.CylinderGeometry(0.5, 0.5, 1, 10),
@@ -18,12 +18,55 @@ var SF = window.SF || (window.SF = {});
   };
   // cape plane pivot at top edge
   G.plane.translate(0, -0.5, 0);
+  // rounded box: corners pushed onto spheres so armour plates read as moulded, not boxy
+  G.rbox = (function () {
+    var g = new THREE.BoxGeometry(1, 1, 1, 4, 4, 4), p = g.attributes.position, r = 0.2, v = new THREE.Vector3(), c = new THREE.Vector3();
+    for (var i = 0; i < p.count; i++) {
+      v.fromBufferAttribute(p, i);
+      c.set(Math.max(-0.5 + r, Math.min(0.5 - r, v.x)), Math.max(-0.5 + r, Math.min(0.5 - r, v.y)), Math.max(-0.5 + r, Math.min(0.5 - r, v.z)));
+      v.sub(c); if (v.lengthSq() > 0) v.setLength(r); v.add(c);
+      p.setXYZ(i, v.x, v.y, v.z);
+    }
+    g.computeVertexNormals();
+    return g;
+  })();
+  // tapered limb with a muscle bulge, capped ends (lathe profile, height 1 centred)
+  G.limb = (function () {
+    var pts = [], n = 14;
+    for (var i = 0; i <= n; i++) {
+      var t = i / n, y = -0.5 + t;
+      var r = 0.5 * (0.78 + 0.22 * Math.sin(t * Math.PI * 0.9 + 0.25)) * (1 - 0.12 * t);
+      if (i === 0) r = 0.0; if (i === 1) r *= 0.75; if (i === n) r = 0.0; if (i === n - 1) r *= 0.8;
+      pts.push(new THREE.Vector2(r, y));
+    }
+    var g = new THREE.LatheGeometry(pts, 14);
+    g.computeVertexNormals();
+    return g;
+  })();
+  G.capsule = (function () {
+    var pts = [];
+    for (var i = 0; i <= 8; i++) { var a = -Math.PI / 2 + i / 8 * Math.PI / 2; pts.push(new THREE.Vector2(Math.cos(a) * 0.5, -0.5 + 0.5 + Math.sin(a) * 0.5 - 0.0)); }
+    pts = [];
+    for (i = 0; i <= 6; i++) { var a1 = -Math.PI / 2 + i / 6 * Math.PI / 2; pts.push(new THREE.Vector2(Math.cos(a1) * 0.5, -0.25 + Math.sin(a1) * 0.25)); }
+    for (i = 0; i <= 6; i++) { var a2 = i / 6 * Math.PI / 2; pts.push(new THREE.Vector2(Math.cos(a2) * 0.5, 0.25 + Math.sin(a2) * 0.25)); }
+    return new THREE.LatheGeometry(pts, 14);
+  })();
 
   var matCache = {};
   M.mat = function (color, rough, metal, extra) {
     var key = color + '|' + (rough == null ? 0.6 : rough) + '|' + (metal || 0) + '|' + (extra || '');
     var m = matCache[key];
     if (m) return m;
+    var surf = extra === 'cloth2' ? 'cloth' : (extra && extra.indexOf && ['armor', 'cloth', 'metal', 'skin', 'fur'].indexOf(extra) >= 0 ? extra : null);
+    if (!surf && !extra) { var rr = rough == null ? 0.6 : rough; surf = (metal || 0) >= 0.5 ? 'metal' : rr >= 1 ? 'fur' : rr >= 0.88 ? 'cloth' : rr >= 0.7 ? 'skin' : 'armor'; }
+    if (surf) {
+      var tx = SF.Tex[surf]();
+      m = new THREE.MeshStandardMaterial({ color: color, roughness: rough == null ? 0.6 : rough, metalness: metal || 0, map: tx.map, normalMap: tx.normal, side: extra === 'cloth2' ? THREE.DoubleSide : THREE.FrontSide });
+      m.normalScale.set(surf === 'armor' || surf === 'metal' ? 0.6 : 0.9, surf === 'armor' || surf === 'metal' ? 0.6 : 0.9);
+      if (surf === 'armor' || surf === 'metal') m.envMapIntensity = 1.2;
+      matCache[key] = m;
+      return m;
+    }
     if (extra === 'glow') m = new THREE.MeshBasicMaterial({ color: color });
     else if (extra === 'add') m = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false });
     else if (extra === 'emis') m = new THREE.MeshStandardMaterial({ color: color, emissive: color, emissiveIntensity: 0.9, roughness: 0.4 });
@@ -35,6 +78,8 @@ var SF = window.SF || (window.SF = {});
   M.cloakMat = new THREE.MeshStandardMaterial({ color: 0x8899aa, transparent: true, opacity: 0.12, roughness: 0.1, metalness: 0.9, depthWrite: false });
 
   function mesh(geo, mat, parent, px, py, pz, sx, sy, sz, rx, ry, rz, detail) {
+    if (geo === 'box' && M.rounded) { var mx = Math.max(sx || 1, sy || 1, sz || 1), mn = Math.min(sx || 1, sy || 1, sz || 1); if (mx / mn < 3.5) geo = 'rbox'; }
+    if (geo === 'cyl' && M.rounded && M.limbMode) geo = 'limb';
     var m = new THREE.Mesh(G[geo] || geo, mat);
     m.position.set(px || 0, py || 0, pz || 0);
     m.scale.set(sx || 1, sy || 1, sz || 1);
@@ -61,8 +106,8 @@ var SF = window.SF || (window.SF = {});
     R.hips = grp(body, 0, hipsY, 0);
     R.spine = grp(R.hips, 0, 0, 0);
     R.chest = grp(R.spine, 0, (opts.torso || 0.22) * s, 0);
-    R.neck = grp(R.chest, 0, 0.36 * s * (opts.neckK || 1), 0);
-    R.head = grp(R.neck, 0, 0.1 * s, 0);
+    R.neck = grp(R.chest, 0, 0.315 * s * (opts.neckK || 1), 0);
+    R.head = grp(R.neck, 0, 0.085 * s, 0);
     var sw = (opts.shoulder || 0.22) * s;
     R.lSh = grp(R.chest, -sw, 0.3 * s, 0); R.rSh = grp(R.chest, sw, 0.3 * s, 0);
     R.lUA = grp(R.lSh); R.rUA = grp(R.rSh);
@@ -84,13 +129,24 @@ var SF = window.SF || (window.SF = {});
     var at = (k.armT || 0.11) * s, lt = (k.legT || 0.14) * s;
     [['l', -1], ['r', 1]].forEach(function (p) {
       var side = p[0];
-      mesh(k.armGeo || 'cyl', mats.upper, R[side + 'UA'], 0, -ua * 0.5, 0, at, ua * 1.0, at);
-      mesh(k.armGeo || 'cyl', mats.lower, R[side + 'El'], 0, -ua * 0.47, 0, at * 0.92, ua * 0.95, at * 0.92);
-      mesh('box', mats.hand, R[side + 'Hand'], 0, -0.03 * s, 0, at * 0.85, 0.1 * s, at * 0.95);
+      mesh(k.armGeo || 'limb', mats.upper, R[side + 'UA'], 0, -ua * 0.5, 0, at * 1.08, ua * 1.12, at * 1.08);
+      mesh(k.armGeo || 'limb', mats.lower, R[side + 'El'], 0, -ua * 0.47, 0, at, ua * 1.04, at * 0.95);
+      mesh('sph', mats.upper, R[side + 'El'], 0, 0, 0, at * 0.95, at * 0.95, at * 0.95, 0, 0, 0, true);
+      // hand: palm, curled fingers, thumb
+      var hd = R[side + 'Hand'];
+      mesh('box', mats.hand, hd, 0, -0.02 * s, 0, at * 0.75, 0.075 * s, at * 0.95);
+      mesh('box', mats.hand, hd, 0, -0.07 * s, -at * 0.12, at * 0.72, 0.05 * s, at * 0.75, 0.5, 0, 0, true);
+      mesh('box', mats.hand, hd, (p[1]) * -at * 0.42, -0.035 * s, -at * 0.3, at * 0.28, 0.06 * s, at * 0.3, 0.3, 0, 0, true);
       if (k.shoulderPad) mesh('sph', mats.pad || mats.upper, R[side + 'UA'], 0, -0.02 * s, 0, at * 1.6, at * 1.2, at * 1.6, 0, 0, 0, true);
-      mesh(k.legGeo || 'cyl', mats.thigh, R[side + 'Thigh'], 0, -lg * 0.5, 0, lt * 1.1, lg * 1.02, lt * 1.15);
-      mesh(k.legGeo || 'cyl', mats.shin, R[side + 'Knee'], 0, -lg * 0.48, 0, lt * 0.95, lg * 0.98, lt);
-      mesh('box', mats.boot, R[side + 'Foot'], 0, -0.03 * s, -0.05 * s, lt * 0.95, 0.08 * s, lt * 1.9);
+      mesh(k.legGeo || 'limb', mats.thigh, R[side + 'Thigh'], 0, -lg * 0.5, 0, lt * 1.2, lg * 1.1, lt * 1.25);
+      mesh(k.legGeo || 'limb', mats.shin, R[side + 'Knee'], 0, -lg * 0.48, 0, lt * 1.02, lg * 1.06, lt * 1.06);
+      mesh('sph', mats.thigh, R[side + 'Knee'], 0, 0, 0, lt * 0.95, lt * 0.95, lt * 0.95, 0, 0, 0, true);
+      // boot: shaft, foot, toe cap, sole
+      var ft = R[side + 'Foot'];
+      mesh('box', mats.boot, ft, 0, 0.02 * s, 0, lt * 1.0, 0.12 * s, lt * 1.05);
+      mesh('box', mats.boot, ft, 0, -0.035 * s, -0.05 * s, lt * 0.95, 0.075 * s, lt * 1.6);
+      mesh('box', mats.boot, ft, 0, -0.04 * s, -0.04 * s - lt * 0.7, lt * 0.82, 0.06 * s, lt * 0.3, 0, 0, 0, true);
+      mesh('box', M.mat(0x141414, 0.9), ft, 0, -0.07 * s, -0.05 * s, lt * 0.92, 0.02 * s, lt * 1.6, 0, 0, 0, true);
       if (k.kneePad) mesh('box', mats.pad || mats.shin, R[side + 'Knee'], 0, -0.04 * s, -lt * 0.45, lt * 0.8, 0.1 * s, 0.05 * s, 0, 0, 0, true);
     });
   }
@@ -118,6 +174,7 @@ var SF = window.SF || (window.SF = {});
     mesh('box', visor, R.head, 0, 0.04, -0.155, 0.05, 0.12, 0.02);
     mesh('box', mark, R.head, 0, 0.24, -0.04, 0.05, 0.05, 0.24, 0, 0, 0, true);
     mesh('cyl', dark, R.head, 0.11, 0.0, -0.13, 0.03, 0.04, 0.03, Math.PI / 2, 0, 0, true);
+    neck(R, dark, 0.09);
     return R;
   };
   styles.synth = function (pal, tint) {
@@ -132,11 +189,14 @@ var SF = window.SF || (window.SF = {});
     mesh('sph', tan, R.lSh, 0, 0, 0, 0.09, 0.09, 0.09); mesh('sph', tan, R.rSh, 0, 0, 0, 0.09, 0.09, 0.09);
     mesh('sph', tan, R.lKnee, 0, 0, 0, 0.08, 0.08, 0.08, 0, 0, 0, true); mesh('sph', tan, R.rKnee, 0, 0, 0, 0.08, 0.08, 0.08, 0, 0, 0, true);
     // long neck and elongated wedge head (snout points forward)
-    mesh('cyl', dark, R.neck, 0, -0.02, 0, 0.04, 0.18, 0.04);
-    mesh('box', tan, R.head, 0, 0.08, -0.06, 0.12, 0.11, 0.34);
-    mesh('box', tan, R.head, 0, 0.12, 0.06, 0.14, 0.14, 0.12);
-    mesh('box', brown, R.head, 0, 0.16, -0.02, 0.08, 0.04, 0.3, 0, 0, 0, true);
-    mesh('sph', eye, R.head, 0.065, 0.1, -0.08, 0.035, 0.035, 0.035); mesh('sph', eye, R.head, -0.065, 0.1, -0.08, 0.035, 0.035, 0.035);
+    mesh('cyl', dark, R.neck, 0, 0.0, 0.02, 0.045, 0.32, 0.045);
+    mesh('cyl', dark, R.neck, 0, -0.16, 0.02, 0.07, 0.05, 0.07);
+    // elongated wedge head sitting on the neck, snout forward
+    mesh('box', tan, R.head, 0, 0.0, -0.06, 0.12, 0.1, 0.34);
+    mesh('box', tan, R.head, 0, 0.04, 0.06, 0.14, 0.15, 0.13);
+    mesh('box', brown, R.head, 0, 0.08, -0.02, 0.08, 0.035, 0.3, 0, 0, 0, true);
+    mesh('box', brown, R.head, 0, -0.04, -0.2, 0.08, 0.04, 0.06, 0, 0, 0, true);
+    mesh('sph', eye, R.head, 0.065, 0.02, -0.08, 0.035, 0.035, 0.035); mesh('sph', eye, R.head, -0.065, 0.02, -0.08, 0.035, 0.035, 0.035);
     mesh('box', brown, R.chest, 0, 0.15, 0.17, 0.18, 0.22, 0.08, 0, 0, 0, true);
     return R;
   };
@@ -144,11 +204,14 @@ var SF = window.SF || (window.SF = {});
     var R = rig(1.12, { shoulder: 0.3 });
     var steel = M.mat(tint ? tint[0] : 0x5a6270, 0.4, 0.6), dark = M.mat(0x2a2e36, 0.5, 0.5), eye = M.mat(0xff5a1f, 0.4, 0, 'emis');
     limbs(R, { upper: steel, lower: steel, hand: dark, thigh: steel, shin: steel, boot: dark }, { armT: 0.16, legT: 0.16 });
-    mesh('box', steel, R.chest, 0, 0.12, 0, 0.62, 0.42, 0.42);
-    mesh('box', dark, R.chest, 0, -0.05, 0, 0.4, 0.15, 0.3);
-    mesh('box', steel, R.hips, 0, 0, 0, 0.32, 0.14, 0.22);
-    mesh('box', steel, R.head, 0, 0.02, -0.08, 0.16, 0.12, 0.18);
-    mesh('box', eye, R.head, 0, 0.04, -0.175, 0.1, 0.025, 0.02);
+    mesh('box', steel, R.chest, 0, 0.14, 0, 0.62, 0.42, 0.42);
+    mesh('box', dark, R.chest, 0, -0.08, 0, 0.36, 0.2, 0.28);
+    mesh('cyl', dark, R.spine, 0, 0.06, 0, 0.16, 0.24, 0.16);
+    mesh('box', steel, R.hips, 0, 0, 0, 0.34, 0.16, 0.24);
+    mesh('box', steel, R.neck, 0, -0.08, -0.06, 0.2, 0.1, 0.16);
+    mesh('box', steel, R.head, 0, -0.12, -0.12, 0.17, 0.13, 0.18);
+    mesh('box', eye, R.head, 0, -0.1, -0.215, 0.11, 0.025, 0.02);
+    mesh('box', dark, R.chest, 0, 0.34, 0.02, 0.5, 0.06, 0.34, 0, 0, 0, true);
     mesh('box', dark, R.rEl, 0, -0.3, -0.03, 0.2, 0.3, 0.2, 0, 0, 0, true);
     return R;
   };
@@ -173,6 +236,7 @@ var SF = window.SF || (window.SF = {});
     mesh('box', grey, R.head, 0, 0.0, -0.175, 0.1, 0.04, 0.02, 0, 0, 0, true);
     mesh('cyl', grey, R.head, 0.08, -0.02, -0.15, 0.04, 0.03, 0.04, Math.PI / 2, 0, 0, true);
     mesh('cyl', grey, R.head, -0.08, -0.02, -0.15, 0.04, 0.03, 0.04, Math.PI / 2, 0, 0, true);
+    neck(R, black, 0.09);
     return R;
   };
   styles.rebel = function (pal, tint) {
@@ -190,6 +254,7 @@ var SF = window.SF || (window.SF = {});
     mesh('hemi', helm, R.head, 0, 0.12, 0.01, 0.26, 0.24, 0.27);
     mesh('box', helm, R.head, 0, 0.13, -0.12, 0.24, 0.02, 0.06, 0, 0, 0, true);
     mesh('box', M.mat(0x111111, 0.3, 0.5), R.head, 0, 0.17, -0.14, 0.17, 0.04, 0.02, 0, 0, 0, true);
+    neck(R, skin, 0.09);
     return R;
   };
   styles.ranger = function (pal, tint) {
@@ -205,6 +270,7 @@ var SF = window.SF || (window.SF = {});
     mesh('sph', white, R.head, 0, 0.1, 0, 0.28, 0.29, 0.29);
     mesh('box', visor, R.head, 0, 0.08, -0.13, 0.22, 0.09, 0.04);
     mesh('box', suit, R.head, 0, 0.22, -0.02, 0.05, 0.04, 0.26, 0, 0, 0, true);
+    neck(R, dark, 0.09);
     return R;
   };
   styles.remnant = function (pal, tint) {
@@ -221,6 +287,7 @@ var SF = window.SF || (window.SF = {});
     mesh('box', M.mat(0x050506, 0.2, 0.8), R.head, 0, 0.09, -0.15, 0.22, 0.07, 0.03);
     mesh('box', lens, R.head, 0.05, 0.09, -0.165, 0.04, 0.02, 0.01); mesh('box', lens, R.head, -0.05, 0.09, -0.165, 0.04, 0.02, 0.01);
     mesh('box', red, R.head, 0, 0.27, -0.05, 0.04, 0.03, 0.2, 0, 0, 0, true);
+    neck(R, under, 0.09);
     return R;
   };
   styles.raider = function (pal, tint) {
@@ -235,6 +302,7 @@ var SF = window.SF || (window.SF = {});
     mesh('cyl', lens, R.head, -0.055, 0.12, -0.12, 0.06, 0.04, 0.06, Math.PI / 2, 0, 0);
     mesh('cone', dark, R.head, 0.04, 0.0, -0.13, 0.025, 0.12, 0.025, -Math.PI / 2, 0, 0, true);
     mesh('cone', dark, R.head, -0.04, 0.0, -0.13, 0.025, 0.12, 0.025, -Math.PI / 2, 0, 0, true);
+    neck(R, wrap, 0.09);
     return R;
   };
   styles.wroshan = function (pal) {
@@ -245,8 +313,10 @@ var SF = window.SF || (window.SF = {});
     mesh('box', fur2, R.spine, 0, 0.06, 0, 0.4, 0.2, 0.26);
     mesh('box', fur, R.hips, 0, 0, 0, 0.42, 0.16, 0.26);
     mesh('box', belt, R.chest, 0, 0.12, 0, 0.5, 0.06, 0.3, 0, 0, 0.75, true);
-    mesh('sph', fur, R.head, 0, 0.12, 0, 0.27, 0.32, 0.3);
-    mesh('box', fur2, R.head, 0, 0.04, -0.12, 0.12, 0.12, 0.12);
+    neck(R, fur, 0.14);
+    mesh('sph', fur, R.head, 0, 0.1, 0, 0.27, 0.32, 0.3);
+    mesh('box', fur2, R.head, 0, 0.03, -0.13, 0.13, 0.11, 0.12);
+    mesh('sph', fur, R.head, 0.0, 0.2, 0.0, 0.29, 0.14, 0.28, 0, 0, 0, true);
     mesh('sph', eye, R.head, 0.06, 0.15, -0.13, 0.04, 0.03, 0.03); mesh('sph', eye, R.head, -0.06, 0.15, -0.13, 0.04, 0.03, 0.03);
     return R;
   };
@@ -278,16 +348,33 @@ var SF = window.SF || (window.SF = {});
   };
 
   // ------------------------------------------------------------------ legends
+  function neck(R, mat, r) { mesh('cyl', mat, R.neck, 0, 0.01, 0.0, r || 0.1, 0.13, r || 0.1); }
   function skinHead(R, b, scale) {
     var sc = scale || 1;
     var skin = M.mat(b.skin || 0xe0b48e, 0.75);
-    mesh('sph', skin, R.head, 0, 0.1 * sc, 0, 0.22 * sc, 0.27 * sc, 0.24 * sc);
-    mesh('box', M.mat(0x111111, 0.4), R.head, 0.045 * sc, 0.12 * sc, -0.11 * sc, 0.03 * sc, 0.015 * sc, 0.01, 0, 0, 0, true);
-    mesh('box', M.mat(0x111111, 0.4), R.head, -0.045 * sc, 0.12 * sc, -0.11 * sc, 0.03 * sc, 0.015 * sc, 0.01, 0, 0, 0, true);
-    if (b.hair && !b.bald && !b.hood) mesh('hemi', M.mat(b.hair, 0.9), R.head, 0, 0.13 * sc, 0.02 * sc, 0.24 * sc, 0.2 * sc, 0.26 * sc);
+    neck(R, skin, 0.095 * sc);
+    // skull, jaw and face features
+    mesh('sph', skin, R.head, 0, 0.1 * sc, 0.0, 0.21 * sc, 0.25 * sc, 0.23 * sc);
+    mesh('sph', skin, R.head, 0, 0.03 * sc, -0.03 * sc, 0.16 * sc, 0.14 * sc, 0.17 * sc);
+    var white = M.mat(0xf2efe8, 0.3), iris = M.mat(b.eyes || 0x3a2a1a, 0.2), brow = M.mat(b.hair || 0x3a2a1a, 0.9), lip = M.mat(new THREE.Color(b.skin || 0xe0b48e).multiplyScalar(0.72).getHex(), 0.6);
+    [-1, 1].forEach(function (sd) {
+      mesh('sph', white, R.head, sd * 0.042 * sc, 0.115 * sc, -0.098 * sc, 0.032 * sc, 0.022 * sc, 0.014, 0, 0, 0, true);
+      mesh('sph', iris, R.head, sd * 0.042 * sc, 0.115 * sc, -0.106 * sc, 0.016 * sc, 0.016 * sc, 0.006, 0, 0, 0, true);
+      mesh('box', brow, R.head, sd * 0.044 * sc, 0.145 * sc, -0.1 * sc, 0.045 * sc, 0.011 * sc, 0.012, 0, 0, -sd * 0.12, true);
+      mesh('sph', skin, R.head, sd * 0.108 * sc, 0.1 * sc, 0.0, 0.03 * sc, 0.055 * sc, 0.04 * sc, 0, 0, 0, true);
+    });
+    mesh('box', skin, R.head, 0, 0.085 * sc, -0.113 * sc, 0.028 * sc, 0.055 * sc, 0.03 * sc, -0.25, 0, 0, true);
+    mesh('box', lip, R.head, 0, 0.035 * sc, -0.105 * sc, 0.05 * sc, 0.012 * sc, 0.012, 0, 0, 0, true);
+    if (b.hair && !b.bald && !b.hood) { mesh('hemi', M.mat(b.hair, 0.95), R.head, 0, 0.13 * sc, 0.015 * sc, 0.235 * sc, 0.19 * sc, 0.255 * sc, -0.12, 0, 0); mesh('sph', M.mat(b.hair, 0.95), R.head, 0, 0.1 * sc, 0.05 * sc, 0.22 * sc, 0.2 * sc, 0.17 * sc); }
     if (b.hair && b.buns) { mesh('sph', M.mat(b.hair, 0.9), R.head, 0.14, 0.1, 0.02, 0.09, 0.12, 0.08); mesh('sph', M.mat(b.hair, 0.9), R.head, -0.14, 0.1, 0.02, 0.09, 0.12, 0.08); }
     if (b.beard) mesh('box', M.mat(b.hair || 0x7a5a3a, 0.95), R.head, 0, -0.02 * sc, -0.07 * sc, 0.17 * sc, 0.1 * sc, 0.1 * sc, 0, 0, 0, true);
-    if (b.hood) mesh('hemi', M.mat(b.robe, 0.95, 0, 'cloth2'), R.head, 0, 0.1, 0.04, 0.32, 0.36, 0.34, -0.15, 0, 0);
+    if (b.hood) {
+      // hood: wraps the back and top of the head, opening toward the face, with a draped collar
+      var hm = M.mat(b.robe, 0.95, 0, 'cloth2');
+      mesh('hemi', hm, R.head, 0, 0.11, 0.0, 0.33, 0.34, 0.36, Math.PI / 2 + 0.25, 0, 0);
+      mesh('hemi', hm, R.head, 0, 0.13, 0.0, 0.32, 0.22, 0.34);
+      mesh('cyl', hm, R.neck, 0, -0.02, 0.02, 0.34, 0.14, 0.3);
+    }
     if (b.horns) for (var i = 0; i < 7; i++) { var a = (i / 6 - 0.5) * 2.4; mesh('cone', M.mat(0xe8dcc0, 0.6), R.head, Math.sin(a) * 0.12, 0.27, Math.cos(a) * 0.05, 0.025, 0.08, 0.025); }
     if (b.horns) { mesh('box', M.mat(0x111111, 0.8), R.head, 0, 0.12, -0.115, 0.02, 0.2, 0.01, 0, 0, 0, true); mesh('box', M.mat(0x111111, 0.8), R.head, 0.07, 0.1, -0.11, 0.015, 0.16, 0.01, 0, 0, 0.3, true); mesh('box', M.mat(0x111111, 0.8), R.head, -0.07, 0.1, -0.11, 0.015, 0.16, 0.01, 0, 0, -0.3, true); }
     if (b.montral) {
@@ -399,10 +486,11 @@ var SF = window.SF || (window.SF = {});
     mesh('sph', org, R.chest, 0, 0.04, -0.04, 0.16, 0.16, 0.12, 0, 0, 0, true);
     mesh('cyl', metal, R.spine, 0, 0.06, 0, 0.08, 0.25, 0.08);
     mesh('box', bone, R.hips, 0, 0, 0, 0.3, 0.1, 0.18);
-    mesh('box', bone, R.head, 0, 0.12, -0.02, 0.18, 0.26, 0.24);
-    mesh('box', bone, R.head, 0, 0.1, -0.15, 0.16, 0.12, 0.06);
-    mesh('sph', eye, R.head, 0.05, 0.14, -0.15, 0.04, 0.025, 0.02); mesh('sph', eye, R.head, -0.05, 0.14, -0.15, 0.04, 0.025, 0.02);
-    cape(R, 0x3a3a3a, 1.2);
+    neck(R, metal, 0.06);
+    mesh('box', bone, R.head, 0, 0.06, -0.02, 0.18, 0.26, 0.24);
+    mesh('box', bone, R.head, 0, 0.04, -0.15, 0.16, 0.12, 0.06);
+    mesh('sph', eye, R.head, 0.05, 0.08, -0.15, 0.04, 0.025, 0.02); mesh('sph', eye, R.head, -0.05, 0.08, -0.15, 0.04, 0.025, 0.02);
+    cape(R, 0x3a3a3a, 1.2); R.cape.scale.x = 0.42;
     // second pair of arms (lower) used for quad blades
     R.lSh2 = grp(R.chest, -0.18 * 1.12, 0.12 * 1.12, 0.03); R.rSh2 = grp(R.chest, 0.18 * 1.12, 0.12 * 1.12, 0.03);
     R.lUA2 = grp(R.lSh2); R.rUA2 = grp(R.rSh2);
@@ -423,6 +511,7 @@ var SF = window.SF || (window.SF = {});
     mesh('box', trim, R.spine, 0, 0.06, 0, 0.32, 0.18, 0.2);
     mesh('box', M.mat(0x3a2e22, 0.7), R.hips, 0, 0.04, 0, 0.37, 0.07, 0.22);
     mesh('box', under, R.hips, 0, -0.02, 0, 0.34, 0.12, 0.2);
+    neck(R, under, 0.1);
     // T-visor helmet with flat brow and side antennae (distinct proportions from the classic design)
     mesh('cyl', armor, R.head, 0, 0.1, 0, 0.29, 0.3, 0.3);
     mesh('sph', armor, R.head, 0, 0.24, 0, 0.29, 0.14, 0.3);
@@ -448,6 +537,7 @@ var SF = window.SF || (window.SF = {});
     mesh('box', coat, R.chest, 0, 0.12, 0, 0.38, 0.32, 0.22);
     mesh('box', coat, R.spine, 0, 0.06, 0, 0.32, 0.18, 0.2);
     mesh('skirt', M.mat(b.coat, 0.9, 0, 'cloth2'), R.hips, 0, -0.32, 0.02, 0.62, 0.68, 0.5);
+    neck(R, skin, 0.09);
     mesh('sph', skin, R.head, 0, 0.08, 0, 0.21, 0.25, 0.23);
     mesh('sph', eye, R.head, 0.05, 0.11, -0.105, 0.04, 0.03, 0.02); mesh('sph', eye, R.head, -0.05, 0.11, -0.105, 0.04, 0.03, 0.02);
     mesh('cyl', hat, R.head, 0, 0.21, 0, 0.62, 0.02, 0.62);
@@ -467,6 +557,7 @@ var SF = window.SF || (window.SF = {});
     mesh('box', M.mat(0x2266ff, 0.3, 0, 'emis'), R.chest, -0.03, 0.11, -0.152, 0.02, 0.02, 0.01, 0, 0, 0, true);
     mesh('box', black, R.hips, 0, 0.04, 0, 0.4, 0.08, 0.24);
     mesh('skirt', M.mat(0x0a0a0a, 0.9, 0, 'cloth2'), R.hips, 0, -0.35, 0, 0.68, 0.7, 0.56);
+    neck(R, dull, 0.12);
     // helmet: flared, angular face mask (redesigned)
     mesh('sph', black, R.head, 0, 0.14, 0.02, 0.3, 0.3, 0.32);
     mesh('cyl', black, R.head, 0, 0.0, 0.04, 0.36, 0.16, 0.38);
@@ -500,8 +591,10 @@ var SF = window.SF || (window.SF = {});
     mesh('box', suit, R.chest, 0, 0.12, 0, 0.44, 0.34, 0.26);
     mesh('box', suit, R.spine, 0, 0.06, 0, 0.38, 0.18, 0.24);
     mesh('box', suit, R.hips, 0, 0, 0, 0.38, 0.14, 0.24);
-    mesh('sph', sk, R.head, 0, 0.1, -0.06, 0.24, 0.24, 0.36);
-    mesh('sph', eye, R.head, 0.08, 0.15, -0.14, 0.04, 0.03, 0.03); mesh('sph', eye, R.head, -0.08, 0.15, -0.14, 0.04, 0.03, 0.03);
+    neck(R, sk, 0.12);
+    mesh('sph', sk, R.head, 0, 0.06, -0.06, 0.24, 0.24, 0.36);
+    mesh('box', M.mat(0x2a2a1a, 0.6), R.head, 0, 0.0, -0.2, 0.1, 0.012, 0.08, 0, 0, 0, true);
+    mesh('sph', eye, R.head, 0.08, 0.11, -0.14, 0.04, 0.03, 0.03); mesh('sph', eye, R.head, -0.08, 0.11, -0.14, 0.04, 0.03, 0.03);
     return R;
   };
   legends.shadowunit = function () {
@@ -511,8 +604,10 @@ var SF = window.SF || (window.SF = {});
     mesh('box', black, R.chest, 0, 0.12, 0, 0.46, 0.36, 0.26);
     mesh('box', dark, R.spine, 0, 0.06, 0, 0.3, 0.2, 0.18);
     mesh('box', black, R.hips, 0, 0, 0, 0.36, 0.12, 0.22);
-    mesh('box', black, R.head, 0, 0.1, 0, 0.2, 0.26, 0.24);
-    mesh('box', eye, R.head, 0, 0.13, -0.125, 0.15, 0.025, 0.01);
+    neck(R, dark, 0.09);
+    mesh('box', black, R.head, 0, 0.06, 0, 0.2, 0.26, 0.24);
+    mesh('box', eye, R.head, 0, 0.09, -0.125, 0.15, 0.025, 0.01);
+    mesh('box', dark, R.head, 0, -0.02, -0.12, 0.1, 0.06, 0.02, 0, 0, 0, true);
     mesh('box', dark, R.chest, 0, 0.12, 0.17, 0.3, 0.3, 0.1);
     R.jetNozzles = [new THREE.Vector3(0.08, 0, 0.22), new THREE.Vector3(-0.08, 0, 0.22)];
     return R;
@@ -522,9 +617,13 @@ var SF = window.SF || (window.SF = {});
 
   // ------------------------------------------------------------------ weapons
   // Returns a group with barrel along -Z, grip at origin, and a muzzle marker.
-  M.weapon = function (w, accent) {
+  M.weapon = function (w, accent, mods) {
     var g = new THREE.Group();
-    var body = M.mat(0x23252a, 0.45, 0.6), dark = M.mat(0x111215, 0.5, 0.5), acc = M.mat(accent || 0x6a6e76, 0.5, 0.5);
+    mods = mods || w.mods || {};
+    var fin = SF.D.finishById && SF.D.finishById[mods.finish || 'std'];
+    var body = fin && fin.body != null ? M.mat(fin.body, fin.rough == null ? 0.45 : fin.rough, fin.metal == null ? 0.5 : fin.metal) : M.mat(0x23252a, 0.45, 0.6);
+    var dark = M.mat(0x111215, 0.5, 0.5);
+    var acc = fin && fin.acc != null ? M.mat(fin.acc, 0.4, 0.5, fin.emissiveAcc ? 'emis' : undefined) : M.mat(accent || 0x6a6e76, 0.5, 0.5);
     var k = w.kind, L = 0.5;
     if (k === 'pistol' || k === 'hpistol') {
       mesh('box', body, g, 0, 0.06, -0.08, 0.05, 0.08, k === 'hpistol' ? 0.28 : 0.22);
@@ -583,7 +682,36 @@ var SF = window.SF || (window.SF = {});
       if (k === 'rifle') mesh('box', body, g, 0, 0.03, 0.14, 0.05, 0.1, 0.16);
       L = len * 1.08;
     }
-    var muzzle = new THREE.Object3D(); muzzle.position.set(0, 0.06, -L); g.add(muzzle);
+    // per-model variation and attachments
+    var lk = w.look || {};
+    if (lk.shroud && (k === 'carbine' || k === 'rifle' || k === 'repeater')) mesh('box', acc, g, 0, 0.08, -L * 0.62, 0.075, 0.07, L * 0.32, 0, 0, 0, true);
+    if (lk.fins || mods.cooling === 'rapid' || mods.cooling === 'cryo') for (var fi = 0; fi < 4; fi++) mesh('box', mods.cooling === 'cryo' ? M.mat(0x8ad8ff, 0.3, 0.3) : dark, g, 0, 0.09, -L * 0.45 - fi * 0.05, 0.1, 0.012, 0.02, 0, 0, 0, true);
+    if (lk.mag === 1 && k !== 'pistol') mesh('box', dark, g, 0, -0.07, -0.18, 0.04, 0.12, 0.07, 0.25, 0, 0, true);
+    if (lk.mag === 2 && k !== 'pistol') mesh('cyl', acc, g, 0, -0.06, -0.2, 0.06, 0.1, 0.06, 0, 0, 0, true);
+    if (lk.stock === 1 && k !== 'pistol' && k !== 'hpistol') mesh('box', body, g, 0, 0.0, 0.2, 0.04, 0.1, 0.26, -0.1, 0, 0, true);
+    if (lk.stock === 2 && k !== 'pistol' && k !== 'hpistol') mesh('cyl', dark, g, 0, 0.02, 0.18, 0.02, 0.28, 0.02, Math.PI / 2, 0, 0, true);
+    if (lk.twin) mesh('cyl', dark, g, 0, 0.0, -L * 0.75, 0.025, L * 0.5, 0.025, Math.PI / 2, 0, 0, true);
+    var optic = mods.optic || (lk.scope && k !== 'sniper' && k !== 'pistol' ? 'x2' : 'none');
+    var lensMat = M.mat(0x3a8ad8, 0.05, 0.9);
+    if (optic === 'dot' || optic === 'holo') { mesh('box', dark, g, 0, 0.14, -0.12, 0.05, 0.05, 0.06); mesh('box', M.mat(optic === 'dot' ? 0xff3a2a : 0x3affd8, 0, 0, 'glow'), g, 0, 0.15, -0.15, 0.03, 0.03, 0.004); }
+    else if (optic === 'x2' || optic === 'x4' || optic === 'x8' || optic === 'thermal') {
+      var sl = optic === 'x8' ? 0.42 : optic === 'x4' ? 0.32 : 0.22;
+      mesh('cyl', optic === 'thermal' ? acc : dark, g, 0, 0.15, -0.12, 0.05, sl, 0.05, Math.PI / 2, 0, 0);
+      mesh('cyl', lensMat, g, 0, 0.15, -0.12 - sl / 2, 0.042, 0.01, 0.042, Math.PI / 2, 0, 0);
+      mesh('box', dark, g, 0, 0.11, -0.12, 0.02, 0.04, 0.03);
+    }
+    if (mods.barrel === 'long') { mesh('cyl', dark, g, 0, 0.06, -L - 0.12, 0.03, 0.24, 0.03, Math.PI / 2, 0, 0); L += 0.24; }
+    if (mods.barrel === 'heavy') mesh('cyl', body, g, 0, 0.06, -L * 0.8, 0.045, L * 0.4, 0.045, Math.PI / 2, 0, 0);
+    if (mods.barrel === 'brake') { mesh('box', dark, g, 0, 0.06, -L - 0.05, 0.06, 0.05, 0.1); L += 0.1; }
+    if (mods.barrel === 'supp') { mesh('cyl', dark, g, 0, 0.06, -L - 0.14, 0.045, 0.28, 0.045, Math.PI / 2, 0, 0); L += 0.28; }
+    if (mods.barrel === 'short') { L *= 0.9; }
+    if (mods.grip === 'vert') mesh('box', dark, g, 0, -0.06, -L * 0.5, 0.03, 0.1, 0.035);
+    if (mods.grip === 'angled') mesh('box', dark, g, 0, -0.05, -L * 0.5, 0.03, 0.08, 0.06, 0.6, 0, 0);
+    if (mods.grip === 'bipod') { mesh('cyl', dark, g, 0.03, -0.08, -L * 0.7, 0.012, 0.16, 0.012, 0.3, 0, 0.3); mesh('cyl', dark, g, -0.03, -0.08, -L * 0.7, 0.012, 0.16, 0.012, 0.3, 0, -0.3); }
+    if (mods.cell === 'over' || mods.cell === 'ion') mesh('cyl', M.mat(mods.cell === 'ion' ? 0x6ab0ff : 0xffaa3a, 0, 0, 'glow'), g, 0.04, 0.04, -0.06, 0.03, 0.08, 0.03, Math.PI / 2, 0, 0);
+    var sc = lk.len && k !== 'pistol' && k !== 'hpistol' ? lk.len : 1;
+    if (sc !== 1) { g.scale.z = sc; L *= sc; }
+    var muzzle = new THREE.Object3D(); muzzle.position.set(0, 0.06, -L / sc); g.add(muzzle);
     g.userData.muzzle = muzzle;
     return g;
   };
@@ -625,7 +753,7 @@ var SF = window.SF || (window.SF = {});
 
   // ------------------------------------------------------------------ public builders
   // Trooper for a faction + class. Returns rig with weapon attached.
-  M.trooper = function (factionId, classId, skin) {
+  M.trooper = function (factionId, classId, skin, look) {
     var F = SF.D.factions[factionId];
     var style = F.style;
     if (factionId === 'syndicate' && (classId === 'enforcer' || classId === 'heavy')) style = 'brute';
@@ -633,6 +761,7 @@ var SF = window.SF || (window.SF = {});
     var tint = skin && SF.D.skinById[skin] ? SF.D.skinById[skin].tint : null;
     var builder = styles[style] || styles.legion;
     var pal = style === 'wroshan' ? SF.D.factions.wroshan.pal : F.pal;
+    if (look && style !== 'wroshan') { pal = SF.Custom.lookPal(style, F, look); tint = null; }
     var R = builder(pal, tint);
     // class markings
     var markC = { assault: null, heavy: 0x8a2a2a, specialist: 0x3a6a3a, officer: 0xc8a032, engineer: 0xc86a1a, commando: 0x222222 }[classId];
@@ -640,6 +769,21 @@ var SF = window.SF || (window.SF = {});
       mesh('box', M.mat(markC, 0.6), R.lUA, 0, -0.1, 0, 0.125, 0.06, 0.125, 0, 0, 0, true);
       if (classId === 'officer') mesh('box', M.mat(markC, 0.4, 0.5), R.chest, 0.12, 0.22, -0.125, 0.06, 0.04, 0.02, 0, 0, 0, true);
       if (classId === 'heavy') mesh('box', M.mat(F.pal[0], 0.4), R.chest, 0, 0.32, 0, 0.5, 0.06, 0.28, 0, 0, 0, true);
+    }
+    // field gear: utility belt pouches, chest strap, thigh holster, helmet details
+    if (style === 'legion' || style === 'dominion' || style === 'remnant' || style === 'ranger' || style === 'rebel') {
+      var dk = M.mat(style === 'rebel' ? 0x4a3a28 : 0x1e2024, 0.85), pouch = M.mat(style === 'rebel' ? 0x6a5a3a : style === 'ranger' ? 0x4a523e : 0x2a2c30, 0.88);
+      for (var pi = 0; pi < 5; pi++) { var ang = -1.1 + pi * 0.55; mesh('box', pouch, R.hips, Math.sin(ang) * 0.19, 0.03, -Math.cos(ang) * 0.12 + 0.01, 0.07, 0.08, 0.05, 0, ang, 0, true); }
+      mesh('box', dk, R.chest, 0.02, 0.12, -0.0, 0.05, 0.36, 0.25, 0, 0, 0.55, true);
+      mesh('box', pouch, R.rThigh, 0.09, -0.13, 0, 0.05, 0.14, 0.1, 0, 0, 0, true);
+      mesh('box', dk, R.rThigh, 0.085, -0.13, 0, 0.055, 0.03, 0.16, 0, 0, 0, true);
+      if (style !== 'rebel') {
+        mesh('cyl', M.mat(F.pal[0], 0.4), R.head, 0.145, 0.06, 0.0, 0.09, 0.03, 0.09, 0, 0, Math.PI / 2, true);
+        mesh('cyl', M.mat(F.pal[0], 0.4), R.head, -0.145, 0.06, 0.0, 0.09, 0.03, 0.09, 0, 0, Math.PI / 2, true);
+      }
+      if (classId === 'specialist' || classId === 'officer') mesh('cyl', M.mat(0x1a1a1a, 0.5, 0.5), R.head, 0.15, 0.16, 0.02, 0.012, 0.22, 0.012, 0, 0, 0, true);
+      if (classId === 'specialist') mesh('box', M.mat(0x111111, 0.2, 0.7), R.head, 0.1, 0.12, -0.15, 0.05, 0.03, 0.05, 0, 0, 0, true);
+      if (classId === 'heavy') { mesh('box', M.mat(F.pal[0], 0.45), R.lUA, 0, 0.02, 0, 0.17, 0.12, 0.17, 0, 0, 0.2, true); mesh('box', M.mat(F.pal[0], 0.45), R.rUA, 0, 0.02, 0, 0.17, 0.12, 0.17, 0, 0, -0.2, true); }
     }
     if (classId === 'jet' || classId === 'aerial') {
       mesh('box', M.mat(0x555a62, 0.4, 0.6), R.chest, 0, 0.12, 0.2, 0.26, 0.3, 0.12);
@@ -651,6 +795,7 @@ var SF = window.SF || (window.SF = {});
       mesh('cyl', M.mat(0x8a2a10, 0.6), R.chest, 0.08, 0.12, 0.22, 0.1, 0.36, 0.1);
       mesh('cyl', M.mat(0x8a2a10, 0.6), R.chest, -0.08, 0.12, 0.22, 0.1, 0.36, 0.1);
     }
+    if (look && style !== 'wroshan' && style !== 'brute') SF.Custom.applyLook(R, look, style);
     R.style = style;
     return R;
   };
@@ -676,11 +821,11 @@ var SF = window.SF || (window.SF = {});
   };
 
   // Attach held items. For blasters: weapon in right hand. For blades: blade(s) per style.
-  M.arm = function (R, weaponSpec, accent) {
+  M.arm = function (R, weaponSpec, accent, mods) {
     R.held = []; R.bladeObjs = [];
     if (typeof weaponSpec === 'string') {
       var w = SF.D.weapons[weaponSpec];
-      var g = M.weapon(w, accent);
+      var g = M.weapon(w, accent, mods);
       g.rotation.x = -Math.PI / 2;
       g.position.set(0, -0.05, -0.02);
       R.rHand.add(g); R.held.push(g); R.gun = g;

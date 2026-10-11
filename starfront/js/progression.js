@@ -10,8 +10,8 @@ var SF = window.SF || (window.SF = {});
   function defaults() {
     return {
       credits: 5000, shards: 200, xp: 0, level: 1,
-      unlocked: { heroes: {}, weapons: {}, cards: { bodyArmor: 1, quickCool: 1 }, skins: {}, emotes: { wave: 1, salute: 1 } },
-      equipped: { classes: {}, heroes: {}, emotes: ['wave', 'salute', null, null], title: 'Recruit' },
+      unlocked: { heroes: {}, weapons: {}, cards: { bodyArmor: 1, quickCool: 1 }, skins: {}, emotes: { wave: 1, salute: 1 }, attach: {}, finish: {}, parts: {} },
+      equipped: { classes: {}, heroes: {}, emotes: ['wave', 'salute', null, null], title: 'Recruit', looks: {}, wmods: {} },
       titles: ['Recruit'],
       seasons: {}, activeSeason: 's1',
       stats: { matches: 0, wins: 0, kills: 0, deaths: 0, heroKills: 0, vehicleKills: 0, captures: 0, playtime: 0, bestStreak: 0, heroMatches: 0, spaceMatches: 0 },
@@ -54,6 +54,24 @@ var SF = window.SF || (window.SF = {});
   P.heroSkin = function (heroId) { var s = (P.p.equipped.heroes[heroId] || {}).skin || 'default'; return P.skinOwned('h:' + heroId + ':' + s) || s === 'default' ? s : 'default'; };
   P.setHeroSkin = function (heroId, s) { P.p.equipped.heroes[heroId] = { skin: s }; P.save(); };
 
+  // ------------------------------------------------------------------ appearance & armoury
+  P.attachOwned = function (slot, id) { var a = D().attachById[slot + ':' + id]; return !a || !a.price || !!P.p.unlocked.attach[slot + ':' + id]; };
+  P.finishOwned = function (id) { var f = D().finishById[id]; return !f || !f.price || !!P.p.unlocked.finish[id]; };
+  P.partOwned = function (cat, id) { var o = (D().lookOptions[cat] || []).filter(function (x) { return x[0] === id; })[0]; return !o || !o[2] || !!P.p.unlocked.parts[cat + ':' + id]; };
+  P.look = function (faction, classId) {
+    var L = Object.assign(SF.Custom.defaultLook(faction), P.p.equipped.looks[faction + ':' + classId] || P.p.equipped.looks[faction + ':*'] || {});
+    Object.keys(D().lookOptions).forEach(function (cat) { if (!P.partOwned(cat, L[cat])) L[cat] = D().lookOptions[cat][0][0]; });
+    return L;
+  };
+  P.setLook = function (faction, classId, L) { P.p.equipped.looks[faction + ':' + classId] = L; P.save(); };
+  P.wmods = function (wid) {
+    var m = Object.assign({ optic: 'none', barrel: 'std', grip: 'none', cooling: 'std', cell: 'std', finish: 'std' }, P.p.equipped.wmods[wid] || {});
+    ['optic', 'barrel', 'grip', 'cooling', 'cell'].forEach(function (sl) { if (!P.attachOwned(sl, m[sl])) m[sl] = D().attachments[sl][0].id; });
+    if (!P.finishOwned(m.finish)) m.finish = 'std';
+    return m;
+  };
+  P.setWmods = function (wid, m) { P.p.equipped.wmods[wid] = m; P.save(); };
+
   // ------------------------------------------------------------------ shop catalogue
   P.catalogue = function () {
     var items = [];
@@ -66,6 +84,10 @@ var SF = window.SF || (window.SF = {});
     D().heroes.forEach(function (h) {
       ['crimson', 'midnight', 'gold', 'veteran', 'shadow', 'chrome'].forEach(function (sid, i) { var s = D().skinById[sid]; items.push({ key: 'skin:h:' + h.id + ':' + sid, cat: 'Legend Looks', name: h.name + ' — ' + s.name, sub: 'Legend appearance', price: i < 3 ? 2500 + i * 500 : 400 + i * 100, cur: i < 3 ? 'credits' : 'shards', owned: P.skinOwned('h:' + h.id + ':' + sid) }); });
     });
+    Object.keys(D().attachments).forEach(function (sl) { D().attachments[sl].forEach(function (a) { if (a.price) items.push({ key: 'attach:' + sl + ':' + a.id, cat: 'Attachments', name: a.name, sub: sl + (a.desc ? ' · ' + a.desc : '') + ' · works on every blaster', price: a.price, cur: 'credits', owned: P.attachOwned(sl, a.id) }); }); });
+    D().finishes.forEach(function (f) { if (f.price) items.push({ key: 'finish:' + f.id, cat: 'Weapon Finishes', name: f.name, sub: 'Weapon paint finish', price: f.price, cur: f.price >= 2500 ? 'shards' : 'credits', owned: P.finishOwned(f.id) }); });
+    Object.keys(D().lookOptions).forEach(function (cat) { D().lookOptions[cat].forEach(function (o) { if (o[2]) items.push({ key: 'part:' + cat + ':' + o[0], cat: 'Armour Parts', name: o[1], sub: cat + ' · for all trooper factions', price: o[2], cur: 'credits', owned: P.partOwned(cat, o[0]) }); }); });
+    items.forEach(function (it) { if (it.cat === 'Weapon Finishes' && it.cur === 'shards') it.price = Math.round(it.price / 10); });
     D().emotes.forEach(function (e) { if (e.price) items.push({ key: 'emote:' + e.id, cat: 'Emotes', name: e.name, sub: 'Emote', price: e.price, cur: 'credits', owned: P.emoteOwned(e.id) }); });
     items.forEach(function (it) { if (it.priceC) { it.price = it.cur === 'shards' ? it.price : it.priceC; } });
     return items;
@@ -94,6 +116,9 @@ var SF = window.SF || (window.SF = {});
     else if (parts[0] === 'card') p.unlocked.cards[parts[1]] = 1;
     else if (parts[0] === 'skin') p.unlocked.skins[parts.slice(1).join(':')] = 1;
     else if (parts[0] === 'emote') p.unlocked.emotes[parts[1]] = 1;
+    else if (parts[0] === 'attach') p.unlocked.attach[parts[1] + ':' + parts[2]] = 1;
+    else if (parts[0] === 'finish') p.unlocked.finish[parts[1]] = 1;
+    else if (parts[0] === 'part') p.unlocked.parts[parts[1] + ':' + parts[2]] = 1;
     else if (parts[0] === 'title') { if (p.titles.indexOf(parts.slice(1).join(':')) < 0) p.titles.push(parts.slice(1).join(':')); }
     else if (parts[0] === 'credits') p.credits += +parts[1];
     else if (parts[0] === 'shards') p.shards += +parts[1];
@@ -122,6 +147,9 @@ var SF = window.SF || (window.SF = {});
       if (t % 10 === 0) free = { key: 'shards:100', label: '100 Lumen Shards' };
       else if (t % 5 === 0) free = { key: 'skin:f:' + facs[t % facs.length] + ':' + skins[(t + idx) % skins.length], label: D().skinById[skins[(t + idx) % skins.length]].name + ' (' + D().factions[facs[t % facs.length]].short + ')' };
       else if (r < 2) free = { key: 'card:' + cards[(t + idx) % cards.length].id, label: 'Star Card: ' + cards[(t + idx) % cards.length].name };
+      else if (r === 2) { var fz = D().finishes[1 + (t + idx * 3) % (D().finishes.length - 1)]; free = { key: 'finish:' + fz.id, label: 'Weapon finish: ' + fz.name }; }
+      else if (r === 3) { var cats = Object.keys(D().lookOptions), ct = cats[(t + idx) % cats.length], op = D().lookOptions[ct][1 + (t % (D().lookOptions[ct].length - 1))]; free = { key: 'part:' + ct + ':' + op[0], label: 'Armour: ' + op[1] }; }
+      else if (r === 4) { var sls = Object.keys(D().attachments), sl = sls[(t + idx) % sls.length], at = D().attachments[sl][1 + (t % (D().attachments[sl].length - 1))]; free = { key: 'attach:' + sl + ':' + at.id, label: 'Attachment: ' + at.name }; }
       else free = { key: 'credits:' + (250 + (t % 4) * 125), label: (250 + (t % 4) * 125) + ' Credits' };
       if (t === s.tiers) { var h = heroes[idx % heroes.length]; prem = { key: 'skin:h:' + h.id + ':gold', label: h.name + ' — Gilded (Tier 40)' }; }
       else if (t % 8 === 0) { var hh = heroes[(t + idx) % heroes.length]; prem = { key: 'skin:h:' + hh.id + ':' + ['crimson', 'midnight', 'shadow', 'chrome', 'veteran'][(t / 8) % 5], label: hh.name + ' look' }; }

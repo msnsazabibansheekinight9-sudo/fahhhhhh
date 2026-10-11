@@ -10,8 +10,8 @@ var SF = window.SF || (window.SF = {});
   // ------------------------------------------------------------------ renderer & scene
   Game.init = function (canvas) {
     var r = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, powerPreference: 'high-performance' });
-    r.outputEncoding = THREE.sRGBEncoding;
-    r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.05;
+    r.outputEncoding = THREE.LinearEncoding;
+    r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.25;
     r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
     G.renderer = r;
     G.camera = new THREE.PerspectiveCamera(75, 1, 0.1, 6000);
@@ -54,7 +54,7 @@ var SF = window.SF || (window.SF = {});
     G.state = 'menu';
     G.world = null;
     var s = G.scene;
-    s.fog = null;
+    s.fog = null; s.environment = null;
     s.background = new THREE.Color(0x02030a);
     var stars = new THREE.BufferGeometry(), p = [];
     for (var i = 0; i < 3000; i++) { var v = new V3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(2500); p.push(v.x, v.y, v.z); }
@@ -123,14 +123,28 @@ var SF = window.SF || (window.SF = {});
     var bio = G.world.bio;
     G.scene.background = null;
     if (map.space) G.scene.fog = new THREE.FogExp2(0x02030a, 0.00012);
-    else G.scene.fog = new THREE.FogExp2(bio.fog, bio.fd * (map.indoor ? 1.6 : 1));
-    var hemi = new THREE.HemisphereLight(bio.sky ? bio.sky[1] : 0xffffff, bio.g ? bio.g[1] : 0x444444, bio.amb || 0.5);
+    else G.scene.fog = new THREE.FogExp2(bio.fog, bio.fd * (map.indoor ? 1.6 : 0.65));
+    var hemi = new THREE.HemisphereLight(bio.sky ? bio.sky[0] : 0xffffff, bio.g ? bio.g[2] : 0x444444, (bio.amb || 0.5) * 0.55);
     G.scene.add(hemi);
-    var sun = new THREE.DirectionalLight(bio.sun || 0xffffff, bio.si || 1.4);
+    // image-based lighting from the biome sky so armour, metal and paint pick up real reflections
+    try {
+      var envScene = new THREE.Scene();
+      var eg = new THREE.SphereGeometry(100, 32, 16), ec = [], ep = eg.attributes.position;
+      var cTop = new THREE.Color(bio.sky ? bio.sky[0] : 0x222233), cHor = new THREE.Color(bio.sky ? bio.sky[1] : 0x444455), cGr = new THREE.Color(bio.g ? bio.g[1] : 0x333333), cc = new THREE.Color();
+      for (var ei = 0; ei < ep.count; ei++) { var yy = ep.getY(ei) / 100; if (yy >= 0) cc.copy(cHor).lerp(cTop, Math.pow(yy, 0.5)); else cc.copy(cHor).lerp(cGr, Math.min(1, -yy * 3)).multiplyScalar(0.6); ec.push(cc.r, cc.g, cc.b); }
+      eg.setAttribute('color', new THREE.Float32BufferAttribute(ec, 3));
+      envScene.add(new THREE.Mesh(eg, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
+      var sunBall = new THREE.Mesh(new THREE.SphereGeometry(8, 12, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(bio.sun || 0xffffff).multiplyScalar(6) }));
+      sunBall.position.set(-50, 70, -40); envScene.add(sunBall);
+      var pm = new THREE.PMREMGenerator(G.renderer);
+      G.scene.environment = pm.fromScene(envScene, 0.02).texture;
+      pm.dispose();
+    } catch (e) { G.scene.environment = null; }
+    var sun = new THREE.DirectionalLight(bio.sun || 0xffffff, (bio.si || 1.4) * 1.35);
     sun.position.set(-160, 260, -120);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
-    var sc = sun.shadow.camera; sc.left = -70; sc.right = 70; sc.top = 70; sc.bottom = -70; sc.near = 10; sc.far = 700;
+    sun.shadow.mapSize.set(2048, 2048); sun.shadow.radius = 2;
+    var sc = sun.shadow.camera; sc.left = -55; sc.right = 55; sc.top = 55; sc.bottom = -55; sc.near = 10; sc.far = 700;
     sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.04;
     G.scene.add(sun); G.scene.add(sun.target);
     G.sun = sun;
@@ -259,7 +273,12 @@ var SF = window.SF || (window.SF = {});
     var lo = D.loadouts[F.faction];
     var cid = cls[(Math.random() * cls.length) | 0];
     var list = lo[cid] || lo.assault;
-    return { classId: cid, weaponId: list[(Math.random() * list.length) | 0], allJet: def.allJet };
+    var wid = list[(Math.random() * list.length) | 0], mods = null;
+    if (Math.random() < 0.45) {
+      var A = D.attachments, pk = function (arr) { return arr[(Math.random() * arr.length) | 0].id; };
+      mods = { optic: pk(A.optic), barrel: pk(A.barrel), grip: pk(A.grip), cooling: pk(A.cooling), cell: pk(A.cell), finish: D.finishes[(Math.random() * D.finishes.length) | 0].id };
+    }
+    return { classId: cid, weaponId: wid, allJet: def.allJet, mods: mods };
   };
   Game.spawnUnit = function (u, kit, spId) {
     var sps = G.mode.spawnPoints(u.team);
@@ -287,8 +306,8 @@ var SF = window.SF || (window.SF = {});
       u.yaw = yaw;
       return;
     }
-    if (kit.heroId || kit.classId !== u.classId || u.isHero || kit.weaponId || kit.skin || kit.cards || !u.rig || kit.allJet) {
-      u.setKit({ heroId: kit.heroId, classId: kit.classId || 'assault', weaponId: kit.weaponId, team: u.team, allJet: kit.allJet });
+    if (kit.heroId || kit.classId !== u.classId || u.isHero || kit.weaponId || kit.skin || kit.cards || !u.rig || kit.allJet || kit.look) {
+      u.setKit({ heroId: kit.heroId, classId: kit.classId || 'assault', weaponId: kit.weaponId, team: u.team, allJet: kit.allJet, look: kit.look, mods: kit.mods !== undefined ? kit.mods : (u.isPlayer ? undefined : null) });
       if (kit.cards) { u.cards = kit.cards; u.maxHp = u.spec.hp * (u.has('bodyArmor') ? 1.15 : 1); u.speedK = (u.spec.speed || 1) * (u.has('sprinter') ? 1.1 : 1); }
       if (kit.skin && kit.skin !== 'default') { u.skin = kit.skin; u.buildModel(); }
     }
@@ -334,6 +353,8 @@ var SF = window.SF || (window.SF = {});
       var r = D.reinfById[choice.classId]; if (r) cost = r.cost;
       var lo = SF.Prog.classLoadout(G.teams[u.team].faction, D.reinfById[choice.classId] ? 'commando' : choice.classId);
       kit.weaponId = choice.weaponId || lo.weapon; kit.cards = lo.cards; kit.skin = lo.skin;
+      var lclass = D.reinfById[choice.classId] ? 'commando' : choice.classId;
+      kit.look = SF.Prog.look(G.teams[u.team].faction, lclass); kit.mods = SF.Prog.wmods(kit.weaponId);
       kit.allJet = G.mode.def.allJet;
     }
     cost *= G.bpK;
@@ -599,6 +620,7 @@ var SF = window.SF || (window.SF = {});
     }
     SF.Combat.update(dt);
     SF.Combat.updateDeploy(dt);
+    if (G.world.anim) for (i = 0; i < G.world.anim.length; i++) G.world.anim[i](dt, G.time);
     if (G.mode && !G.mode.result) { G.playerInZone = null; G.mode.update(dt); }
     // respawns
     for (i = 0; i < G.units.length; i++) {

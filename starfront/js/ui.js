@@ -190,7 +190,7 @@ var SF = window.SF || (window.SF = {});
     if (UI.depSel && UI.depSel.classId && D.classById[UI.depSel.classId]) {
       var lo = P.classLoadout(F.faction, UI.depSel.classId);
       var list = (D.loadouts[F.faction] || {})[UI.depSel.classId] || [];
-      wp.innerHTML = '<div class="sect">Primary weapon</div><div class="opt">' + list.map(function (wid) { var w = D.weapons[wid], own = P.weaponOwned(wid); return '<button class="btn small' + (lo.weapon === wid ? ' on' : '') + '" data-w="' + wid + '"' + (own ? '' : ' disabled title="Buy in the shop"') + '>' + esc(w.name) + (own ? '' : ' 🔒') + '</button>'; }).join('') + '</div><div class="dim" style="font-size:12px;margin-top:6px">Star cards: ' + (lo.cards.length ? lo.cards.map(function (c) { return D.cardById[c].name; }).join(', ') : 'none — equip in Collection') + '</div>';
+      wp.innerHTML = '<div class="sect">Primary weapon <span class="dim">(unlock more in Collection)</span></div><div class="opt">' + list.filter(function (x) { return P.weaponOwned(x); }).map(function (wid) { var w = D.weapons[wid], own = P.weaponOwned(wid); return '<button class="btn small' + (lo.weapon === wid ? ' on' : '') + '" data-w="' + wid + '"' + (own ? '' : ' disabled title="Buy in the shop"') + '>' + esc(w.name) + (own ? '' : ' 🔒') + '</button>'; }).join('') + '</div><div class="dim" style="font-size:12px;margin-top:6px">Star cards: ' + (lo.cards.length ? lo.cards.map(function (c) { return D.cardById[c].name; }).join(', ') : 'none — equip in Collection') + '</div>';
       wp.querySelectorAll('[data-w]').forEach(function (b) { b.onclick = function () { lo.weapon = b.getAttribute('data-w'); P.setClassLoadout(F.faction, UI.depSel.classId, lo); UI.renderDeploy(); }; });
     } else wp.innerHTML = '';
     // spawn points
@@ -342,7 +342,7 @@ var SF = window.SF || (window.SF = {});
     G.units.forEach(function (u) {
       if (!u.alive || u === p) return;
       var ally = u.team === p.team;
-      var seen = ally || u.buffs.revealed > 0 || (u.fireT > -1 && !u.cloaked() && u.pos.distanceTo(center) < 60) || (scout && u.pos.distanceTo(center) < 30);
+      var seen = ally || u.buffs.revealed > 0 || (u.fireT > -1 && !(u.weapon && u.weapon.silent) && !u.cloaked() && u.pos.distanceTo(center) < 60) || (scout && u.pos.distanceTo(center) < 30);
       if (!seen) return;
       var q = tr(u.pos.x, u.pos.z);
       x.fillStyle = ally ? G.teams[p.team].css : '#ff4a3a';
@@ -449,7 +449,7 @@ var SF = window.SF || (window.SF = {});
   UI.renderShop = function () {
     document.querySelectorAll('.shardVal').forEach(function (e) { e.textContent = fmt(P.p.shards); });
     document.querySelectorAll('.credVal').forEach(function (e) { e.textContent = fmt(P.p.credits); });
-    var tabs = ['Featured', 'Legends', 'Weapons', 'Star Cards', 'Trooper Looks', 'Legend Looks', 'Emotes'];
+    var tabs = ['Featured', 'Legends', 'Weapons', 'Attachments', 'Weapon Finishes', 'Armour Parts', 'Star Cards', 'Trooper Looks', 'Legend Looks', 'Emotes'];
     $('shopTabs').innerHTML = tabs.map(function (t) { return '<button class="btn small' + (t === UI.shopTab ? ' on' : '') + '" data-st="' + t + '">' + t + '</button>'; }).join('');
     document.querySelectorAll('[data-st]').forEach(function (b) { b.onclick = function () { UI.shopTab = b.getAttribute('data-st'); UI.renderShop(); }; });
     var items = UI.shopTab === 'Featured' ? P.featured() : P.catalogue().filter(function (i) { return i.cat === UI.shopTab; });
@@ -461,41 +461,144 @@ var SF = window.SF || (window.SF = {});
   };
 
   // ------------------------------------------------------------------ collection
-  UI.colTab = 'Troopers'; UI.colFaction = 'concord'; UI.colClass = 'assault';
+  UI.colTab = 'Troopers'; UI.colFaction = 'concord'; UI.colClass = 'assault'; UI.colSub = 'Loadout'; UI.colWeapon = null;
+  // ---- live 3D preview of the selected trooper or legend
+  UI.preview = function () {
+    var c = $('prevCanvas'); if (!c) return null;
+    var P3 = UI.prev;
+    if (!P3 || P3.canvas !== c) {
+      var r = new THREE.WebGLRenderer({ canvas: c, antialias: true, alpha: true });
+      r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.2; r.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+      var sc = new THREE.Scene();
+      sc.add(new THREE.HemisphereLight(0xcfe0ff, 0x2a2420, 0.7));
+      var key = new THREE.DirectionalLight(0xfff0dc, 2.4); key.position.set(-2, 4, -3); sc.add(key);
+      var rim = new THREE.DirectionalLight(0x6aa8ff, 1.4); rim.position.set(3, 2, 3); sc.add(rim);
+      var pad = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.0, 0.08, 40), new THREE.MeshStandardMaterial({ color: 0x1a1f2a, roughness: 0.4, metalness: 0.6 })); pad.position.y = -0.04; sc.add(pad);
+      var ring = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.012, 6, 60), new THREE.MeshBasicMaterial({ color: 0xffc94a })); ring.rotation.x = Math.PI / 2; ring.position.y = 0.01; sc.add(ring);
+      var cam = new THREE.PerspectiveCamera(32, 1, 0.1, 50); cam.position.set(0, 1.25, -4.2); cam.lookAt(0, 0.95, 0);
+      P3 = UI.prev = { canvas: c, r: r, sc: sc, cam: cam, yaw: 0.35, drag: null };
+      c.onpointerdown = function (e) { P3.drag = e.clientX; c.setPointerCapture && c.setPointerCapture(e.pointerId); };
+      c.onpointermove = function (e) { if (P3.drag != null) { P3.yaw += (e.clientX - P3.drag) * 0.012; P3.drag = e.clientX; } };
+      c.onpointerup = function () { P3.drag = null; };
+      var loop = function () {
+        if (UI.cur !== 'collection' || !document.body.contains(c)) { P3.running = false; return; }
+        requestAnimationFrame(loop);
+        var w = c.clientWidth, h = c.clientHeight;
+        if (c.width !== w * r.getPixelRatio() || c.height !== h * r.getPixelRatio()) { r.setSize(w, h, false); cam.aspect = w / Math.max(1, h); cam.updateProjectionMatrix(); }
+        if (P3.R) {
+          var t = performance.now() / 1000;
+          if (P3.drag == null) P3.yaw += 0.004;
+          P3.R.root.rotation.y = P3.yaw;
+          P3.R.chest.rotation.x = Math.sin(t * 1.7) * 0.02;
+          P3.R.head.rotation.y = Math.sin(t * 0.5) * 0.15;
+          if (P3.R.cape) P3.R.cape.rotation.x = 0.1 + Math.sin(t * 2) * 0.05;
+        }
+        r.render(sc, cam);
+      };
+      P3.running = true; requestAnimationFrame(loop);
+    }
+    if (!P3.running) { P3.running = true; var l2 = function () { if (UI.cur !== 'collection' || !document.body.contains(P3.canvas)) { P3.running = false; return; } requestAnimationFrame(l2); if (P3.R) { if (P3.drag == null) P3.yaw += 0.004; P3.R.root.rotation.y = P3.yaw; } P3.r.render(P3.sc, P3.cam); }; requestAnimationFrame(l2); }
+    return P3;
+  };
+  UI.previewSet = function (R) {
+    var P3 = UI.preview(); if (!P3) return;
+    if (P3.R) P3.sc.remove(P3.R.root);
+    P3.R = R; if (!R) return;
+    // ready stance
+    R.rUA.rotation.set(1.0, 0, -0.2); R.rEl.rotation.x = 0.55; R.lUA.rotation.set(1.15, 0, 0.6); R.lEl.rotation.x = 0.6;
+    R.lThigh.rotation.z = 0.06; R.rThigh.rotation.z = -0.06;
+    if (R.bladeObjs && R.bladeObjs.length) { R.rUA.rotation.set(0.8, 0, -0.25); R.rEl.rotation.x = 1.0; R.lUA.rotation.set(0.6, 0, 0.45); R.lEl.rotation.x = 0.9; }
+    var s = 1.8 / Math.max(1.2, R.height);
+    R.root.scale.setScalar(s);
+    P3.sc.add(R.root);
+  };
+  function swatches(key, list, cur, attr) {
+    return '<div class="opt">' + list.map(function (c) { return '<button class="btn small sw' + (c[1] === cur ? ' on' : '') + '" data-' + attr + '="' + key + ':' + c[1] + '" title="' + c[0] + '" style="width:30px;height:30px;padding:0;background:' + hex(c[1]) + ';border-width:' + (c[1] === cur ? 3 : 1) + 'px"></button>'; }).join('') + '</div>';
+  }
+  function tryBuy(key, price, cb) {
+    if (P.p.credits < price) { UI.flash('Need ◈ ' + fmt(price) + ' — you have ◈ ' + fmt(P.p.credits)); return; }
+    P.p.credits -= price; P.grant(key); P.save(); UI.flash('Unlocked!'); SF.Audio.ui(); if (cb) cb();
+  }
   UI.renderCollection = function () {
     var tabs = ['Troopers', 'Legends', 'Emotes & Title'];
-    $('colTabs').innerHTML = tabs.map(function (t) { return '<button class="btn small' + (t === UI.colTab ? ' on' : '') + '" data-ct="' + t + '">' + t + '</button>'; }).join('');
+    $('colTabs').innerHTML = tabs.map(function (t) { return '<button class="btn small' + (t === UI.colTab ? ' on' : '') + '" data-ct="' + t + '">' + t + '</button>'; }).join('') + '<span style="flex:1"></span><span class="coin" style="align-self:center">◈ ' + fmt(P.p.credits) + '</span>';
     document.querySelectorAll('[data-ct]').forEach(function (b) { b.onclick = function () { UI.colTab = b.getAttribute('data-ct'); UI.renderCollection(); }; });
     var body = $('colBody'), html = '';
     if (UI.colTab === 'Troopers') {
+      var F = UI.colFaction, C = UI.colClass;
       var facs = ['concord', 'syndicate', 'alliance', 'dominion', 'rangers', 'remnant'];
-      html += '<div class="opt">' + facs.map(function (f) { return '<button class="btn small' + (f === UI.colFaction ? ' on' : '') + '" data-cf="' + f + '">' + D.factions[f].name + '</button>'; }).join('') + '</div>';
-      html += '<div class="opt" style="margin-top:8px">' + D.classes.map(function (c) { return '<button class="btn small' + (c.id === UI.colClass ? ' on' : '') + '" data-cc="' + c.id + '">' + ((D.factionClassNames[UI.colFaction] || {})[c.id] || c.name) + '</button>'; }).join('') + '</div>';
-      var lo = P.classLoadout(UI.colFaction, UI.colClass);
-      var list = D.loadouts[UI.colFaction][UI.colClass];
-      html += '<div class="sect">Primary weapon</div><div class="grid">' + list.map(function (wid) { var w = D.weapons[wid], own = P.weaponOwned(wid); return '<button class="card' + (lo.weapon === wid ? ' sel' : '') + '" data-cw="' + wid + '"' + (own ? '' : ' disabled') + '><div class="t">' + esc(w.name) + (own ? '' : ' 🔒') + '</div><div class="s">' + w.kind + ' · ' + w.dmg + (w.pellets > 1 ? '×' + w.pellets : '') + ' dmg · ' + w.rpm + ' rpm · heat ' + w.heat + '/shot · range ' + w.range + ' m</div></button>'; }).join('') + '</div>';
-      html += '<div class="sect">Star cards (pick up to 3)</div><div class="grid">' + D.starCards.map(function (c) { var own = P.cardOwned(c.id), on = lo.cards.indexOf(c.id) >= 0; return '<button class="card' + (on ? ' sel' : '') + '" data-cd="' + c.id + '"' + (own ? '' : ' disabled') + '><div class="t">' + esc(c.name) + (own ? '' : ' 🔒') + '</div><div class="s">' + esc(c.desc) + '</div></button>'; }).join('') + '</div>';
-      html += '<div class="sect">Appearance (all ' + D.factions[UI.colFaction].short + ' troopers)</div><div class="opt">' + D.skinVariants.map(function (s) { var own = P.skinOwned('f:' + UI.colFaction + ':' + s.id); return '<button class="btn small' + (lo.skin === s.id ? ' on' : '') + '" data-sk="' + s.id + '"' + (own ? '' : ' disabled') + '>' + s.name + (own ? '' : ' 🔒') + '</button>'; }).join('') + '</div>';
+      html += '<div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start"><div style="flex:1;min-width:300px">';
+      html += '<div class="opt">' + facs.map(function (f) { return '<button class="btn small' + (f === F ? ' on' : '') + '" data-cf="' + f + '" style="border-left:3px solid ' + D.factions[f].ui + '">' + D.factions[f].name + '</button>'; }).join('') + '</div>';
+      html += '<div class="opt" style="margin-top:6px">' + D.classes.map(function (c) { return '<button class="btn small' + (c.id === C ? ' on' : '') + '" data-cc="' + c.id + '">' + ((D.factionClassNames[F] || {})[c.id] || c.name) + '</button>'; }).join('') + '</div>';
+      html += '<div class="tabs" style="margin-top:10px">' + ['Loadout', 'Armory', 'Appearance'].map(function (t) { return '<button class="btn small' + (UI.colSub === t ? ' on' : '') + '" data-cs="' + t + '">' + t + '</button>'; }).join('') + '</div>';
+      var lo = P.classLoadout(F, C);
+      var list = D.loadouts[F][C];
+      if (!UI.colWeapon || list.indexOf(UI.colWeapon) < 0) UI.colWeapon = lo.weapon;
+      if (UI.colSub === 'Loadout') {
+        html += '<div class="sect">Primary weapon — ' + list.length + ' available</div><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">' + list.map(function (wid) {
+          var w = D.weapons[wid], own = P.weaponOwned(wid);
+          return '<button class="card' + (lo.weapon === wid ? ' sel' : '') + '" data-cw="' + wid + '"><div class="t" style="font-size:13px">' + esc(w.name) + '</div><div class="s">' + w.kind + (w.maker ? ' · ' + esc(w.maker) : '') + '</div><div class="s">' + Math.round(w.dmg) + (w.pellets > 1 ? '×' + w.pellets : '') + ' dmg · ' + Math.round(w.rpm) + ' rpm · ' + w.range + ' m</div><div class="p">' + (own ? (lo.weapon === wid ? '<span class="acc">Equipped</span>' : '<span class="good">Owned</span>') : '<span class="coin">◈ ' + fmt(w.price) + '</span>') + '</div></button>';
+        }).join('') + '</div>';
+        html += '<div class="sect">Star cards (pick up to 3)</div><div class="grid">' + D.starCards.map(function (c) { var own = P.cardOwned(c.id), on = lo.cards.indexOf(c.id) >= 0; return '<button class="card' + (on ? ' sel' : '') + '" data-cd="' + c.id + '"><div class="t">' + esc(c.name) + '</div><div class="s">' + esc(c.desc) + '</div><div class="p">' + (own ? (on ? '<span class="acc">Equipped</span>' : '') : '<span class="coin">◈ ' + fmt(c.price) + '</span>') + '</div></button>'; }).join('') + '</div>';
+      } else if (UI.colSub === 'Armory') {
+        var wid = UI.colWeapon, w0 = D.weapons[wid], m = P.wmods(wid), wm = SF.Custom.applyMods(w0, m);
+        html += '<div class="sect">Weapon</div><select id="armW">' + list.map(function (x) { return '<option value="' + x + '"' + (x === wid ? ' selected' : '') + '>' + esc(D.weapons[x].name) + (P.weaponOwned(x) ? '' : ' 🔒') + '</option>'; }).join('') + '</select>';
+        html += '<div class="panel" style="padding:10px;margin-top:8px;font-size:13px"><b>' + esc(w0.name) + '</b><div class="dim">Base: ' + SF.Custom.statLine(w0) + '</div><div class="acc">Modded: ' + SF.Custom.statLine(wm) + '</div></div>';
+        Object.keys(D.attachments).forEach(function (slot) {
+          html += '<div class="sect">' + slot + '</div><div class="opt">' + D.attachments[slot].map(function (a) { var own = P.attachOwned(slot, a.id); return '<button class="btn small' + (m[slot] === a.id ? ' on' : '') + '" data-at="' + slot + ':' + a.id + '" title="' + esc(a.desc || '') + '">' + esc(a.name) + (own ? '' : ' · ◈' + fmt(a.price)) + '</button>'; }).join('') + '</div>';
+        });
+        html += '<div class="sect">Finish</div><div class="opt">' + D.finishes.map(function (f) { var own = P.finishOwned(f.id); var shard = f.price >= 2500; return '<button class="btn small' + (m.finish === f.id ? ' on' : '') + '" data-fi="' + f.id + '" style="border-left:12px solid ' + (f.body != null ? hex(f.body) : '#23252a') + '">' + esc(f.name) + (own ? '' : shard ? ' · ◆' + Math.round(f.price / 10) : ' · ◈' + fmt(f.price)) + '</button>'; }).join('') + '</div>';
+      } else {
+        var L = P.look(F, C);
+        html += '<div class="sect">Primary armour</div>' + swatches('primary', D.colors, L.primary, 'lk');
+        html += '<div class="sect">Secondary / markings</div>' + swatches('secondary', D.colors, L.secondary, 'lk');
+        html += '<div class="sect">Undersuit / accent</div>' + swatches('accent', D.colors, L.accent, 'lk');
+        html += '<div class="sect">Visor</div>' + swatches('visor', D.visorColors, L.visor, 'lk');
+        Object.keys(D.lookOptions).forEach(function (cat) {
+          html += '<div class="sect">' + cat + '</div><div class="opt">' + D.lookOptions[cat].map(function (o) { var own = P.partOwned(cat, o[0]); return '<button class="btn small' + (L[cat] === o[0] ? ' on' : '') + '" data-lp="' + cat + ':' + o[0] + '">' + esc(o[1]) + (own ? '' : ' · ◈' + fmt(o[2])) + '</button>'; }).join('') + '</div>';
+        });
+        html += '<div class="opt" style="margin-top:14px"><button class="btn" id="lkAll">Apply to every class</button><button class="btn" id="lkRand">Randomise</button><button class="btn" id="lkReset">Reset to faction colours</button></div>';
+        html += '<div class="dim" style="font-size:12px;margin-top:6px">Some parts only show on armoured troopers. Synths and natives keep their own frames.</div>';
+      }
+      html += '</div><div style="flex:0 0 min(380px,100%);position:sticky;top:0"><canvas id="prevCanvas" style="width:100%;height:min(62vh,520px);display:block;border-radius:8px;background:radial-gradient(circle at 50% 40%,#2a3448,#0a0e16 75%);border:1px solid var(--line);cursor:grab"></canvas><div class="dim" style="font-size:12px;text-align:center;margin-top:4px">Drag to rotate</div></div></div>';
       body.innerHTML = html;
-      body.querySelectorAll('[data-cf]').forEach(function (b) { b.onclick = function () { UI.colFaction = b.getAttribute('data-cf'); UI.renderCollection(); }; });
-      body.querySelectorAll('[data-cc]').forEach(function (b) { b.onclick = function () { UI.colClass = b.getAttribute('data-cc'); UI.renderCollection(); }; });
-      body.querySelectorAll('[data-cw]').forEach(function (b) { b.onclick = function () { lo.weapon = b.getAttribute('data-cw'); P.setClassLoadout(UI.colFaction, UI.colClass, lo); UI.renderCollection(); }; });
-      body.querySelectorAll('[data-cd]').forEach(function (b) { b.onclick = function () { var id = b.getAttribute('data-cd'), i = lo.cards.indexOf(id); if (i >= 0) lo.cards.splice(i, 1); else if (lo.cards.length < 3) lo.cards.push(id); else UI.flash('Three cards maximum'); P.setClassLoadout(UI.colFaction, UI.colClass, lo); UI.renderCollection(); }; });
-      body.querySelectorAll('[data-sk]').forEach(function (b) { b.onclick = function () { var sk = b.getAttribute('data-sk'); D.classes.forEach(function (c) { var l = P.classLoadout(UI.colFaction, c.id); l.skin = sk; P.setClassLoadout(UI.colFaction, c.id, l); }); UI.renderCollection(); }; });
+      var cls = C;
+      var R = SF.Models.trooper(F, cls, 'default', P.look(F, C));
+      SF.Models.arm(R, UI.colSub === 'Armory' ? UI.colWeapon : lo.weapon, D.factions[F].pal[1], P.wmods(UI.colSub === 'Armory' ? UI.colWeapon : lo.weapon));
+      UI.previewSet(R);
+      body.querySelectorAll('[data-cf]').forEach(function (b) { b.onclick = function () { UI.colFaction = b.getAttribute('data-cf'); UI.colWeapon = null; UI.renderCollection(); }; });
+      body.querySelectorAll('[data-cc]').forEach(function (b) { b.onclick = function () { UI.colClass = b.getAttribute('data-cc'); UI.colWeapon = null; UI.renderCollection(); }; });
+      body.querySelectorAll('[data-cs]').forEach(function (b) { b.onclick = function () { UI.colSub = b.getAttribute('data-cs'); UI.renderCollection(); }; });
+      body.querySelectorAll('[data-cw]').forEach(function (b) { b.onclick = function () { var id = b.getAttribute('data-cw'); UI.colWeapon = id; if (!P.weaponOwned(id)) { tryBuy('weapon:' + id, D.weapons[id].price, function () { lo.weapon = id; P.setClassLoadout(F, C, lo); UI.renderCollection(); }); return; } lo.weapon = id; P.setClassLoadout(F, C, lo); UI.renderCollection(); }; });
+      body.querySelectorAll('[data-cd]').forEach(function (b) { b.onclick = function () { var id = b.getAttribute('data-cd'); if (!P.cardOwned(id)) { tryBuy('card:' + id, D.cardById[id].price, UI.renderCollection); return; } var i = lo.cards.indexOf(id); if (i >= 0) lo.cards.splice(i, 1); else if (lo.cards.length < 3) lo.cards.push(id); else UI.flash('Three cards maximum'); P.setClassLoadout(F, C, lo); UI.renderCollection(); }; });
+      var armW = $('armW'); if (armW) armW.onchange = function () { UI.colWeapon = this.value; UI.renderCollection(); };
+      body.querySelectorAll('[data-at]').forEach(function (b) { b.onclick = function () { var x = b.getAttribute('data-at').split(':'), wid2 = UI.colWeapon; var apply = function () { var mm = P.wmods(wid2); mm[x[0]] = x[1]; P.setWmods(wid2, mm); UI.renderCollection(); }; if (!P.attachOwned(x[0], x[1])) tryBuy('attach:' + x[0] + ':' + x[1], D.attachById[x[0] + ':' + x[1]].price, apply); else apply(); }; });
+      body.querySelectorAll('[data-fi]').forEach(function (b) { b.onclick = function () { var id = b.getAttribute('data-fi'), wid2 = UI.colWeapon, f = D.finishById[id]; var apply = function () { var mm = P.wmods(wid2); mm.finish = id; P.setWmods(wid2, mm); UI.renderCollection(); }; if (P.finishOwned(id)) return apply(); if (f.price >= 2500) { var cost = Math.round(f.price / 10); if (P.p.shards < cost) return UI.flash('Need ◆ ' + cost); P.p.shards -= cost; P.grant('finish:' + id); P.save(); apply(); } else tryBuy('finish:' + id, f.price, apply); }; });
+      body.querySelectorAll('[data-lk]').forEach(function (b) { b.onclick = function () { var x = b.getAttribute('data-lk').split(':'); var L2 = P.look(F, C); L2[x[0]] = +x[1]; P.setLook(F, C, L2); UI.renderCollection(); }; });
+      body.querySelectorAll('[data-lp]').forEach(function (b) { b.onclick = function () { var x = b.getAttribute('data-lp').split(':'); var apply = function () { var L2 = P.look(F, C); L2[x[0]] = x[1]; P.setLook(F, C, L2); UI.renderCollection(); }; var opt = D.lookOptions[x[0]].filter(function (o) { return o[0] === x[1]; })[0]; if (!P.partOwned(x[0], x[1])) tryBuy('part:' + x[0] + ':' + x[1], opt[2], apply); else apply(); }; });
+      if ($('lkAll')) $('lkAll').onclick = function () { var L2 = P.look(F, C); D.classes.forEach(function (c) { P.setLook(F, c.id, Object.assign({}, L2)); }); P.p.equipped.looks[F + ':commando'] = Object.assign({}, L2); P.save(); UI.flash('Applied to all ' + D.factions[F].short + ' classes'); };
+      if ($('lkRand')) $('lkRand').onclick = function () { var L2 = SF.Custom.randomLook(F, C); L2.primary = D.colors[(Math.random() * D.colors.length) | 0][1]; L2.secondary = D.colors[(Math.random() * D.colors.length) | 0][1]; Object.keys(D.lookOptions).forEach(function (cat) { if (!P.partOwned(cat, L2[cat])) L2[cat] = D.lookOptions[cat][0][0]; }); P.setLook(F, C, L2); UI.renderCollection(); };
+      if ($('lkReset')) $('lkReset').onclick = function () { P.setLook(F, C, SF.Custom.defaultLook(F)); UI.renderCollection(); };
     } else if (UI.colTab === 'Legends') {
-      html = '<div class="grid">' + D.heroes.map(function (h) {
-        var own = P.heroOwned(h.id), sk = P.heroSkin(h.id);
-        var skins = ['default', 'crimson', 'midnight', 'gold', 'veteran', 'shadow', 'chrome'].filter(function (s) { return P.skinOwned('h:' + h.id + ':' + s); });
-        return '<div class="card' + (own ? '' : ' owned') + '"><div class="t">' + esc(h.name) + '</div><div class="s">' + esc(h.title) + ' · ' + D.eraById[h.era].name + ' · ' + (h.side ? 'Tyrant' : 'Champion') + '</div><div class="s">' + h.abilities.map(function (a) { return D.abilities[a].name; }).join(' · ') + '</div><div class="p">' + (own ? '<select data-hs="' + h.id + '">' + skins.map(function (s) { return '<option value="' + s + '"' + (s === sk ? ' selected' : '') + '>' + D.skinById[s].name + '</option>'; }).join('') + '</select>' : '<span class="dim">🔒 ◈ ' + fmt(h.price) + ' in the Shop</span>') + '</div></div>';
-      }).join('') + '</div>';
+      UI.colHero = UI.colHero || D.heroes[0].id;
+      var hh = D.heroById[UI.colHero];
+      html = '<div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start"><div style="flex:1;min-width:300px"><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr))">' + D.heroes.map(function (h) {
+        var own = P.heroOwned(h.id);
+        return '<button class="card' + (h.id === UI.colHero ? ' sel' : '') + '" data-hc="' + h.id + '"><div class="t" style="font-size:13px">' + esc(h.name) + '</div><div class="s">' + esc(h.title) + ' · ' + D.eraById[h.era].name + '</div><div class="p">' + (own ? '<span class="good">Owned</span>' : '<span class="coin">◈ ' + fmt(h.price) + '</span>') + '</div></button>';
+      }).join('') + '</div></div><div style="flex:0 0 min(380px,100%)"><canvas id="prevCanvas" style="width:100%;height:min(56vh,480px);display:block;border-radius:8px;background:radial-gradient(circle at 50% 40%,#2a3448,#0a0e16 75%);border:1px solid var(--line);cursor:grab"></canvas>' +
+        '<div style="font-weight:900;font-size:18px;margin-top:8px">' + esc(hh.name) + '</div><div class="dim" style="font-size:13px">' + esc(hh.desc || '') + '</div><div style="font-size:12px;margin-top:4px">' + hh.abilities.map(function (a) { return D.abilities[a].name; }).join(' · ') + '</div>' +
+        (P.heroOwned(hh.id) ? '<div class="sect">Appearance</div><div class="opt">' + ['default', 'crimson', 'midnight', 'gold', 'veteran', 'shadow', 'chrome'].map(function (sk) { var own = P.skinOwned('h:' + hh.id + ':' + sk); return '<button class="btn small' + (P.heroSkin(hh.id) === sk ? ' on' : '') + '" data-hs="' + sk + '"' + (own ? '' : ' disabled title="Shop or battle pass"') + '>' + D.skinById[sk].name + (own ? '' : ' 🔒') + '</button>'; }).join('') + '</div>' : '<button class="btn primary" id="hBuy" style="margin-top:10px">Unlock · ◈ ' + fmt(hh.price) + '</button>') + '</div></div>';
       body.innerHTML = html;
-      body.querySelectorAll('[data-hs]').forEach(function (s) { s.onchange = function () { P.setHeroSkin(s.getAttribute('data-hs'), s.value); }; });
+      var RH = SF.Models.legend(hh, P.heroSkin(hh.id)); SF.Models.arm(RH, hh.weapon, 0x666666); UI.previewSet(RH);
+      body.querySelectorAll('[data-hc]').forEach(function (b) { b.onclick = function () { UI.colHero = b.getAttribute('data-hc'); UI.renderCollection(); }; });
+      body.querySelectorAll('[data-hs]').forEach(function (b) { b.onclick = function () { P.setHeroSkin(hh.id, b.getAttribute('data-hs')); UI.renderCollection(); }; });
+      if ($('hBuy')) $('hBuy').onclick = function () { tryBuy('hero:' + hh.id, hh.price, UI.renderCollection); };
     } else {
       var eq = P.p.equipped.emotes;
       html = '<div class="sect">Emote slots (B, 5, 6, 7 in battle)</div><div class="opt">' + [0, 1, 2, 3].map(function (i) { return '<select data-es="' + i + '"><option value="">— empty —</option>' + D.emotes.filter(function (e) { return P.emoteOwned(e.id); }).map(function (e) { return '<option value="' + e.id + '"' + (eq[i] === e.id ? ' selected' : '') + '>' + e.name + '</option>'; }).join('') + '</select>'; }).join('') + '</div>';
       html += '<div class="sect">Title</div><select id="titleSel">' + P.p.titles.map(function (t) { return '<option' + (t === P.p.equipped.title ? ' selected' : '') + '>' + esc(t) + '</option>'; }).join('') + '</select>';
       body.innerHTML = html;
-      body.querySelectorAll('[data-es]').forEach(function (s) { s.onchange = function () { eq[+s.getAttribute('data-es')] = s.value || null; P.save(); }; });
+      body.querySelectorAll('[data-es]').forEach(function (s2) { s2.onchange = function () { eq[+s2.getAttribute('data-es')] = s2.value || null; P.save(); }; });
       $('titleSel').onchange = function () { P.p.equipped.title = this.value; P.save(); };
     }
   };

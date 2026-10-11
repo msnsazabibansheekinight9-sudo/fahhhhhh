@@ -20,7 +20,7 @@ var SF = window.SF || (window.SF = {});
     syndicate: { id: 'syndicate', name: 'Syndicate Synth Host', short: 'SYNDICATE', era: 'cw', side: 1, ui: '#d9a441', style: 'synth', pal: [0xc9b07a, 0x8b6d3a, 0x3a3226, 0xff5a1f], bolt: 0xff3b2f },
     alliance:  { id: 'alliance', name: 'Free Alliance', short: 'ALLIANCE', era: 'gcw', side: 0, ui: '#ff8a3d', style: 'rebel', pal: [0x6f6a52, 0xb8a582, 0xd6542a, 0x262420], bolt: 0xff4a2a },
     dominion:  { id: 'dominion', name: 'Dominion Army', short: 'DOMINION', era: 'gcw', side: 1, ui: '#c9d2df', style: 'dominion', pal: [0xf1f2f4, 0x2a2d33, 0x5d6370, 0x0b0c0f], bolt: 0xff2a1a },
-    rangers:   { id: 'rangers', name: 'Rim Rangers', short: 'RANGERS', era: 'orr', side: 0, ui: '#5fd38a', style: 'ranger', pal: [0xd27b2a, 0x3c4a3e, 0xe8e2d0, 0x1a1d22], bolt: 0x46b4ff },
+    rangers:   { id: 'rangers', name: 'Rim Rangers', short: 'RANGERS', era: 'orr', side: 0, ui: '#5fd38a', style: 'ranger', pal: [0xb85a1e, 0x3c4a3e, 0xe8e2d0, 0x1a1d22], bolt: 0x46b4ff },
     remnant:   { id: 'remnant', name: 'Dominion Remnant', short: 'REMNANT', era: 'orr', side: 1, ui: '#e04848', style: 'remnant', pal: [0x2b2d33, 0x9a1b1b, 0x111216, 0xc8102e], bolt: 0xff1a1a },
     // natives (Hunt / Forest Hunt)
     raiders:   { id: 'raiders', name: 'Dune Raiders', short: 'RAIDERS', era: '*', side: 1, ui: '#c7a679', style: 'raider', pal: [0xb59a6e, 0x6e5a3e, 0x2c2620, 0x15130f], bolt: 0xffaa33 },
