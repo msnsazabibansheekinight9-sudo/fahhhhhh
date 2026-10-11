@@ -103,122 +103,212 @@ var SF = window.SF || (window.SF = {});
   };
 
   // ---------------------------------------------------------------- walkers
-  // Leg: { hip, knee, len1, len2, phase, side }
-  function leg(parent, x, y, z, l1, l2, th, mat, mat2, phase, backward) {
+  // Articulated leg: hip joint → upper leg (with hydraulic piston) → knee joint → lower leg → ankle → foot.
+  // o: { l1, l2, th, mat, mat2, joint, foot:'pad'|'claw'|'spike', phase, back, splay, kneeOut }
+  function leg2(parent, x, y, z, o) {
     var hip = grp(parent, x, y, z);
-    mesh('box', mat, hip, 0, -l1 / 2, 0, th, l1, th);
+    var th = o.th, l1 = o.l1, l2 = o.l2;
+    var jm = o.joint || m(0x3a3e44, 0.5, 0.6);
+    mesh('cyl', jm, hip, 0, 0, 0, th * 1.5, th * 1.25, th * 1.5, 0, 0, Math.PI / 2);
+    mesh('box', o.mat, hip, 0, -l1 / 2, 0, th, l1 * 0.92, th * 1.1);
+    mesh('box', o.mat2 || o.mat, hip, 0, -l1 * 0.45, -th * 0.62, th * 0.55, l1 * 0.6, th * 0.18);        // armour plate
+    mesh('cyl', m(0x8a8e94, 0.25, 0.85), hip, th * 0.62, -l1 * 0.5, th * 0.25, th * 0.16, l1 * 0.75, th * 0.16); // piston
     var knee = grp(hip, 0, -l1, 0);
-    mesh('box', mat2 || mat, knee, 0, -l2 / 2, 0, th * 0.85, l2, th * 0.85);
+    mesh('cyl', jm, knee, 0, 0, 0, th * 1.3, th * 1.2, th * 1.3, 0, 0, Math.PI / 2);
+    mesh('box', o.mat2 || o.mat, knee, 0, -l2 / 2, 0, th * 0.82, l2 * 0.92, th * 0.9);
+    mesh('cyl', m(0x8a8e94, 0.25, 0.85), knee, -th * 0.5, -l2 * 0.45, th * 0.2, th * 0.13, l2 * 0.7, th * 0.13);
     var foot = grp(knee, 0, -l2, 0);
-    mesh('box', mat, foot, 0, 0, -th * 0.4, th * 1.8, th * 0.4, th * 2.4);
-    return { hip: hip, knee: knee, foot: foot, l1: l1, l2: l2, phase: phase, back: !!backward };
+    mesh('sph', jm, foot, 0, 0, 0, th * 1.05, th * 1.05, th * 1.05);
+    if (o.foot === 'pad') {
+      mesh('cyl', o.mat2 || o.mat, foot, 0, -th * 0.55, 0, th * 2.6, th * 0.7, th * 2.6);
+      mesh('cyl', jm, foot, 0, -th * 0.95, 0, th * 2.8, th * 0.2, th * 2.8);
+      for (var r = 0; r < 4; r++) mesh('box', jm, foot, Math.cos(r * 1.57) * th * 1.2, -th * 0.35, Math.sin(r * 1.57) * th * 1.2, th * 0.3, th * 0.5, th * 0.3);
+    } else if (o.foot === 'claw') {
+      mesh('box', o.mat2 || o.mat, foot, 0, -th * 0.45, -th * 0.3, th * 1.4, th * 0.45, th * 1.6);
+      for (var c = -1; c <= 1; c++) mesh('box', jm, foot, c * th * 0.55, -th * 0.6, -th * 1.4, th * 0.32, th * 0.3, th * 1.3, 0, c * 0.35, 0);
+      mesh('box', jm, foot, 0, -th * 0.6, th * 0.9, th * 0.35, th * 0.3, th * 0.9);
+    } else {
+      mesh('cone', jm, foot, 0, -th * 0.9, 0, th * 0.9, th * 1.6, th * 0.9, Math.PI, 0, 0);
+    }
+    return { hip: hip, knee: knee, foot: foot, l1: l1, l2: l2, phase: o.phase || 0, back: !!o.back, spread: !!o.splay, baseZ: 0, kneeOut: o.kneeOut || 0, amp: o.amp || 0.45, lift: o.lift || 0.6 };
   }
+  function greeble(parent, mat, x, y, z, w, h, d, n, R) {
+    for (var i = 0; i < n; i++) mesh('box', mat, parent, x + (R() - 0.5) * w, y + (R() - 0.5) * h, z + (R() - 0.5) * d, 0.12 + R() * 0.4, 0.08 + R() * 0.2, 0.12 + R() * 0.5, 0, 0, 0);
+  }
+  // splayed leg: upper segment rises outward by `up`, lower drops to the ground leaning out by `out`
+  function splayLeg(top, x, y, z, sd, up, out, l1, h, footH, o) {
+    var l2 = (h + l1 * Math.sin(up) - footH) / Math.cos(out);
+    o.l1 = l1; o.l2 = l2; o.splay = true;
+    var L = leg2(top, x, y, z, o);
+    L.hip.rotation.z = sd * (Math.PI / 2 + up); L.knee.rotation.z = -sd * (Math.PI / 2 + up - out); L.foot.rotation.z = -sd * out;
+    L.baseKneeZ = L.knee.rotation.z; L.side = sd;
+    return L;
+  }
+  function rng(s) { return function () { s = (s * 16807) % 2147483647; return s / 2147483647; }; }
+
+  // Scout Strider: two reverse-knee legs under a boxy, angular cockpit "head"
   V.strider = function (pal) {
-    var r = new THREE.Group();
-    var a = m(pal[0], 0.55, 0.3), b = m(pal[1], 0.6, 0.3), d = m(0x2a2c30, 0.5, 0.5), win = m(0x111111, 0.1, 0.8);
-    var hipY = 5.2;
+    var r = new THREE.Group(), R = rng(31);
+    var a = m(0x8c9096, 0.55, 0.35), b = m(0x6e7278, 0.6, 0.35), d = m(0x2a2c30, 0.5, 0.55), win = m(0x0a0c10, 0.08, 0.9);
+    var hipY = 5.6;
     var top = grp(r, 0, hipY, 0);
-    var cab = grp(top, 0, 1.1, 0);
-    mesh('box', a, cab, 0, 0.4, 0, 2.4, 1.8, 2.4);
-    mesh('box', a, cab, 0, 0.3, -1.4, 2.0, 1.2, 0.8, 0.35, 0, 0);
-    mesh('box', win, cab, 0, 0.75, -1.55, 1.6, 0.18, 0.2, 0.35, 0, 0);
-    mesh('box', b, cab, 0, 1.4, 0.1, 1.4, 0.3, 1.4);
-    mesh('cyl', d, cab, 1.35, 0, -1.2, 0.18, 1.4, 0.18, Math.PI / 2, 0, 0);
-    mesh('cyl', d, cab, -1.35, 0, -1.2, 0.18, 1.4, 0.18, Math.PI / 2, 0, 0);
-    mesh('cyl', d, cab, -1.35, 0.4, -1.0, 0.1, 1.0, 0.1, Math.PI / 2, 0, 0);
-    mesh('box', d, top, 0, 0.2, 0, 1.0, 0.6, 1.0);
-    var legs = [leg(top, 0.9, 0, 0, 2.8, 2.8, 0.45, b, a, 0, true), leg(top, -0.9, 0, 0, 2.8, 2.8, 0.45, b, a, Math.PI, true)];
-    return out(r, [v3(1.35, hipY + 1.1, -2.0), v3(-1.35, hipY + 1.1, -2.0)], 2.2, hipY + 3, { legs: legs, top: top, hipY: hipY, head: cab });
+    // hip drive block and waist joint
+    mesh('box', b, top, 0, 0.0, 0.1, 1.5, 0.7, 1.3);
+    mesh('cyl', d, top, 0, 0.0, 0.1, 0.5, 2.3, 0.5, 0, 0, Math.PI / 2);
+    mesh('cyl', d, top, 0, 0.55, 0.0, 0.7, 0.5, 0.7);
+    var cab = grp(top, 0, 1.6, 0);
+    // cockpit: wide box with chamfered "brow" and "chin", tapering toward the back
+    mesh('box', a, cab, 0, 0.2, 0.1, 2.5, 1.6, 2.3);
+    mesh('box', a, cab, 0, 0.75, -0.9, 2.3, 0.6, 1.0, -0.45, 0, 0);        // sloped brow
+    mesh('box', a, cab, 0, -0.4, -1.05, 2.2, 0.55, 0.9, 0.5, 0, 0);       // sloped chin
+    mesh('box', b, cab, 0, 1.1, 0.35, 1.7, 0.25, 1.6);                     // roof hatch plate
+    mesh('cyl', d, cab, 0, 1.28, 0.35, 0.6, 0.12, 0.6);                     // hatch
+    mesh('box', b, cab, 0, 0.15, 1.35, 2.0, 1.2, 0.5);                     // rear
+    mesh('box', win, cab, 0.55, 0.42, -1.28, 0.7, 0.16, 0.08, -0.45, 0, 0); mesh('box', win, cab, -0.55, 0.42, -1.28, 0.7, 0.16, 0.08, -0.45, 0, 0); // view slits
+    mesh('box', b, cab, 1.3, 0.25, -0.1, 0.12, 1.1, 1.8); mesh('box', b, cab, -1.3, 0.25, -0.1, 0.12, 1.1, 1.8); // side armour
+    // chin twin blaster cannons and side mounts
+    mesh('box', d, cab, 0, -0.75, -1.1, 0.8, 0.35, 0.5);
+    mesh('cyl', d, cab, 0.22, -0.78, -1.75, 0.13, 1.2, 0.13, Math.PI / 2, 0, 0); mesh('cyl', d, cab, -0.22, -0.78, -1.75, 0.13, 1.2, 0.13, Math.PI / 2, 0, 0);
+    mesh('box', d, cab, 1.5, 0.0, -0.6, 0.35, 0.35, 0.8); mesh('cyl', d, cab, 1.5, 0.0, -1.4, 0.09, 1.0, 0.09, Math.PI / 2, 0, 0);
+    mesh('box', d, cab, -1.5, 0.15, -0.5, 0.4, 0.45, 0.7); mesh('cyl', d, cab, -1.5, 0.15, -1.1, 0.16, 0.55, 0.16, Math.PI / 2, 0, 0);
+    greeble(cab, d, 0, 0.3, 1.6, 1.6, 0.8, 0.1, 6, R);
+    var legs = [
+      leg2(top, 1.25, 0, 0.1, { l1: 2.9, l2: 3.0, th: 0.42, mat: b, mat2: a, foot: 'claw', phase: 0, back: true, amp: 0.4 }),
+      leg2(top, -1.25, 0, 0.1, { l1: 2.9, l2: 3.0, th: 0.42, mat: b, mat2: a, foot: 'claw', phase: Math.PI, back: true, amp: 0.4 })
+    ];
+    return out(r, [v3(0.22, hipY + 0.82, -2.6), v3(-0.22, hipY + 0.82, -2.6)], 2.2, hipY + 3.2, { legs: legs, top: top, hipY: hipY, head: cab, gait: 'biped' });
   };
+  // Recon Strider: open seat on two reverse-knee legs, single front repeater
   V.strider_open = function (pal) {
     var r = new THREE.Group();
-    var a = m(pal[0], 0.5, 0.3), b = m(pal[1], 0.6, 0.3), d = m(0x2a2c30, 0.5, 0.5);
-    var hipY = 2.6;
+    var a = m(pal[0], 0.5, 0.3), b = m(0x6e7278, 0.55, 0.4), d = m(0x2a2c30, 0.5, 0.55);
+    var hipY = 2.7;
     var top = grp(r, 0, hipY, 0);
-    mesh('box', a, top, 0, 0.3, 0, 1.0, 0.5, 1.4);
-    mesh('box', b, top, 0, 0.2, -0.95, 0.7, 0.3, 0.6);
-    mesh('cyl', d, top, 0, 0.0, -1.5, 0.12, 1.0, 0.12, Math.PI / 2, 0, 0);
-    mesh('box', d, top, 0, 0.9, -0.5, 0.6, 0.06, 0.2);
-    var legs = [leg(top, 0.6, 0, 0, 1.45, 1.45, 0.25, b, a, 0, true), leg(top, -0.6, 0, 0, 1.45, 1.45, 0.25, b, a, Math.PI, true)];
-    return out(r, [v3(0, hipY, -2.0)], 1.4, hipY + 1.6, { legs: legs, top: top, hipY: hipY, seat: grp(top, 0, 0.55, 0.1), riderPose: 'sit' });
+    mesh('box', b, top, 0, 0.0, 0.15, 0.9, 0.55, 1.0);
+    mesh('cyl', d, top, 0, 0.0, 0.1, 0.32, 1.5, 0.32, 0, 0, Math.PI / 2);
+    mesh('box', a, top, 0, 0.45, 0.2, 0.75, 0.25, 0.9);       // seat pan
+    mesh('box', a, top, 0, 0.85, 0.62, 0.7, 0.75, 0.15, 0.2, 0, 0);  // back rest
+    mesh('box', b, top, 0, 0.35, -0.7, 0.55, 0.3, 0.8, -0.15, 0, 0); // front fairing
+    mesh('cyl', d, top, 0, 0.75, -0.75, 0.035, 0.6, 0.035, 0.6, 0, 0); // control stalk
+    mesh('box', d, top, 0, 0.95, -0.9, 0.5, 0.06, 0.1);
+    mesh('box', d, top, 0, 0.15, -1.15, 0.25, 0.25, 0.4);
+    mesh('cyl', d, top, 0, 0.15, -1.75, 0.08, 1.1, 0.08, Math.PI / 2, 0, 0);
+    var legs = [
+      leg2(top, 0.62, 0, 0.1, { l1: 1.45, l2: 1.5, th: 0.22, mat: b, mat2: a, foot: 'claw', phase: 0, back: true, amp: 0.45 }),
+      leg2(top, -0.62, 0, 0.1, { l1: 1.45, l2: 1.5, th: 0.22, mat: b, mat2: a, foot: 'claw', phase: Math.PI, back: true, amp: 0.45 })
+    ];
+    return out(r, [v3(0, hipY + 0.15, -2.3)], 1.4, hipY + 1.6, { legs: legs, top: top, hipY: hipY, seat: grp(top, 0, 0.6, 0.2), riderPose: 'sit', gait: 'biped' });
   };
+  // Colossus: long armoured body, ribbed neck, wedge head with chin cannons, four columnar legs with round feet
   V.colossus = function (pal) {
-    var r = new THREE.Group();
-    var a = m(pal[0] === 0xf1f2f4 ? 0x9aa0a8 : pal[0], 0.7, 0.3), b = m(0x6a7078, 0.7, 0.3), d = m(0x2a2c30, 0.6, 0.5), win = m(0x111111, 0.1, 0.8);
-    var hipY = 15;
+    var r = new THREE.Group(), R = rng(7);
+    var a = m(0x9aa0a8, 0.7, 0.3), b = m(0x7a8088, 0.72, 0.3), d = m(0x2e3136, 0.6, 0.5), win = m(0x0a0c10, 0.08, 0.9), red = m(0x8a2a22, 0.6, 0.2);
+    var hipY = 16;
     var top = grp(r, 0, hipY, 0);
-    mesh('box', a, top, 0, 2.6, 0, 7.0, 5.2, 16.0);
-    mesh('box', b, top, 0, 5.4, 0, 5.0, 0.6, 14);
-    mesh('box', a, top, 0, 0.0, 0, 5.0, 1.0, 13);
-    for (var i = 0; i < 5; i++) mesh('box', d, top, 3.55, 2.6, -6 + i * 3, 0.1, 4.6, 0.2);
-    for (i = 0; i < 5; i++) mesh('box', d, top, -3.55, 2.6, -6 + i * 3, 0.1, 4.6, 0.2);
-    var neck = grp(top, 0, 2.4, -8.6);
-    mesh('cyl', d, neck, 0, 0, -1.2, 1.2, 3.0, 1.2, Math.PI / 2, 0, 0);
-    var head = grp(neck, 0, 0, -3.2);
-    mesh('box', a, head, 0, 0, -1.4, 3.6, 3.0, 4.6);
-    mesh('box', a, head, 0, -0.4, -4.0, 3.0, 2.2, 1.6, 0.25, 0, 0);
-    mesh('box', win, head, 0, 0.5, -3.6, 2.4, 0.3, 0.2, 0.15, 0, 0);
-    mesh('cyl', d, head, 1.9, -1.0, -3.8, 0.35, 2.4, 0.35, Math.PI / 2, 0, 0);
-    mesh('cyl', d, head, -1.9, -1.0, -3.8, 0.35, 2.4, 0.35, Math.PI / 2, 0, 0);
+    // body: main box with bevelled upper edges, side bays and a spine
+    mesh('box', a, top, 0, 3.0, 0, 7.6, 5.0, 17.0);
+    mesh('box', a, top, 2.9, 5.6, 0, 2.6, 1.4, 16.2, 0, 0, -0.6); mesh('box', a, top, -2.9, 5.6, 0, 2.6, 1.4, 16.2, 0, 0, 0.6);
+    mesh('box', b, top, 0, 6.05, 0, 4.4, 0.6, 15.4);
+    mesh('box', a, top, 0, 3.4, -8.9, 6.6, 3.8, 1.4, 0.35, 0, 0);   // front bevel
+    mesh('box', a, top, 0, 3.4, 8.9, 6.6, 3.8, 1.4, -0.35, 0, 0);   // rear bevel
+    mesh('box', b, top, 0, 0.35, 0, 5.6, 0.9, 14.0);                   // belly
+    for (var i = 0; i < 6; i++) { mesh('box', b, top, 3.85, 3.0, -6.5 + i * 2.6, 0.2, 3.6, 2.1); mesh('box', b, top, -3.85, 3.0, -6.5 + i * 2.6, 0.2, 3.6, 2.1); }
+    mesh('box', d, top, 3.9, 1.5, -2, 0.15, 0.4, 9); mesh('box', d, top, -3.9, 1.5, -2, 0.15, 0.4, 9);
+    greeble(top, d, 0, 6.4, 0, 3.6, 0.2, 13, 22, R);
+    mesh('box', red, top, 3.96, 4.6, -6.0, 0.05, 0.5, 2.4); mesh('box', red, top, -3.96, 4.6, -6.0, 0.05, 0.5, 2.4); // unit markings
+    // neck: ribbed cylinder sections
+    var neck = grp(top, 0, 3.2, -9.0);
+    for (var n = 0; n < 6; n++) mesh('cyl', n % 2 ? d : b, neck, 0, 0, -0.45 - n * 0.55, n % 2 ? 1.5 : 1.8, 0.5, n % 2 ? 1.5 : 1.8, Math.PI / 2, 0, 0);
+    // head
+    var head = grp(neck, 0, 0, -3.7);
+    mesh('box', a, head, 0, 0.2, -1.6, 4.2, 3.2, 5.0);
+    mesh('box', a, head, 0, 1.55, -2.0, 3.6, 0.9, 4.2, 0.12, 0, 0);
+    mesh('box', a, head, 0, -0.25, -4.3, 3.4, 2.2, 1.8, 0.42, 0, 0);    // sloped snout
+    mesh('box', a, head, 2.15, 0.2, -1.4, 0.3, 2.6, 4.2); mesh('box', a, head, -2.15, 0.2, -1.4, 0.3, 2.6, 4.2);
+    mesh('box', win, head, 0.8, 0.8, -4.05, 1.0, 0.32, 0.12, 0.42, 0, 0); mesh('box', win, head, -0.8, 0.8, -4.05, 1.0, 0.32, 0.12, 0.42, 0, 0);
+    mesh('box', b, head, 0, -1.25, -2.6, 2.6, 0.5, 2.4);
+    mesh('cyl', d, head, 0.85, -1.45, -4.4, 0.32, 3.0, 0.32, Math.PI / 2, 0, 0); mesh('cyl', d, head, -0.85, -1.45, -4.4, 0.32, 3.0, 0.32, Math.PI / 2, 0, 0); // chin cannons
+    mesh('cyl', d, head, 2.45, 0.6, -3.0, 0.22, 2.2, 0.22, Math.PI / 2, 0, 0); mesh('cyl', d, head, -2.45, 0.6, -3.0, 0.22, 2.2, 0.22, Math.PI / 2, 0, 0); // temple guns
     var legs = [];
-    [[3.2, -5.5, 0], [-3.2, -5.5, Math.PI], [3.2, 5.5, Math.PI], [-3.2, 5.5, 0]].forEach(function (p) {
-      var L = leg(top, p[0], -0.3, p[1], 7.6, 7.6, 1.3, b, a, p[2], false);
-      mesh('box', b, L.hip, 0, 0, 0, 1.8, 1.8, 2.2);
-      mesh('box', b, L.knee, 0, 0, 0, 1.6, 1.4, 1.8);
+    [[3.4, -6.0, 0], [-3.4, -6.0, Math.PI], [3.4, 6.0, Math.PI], [-3.4, 6.0, 0]].forEach(function (p) {
+      var L = leg2(top, p[0] * 1.32, 1.2, p[1], { l1: 8.2, l2: 7.85, th: 1.25, mat: b, mat2: a, joint: d, foot: 'pad', phase: p[2], amp: 0.28, lift: 0.45 });
+      // armoured hip shroud and knee cap
+      mesh('box', a, L.hip, 0, -0.6, 0, 1.4, 2.6, 2.8);
+      mesh('box', a, L.knee, 0, 0.1, -0.9, 1.6, 1.8, 0.9);
       legs.push(L);
     });
-    return out(r, [v3(1.9, hipY + 1.4, -18.5), v3(-1.9, hipY + 1.4, -18.5)], 9, hipY + 6, { legs: legs, top: top, hipY: hipY, head: head, big: true });
+    return out(r, [v3(0.85, hipY + 1.75, -21.2), v3(-0.85, hipY + 1.75, -21.2)], 9, hipY + 6.5, { legs: legs, top: top, hipY: hipY, head: head, big: true, gait: 'quad' });
   };
+  // Sixlegger: two armoured hull sections, six splayed spider legs, mass cannon on the rear deck
   V.sixlegger = function (pal) {
-    var r = new THREE.Group();
-    var a = m(pal[0], 0.55, 0.25), b = m(pal[1], 0.6), d = m(0x3a3e44, 0.6, 0.5), win = m(0x111111, 0.1, 0.8);
-    var hipY = 3.4;
-    var top = grp(r, 0, hipY, 0);
-    mesh('box', a, top, 0, 0.8, -2.5, 3.6, 2.2, 5.0);
-    mesh('box', a, top, 0, 0.8, 2.8, 3.4, 2.0, 4.6);
-    mesh('box', b, top, 0, 0.8, 0.15, 2.2, 1.4, 1.2);
-    mesh('box', win, top, 0, 1.3, -5.05, 2.6, 0.4, 0.2);
-    mesh('box', b, top, 0, 1.0, -5.0, 3.2, 0.2, 0.2);
-    var tur = grp(top, 0, 2.2, 2.4);
-    mesh('cyl', d, tur, 0, 0.4, 0, 0.8, 0.8, 0.8);
-    mesh('cyl', d, tur, 0, 0.9, -2.0, 0.3, 5.0, 0.3, Math.PI / 2 - 0.4, 0, 0);
-    var legs = [];
-    [-4.2, -0.2, 3.8].forEach(function (z, i) {
-      legs.push(leg(top, 2.2, 0.2, z, 1.9, 2.0, 0.4, d, b, i % 2 ? 0 : Math.PI, false));
-      legs.push(leg(top, -2.2, 0.2, z, 1.9, 2.0, 0.4, d, b, i % 2 ? Math.PI : 0, false));
-    });
-    legs.forEach(function (L) { L.hip.rotation.z = L.hip.position.x > 0 ? -0.35 : 0.35; });
-    return out(r, [v3(1.2, hipY + 0.6, -5.3), v3(-1.2, hipY + 0.6, -5.3)], 5, hipY + 4, { legs: legs, top: top, hipY: hipY, turret: tur, turretMuzzle: v3(0, 2.4, -4.4) });
-  };
-  V.spider = function (pal) {
-    var r = new THREE.Group();
-    var a = m(pal[0], 0.5, 0.4), b = m(pal[1], 0.6, 0.4), eye = M.mat(0xff3322, 0.3, 0, 'emis');
+    var r = new THREE.Group(), R = rng(13);
+    var a = m(0xd8d4c8, 0.6, 0.2), b = m(pal[1] || 0x2f63c4, 0.6, 0.25), d = m(0x3a3e44, 0.6, 0.5), win = m(0x0a0c10, 0.08, 0.9);
     var hipY = 3.2;
     var top = grp(r, 0, hipY, 0);
-    mesh('sph', a, top, 0, 0.8, 0, 3.0, 2.0, 3.0);
-    mesh('sph', eye, top, 0, 0.8, -1.45, 0.6, 0.6, 0.3);
-    mesh('cyl', b, top, 0, 0.4, -2.0, 0.25, 1.6, 0.25, Math.PI / 2, 0, 0);
+    // front cockpit hull with sloped nose
+    mesh('box', a, top, 0, 1.0, -2.7, 3.8, 2.2, 4.4);
+    mesh('box', a, top, 0, 1.0, -5.3, 3.6, 2.0, 1.4, 0, 0, 0);
+    mesh('box', a, top, 0, 0.55, -6.15, 3.4, 1.2, 1.0, 0.55, 0, 0);
+    mesh('box', win, top, 0, 1.55, -6.0, 2.6, 0.3, 0.1, 0.3, 0, 0);
+    mesh('box', b, top, 0, 2.18, -2.7, 3.2, 0.12, 3.6);
+    mesh('box', b, top, 1.92, 1.0, -2.7, 0.06, 0.6, 4.0); mesh('box', b, top, -1.92, 1.0, -2.7, 0.06, 0.6, 4.0);
+    mesh('cyl', d, top, 1.0, 0.1, -6.4, 0.16, 1.2, 0.16, Math.PI / 2, 0, 0); mesh('cyl', d, top, -1.0, 0.1, -6.4, 0.16, 1.2, 0.16, Math.PI / 2, 0, 0);
+    // coupling
+    mesh('cyl', d, top, 0, 0.9, 0.2, 1.1, 1.4, 1.1, Math.PI / 2, 0, 0);
+    // rear hull
+    mesh('box', a, top, 0, 1.0, 3.0, 3.6, 2.1, 4.6);
+    mesh('box', b, top, 0, 2.12, 3.0, 3.0, 0.12, 4.0);
+    greeble(top, d, 0, 2.3, 3.0, 2.6, 0.1, 3.6, 10, R);
+    var tur = grp(top, 0, 2.3, 3.0);
+    mesh('cyl', d, tur, 0, 0.35, 0, 1.0, 0.7, 1.0);
+    mesh('box', a, tur, 0, 0.9, 0.2, 1.2, 0.9, 1.8);
+    mesh('cyl', d, tur, 0, 1.0, -2.6, 0.32, 5.2, 0.32, Math.PI / 2, 0, 0);
+    mesh('cyl', d, tur, 0, 1.0, -5.3, 0.45, 0.4, 0.45, Math.PI / 2, 0, 0);
     var legs = [];
-    [[1.4, -1.0, 0], [-1.4, -1.0, Math.PI], [1.4, 1.0, Math.PI], [-1.4, 1.0, 0]].forEach(function (p) {
-      var L = leg(top, p[0], 0.8, p[1], 2.6, 3.4, 0.3, b, a, p[2], false);
-      L.hip.rotation.z = p[0] > 0 ? -0.9 : 0.9; L.spread = true; legs.push(L);
+    [-4.6, -0.4, 3.6].forEach(function (z, i) {
+      [1, -1].forEach(function (sd) {
+        legs.push(splayLeg(top, sd * 1.9, 0.4, z, sd, 0.5, 0.25, 2.3, hipY + 0.4, 0.45, { th: 0.38, mat: d, mat2: a, foot: 'pad', phase: (i + (sd > 0 ? 0 : 1)) % 2 ? 0 : Math.PI, amp: 0.3 }));
+      });
     });
-    return out(r, [v3(0, hipY + 0.4, -2.9)], 2.6, hipY + 2, { legs: legs, top: top, hipY: hipY });
+    return out(r, [v3(1.0, hipY + 0.1, -7.0), v3(-1.0, hipY + 0.1, -7.0)], 5.5, hipY + 4, { legs: legs, top: top, hipY: hipY, turret: tur, turretMuzzle: v3(0, 1.0, -5.5), gait: 'hex' });
   };
+  // Spider synth walker: round body with a big eye cannon on four high-arching legs
+  V.spider = function (pal) {
+    var r = new THREE.Group();
+    var a = m(pal[0], 0.5, 0.45), b = m(pal[1], 0.6, 0.45), d = m(0x2a2c30, 0.5, 0.6), eye = M.mat(0xff3322, 0.3, 0, 'emis');
+    var hipY = 3.4;
+    var top = grp(r, 0, hipY, 0);
+    mesh('sph', a, top, 0, 1.0, 0, 3.2, 2.2, 3.2);
+    mesh('cyl', b, top, 0, 1.0, 0, 3.3, 0.4, 3.3);
+    mesh('sph', d, top, 0, 1.0, -1.45, 1.1, 1.1, 0.7);
+    mesh('sph', eye, top, 0, 1.0, -1.82, 0.55, 0.55, 0.2);
+    mesh('cyl', d, top, 0, 0.55, -2.4, 0.22, 1.8, 0.22, Math.PI / 2, 0, 0);
+    mesh('cyl', b, top, 0, 2.05, 0, 0.9, 0.3, 0.9);
+    var legs = [];
+    [[1, -1, 0], [-1, -1, Math.PI], [1, 1, Math.PI], [-1, 1, 0]].forEach(function (p) {
+      var L = splayLeg(top, p[0] * 1.3, 1.1, p[1] * 1.0, p[0], 0.6, 0.35, 2.4, hipY + 1.1, 0.35, { th: 0.24, mat: b, mat2: a, joint: d, foot: 'spike', phase: p[2], amp: 0.35 });
+      L.hip.rotation.y = -p[1] * p[0] * 0.32; legs.push(L);
+    });
+    return out(r, [v3(0, hipY + 0.55, -3.3)], 2.8, hipY + 2.2, { legs: legs, top: top, hipY: hipY, gait: 'quad' });
+  };
+  // Crab synth walker: low wedge body on six jointed legs
   V.crab = function (pal) {
     var r = new THREE.Group();
-    var a = m(pal[0], 0.5, 0.4), b = m(pal[1], 0.6, 0.4), eye = M.mat(0xff3322, 0.3, 0, 'emis');
-    var hipY = 2.0;
+    var a = m(pal[0], 0.5, 0.45), b = m(pal[1], 0.6, 0.45), d = m(0x2a2c30, 0.5, 0.6), eye = M.mat(0xff3322, 0.3, 0, 'emis');
+    var hipY = 2.2;
     var top = grp(r, 0, hipY, 0);
-    mesh('box', a, top, 0, 0.4, 0, 2.8, 1.0, 2.2);
-    mesh('box', b, top, 0, 0.9, -0.2, 1.6, 0.4, 1.2);
-    mesh('sph', eye, top, 0.4, 0.5, -1.15, 0.25, 0.25, 0.15); mesh('sph', eye, top, -0.4, 0.5, -1.15, 0.25, 0.25, 0.15);
+    mesh('box', a, top, 0, 0.45, 0, 2.8, 0.9, 2.4);
+    mesh('box', a, top, 0, 0.55, -1.4, 2.2, 0.6, 0.8, 0.4, 0, 0);
+    mesh('box', b, top, 0, 1.0, 0.1, 1.8, 0.35, 1.6);
+    mesh('sph', eye, top, 0.45, 0.6, -1.7, 0.25, 0.25, 0.15); mesh('sph', eye, top, -0.45, 0.6, -1.7, 0.25, 0.25, 0.15);
+    mesh('cyl', d, top, 0.45, 0.35, -2.0, 0.08, 0.8, 0.08, Math.PI / 2, 0, 0); mesh('cyl', d, top, -0.45, 0.35, -2.0, 0.08, 0.8, 0.08, Math.PI / 2, 0, 0);
     var legs = [];
     [-0.8, 0, 0.8].forEach(function (z, i) {
-      var L1 = leg(top, 1.4, 0.3, z, 1.4, 2.0, 0.18, b, a, i % 2 ? 0 : Math.PI, false); L1.hip.rotation.z = -0.9; L1.spread = true; legs.push(L1);
-      var L2 = leg(top, -1.4, 0.3, z, 1.4, 2.0, 0.18, b, a, i % 2 ? Math.PI : 0, false); L2.hip.rotation.z = 0.9; L2.spread = true; legs.push(L2);
+      [1, -1].forEach(function (sd) {
+        legs.push(splayLeg(top, sd * 1.4, 0.3, z, sd, 0.4, 0.3, 1.4, hipY + 0.3, 0.25, { th: 0.16, mat: b, mat2: a, joint: d, foot: 'spike', phase: (i + (sd > 0 ? 0 : 1)) % 2 ? 0 : Math.PI, amp: 0.35 }));
+      });
     });
-    return out(r, [v3(0.4, hipY + 0.5, -1.4), v3(-0.4, hipY + 0.5, -1.4)], 2.2, hipY + 1.5, { legs: legs, top: top, hipY: hipY });
+    return out(r, [v3(0.45, hipY + 0.35, -2.4), v3(-0.45, hipY + 0.35, -2.4)], 2.3, hipY + 1.5, { legs: legs, top: top, hipY: hipY, gait: 'hex' });
   };
 
   // ---------------------------------------------------------------- starfighters
@@ -511,7 +601,8 @@ var SF = window.SF || (window.SF = {});
     var F = SF.D.factions[faction] || SF.D.factions.concord;
     var pal = [F.pal[0], F.pal[1], F.pal[2]];
     var b = V[vdef.model] || V.skimmer;
-    var o = b(pal);
+    M.rounded = false;   // hard-surface machines: crisp edges
+    var o; try { o = b(pal); } finally { M.rounded = true; }
     o.def = vdef;
     return o;
   };

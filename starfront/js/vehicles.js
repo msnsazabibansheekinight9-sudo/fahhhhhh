@@ -354,15 +354,21 @@ var SF = window.SF || (window.SF = {});
     if (M.head && !M.turret) { M.head.rotation.y = Math.max(-0.6, Math.min(0.6, angDiff(this.turretYaw, this.yaw))); M.head.rotation.x = this.turretPitch * 0.5; }
     if (M.legs) {
       var ph = this.legPhase, moving = Math.abs(this.vel.x) + Math.abs(this.vel.z) > 0.3;
-      var amp = moving ? 1 : 0;
+      M.blend = (M.blend || 0) + ((moving ? 1 : 0) - (M.blend || 0)) * Math.min(1, dt * 3);
+      var bl = M.blend, bobSum = 0;
       for (var i = 0; i < M.legs.length; i++) {
-        var L = M.legs[i], p = ph + L.phase;
-        var swing = Math.sin(p) * 0.45 * amp, lift = Math.max(0, Math.cos(p)) * 0.6 * amp;
-        if (L.back) { L.hip.rotation.x = -0.55 + swing; L.knee.rotation.x = 1.1 + lift * 0.6; L.foot.rotation.x = -0.55 - swing - lift * 0.6 + 0; }
-        else if (L.spread) { L.hip.rotation.x = swing; L.knee.rotation.x = (L.hip.position.x > 0 ? 1 : 1) * (1.1 - lift); }
-        else { L.hip.rotation.x = swing; L.knee.rotation.x = -lift * 0.8; L.foot.rotation.x = -swing + lift * 0.8; }
+        var L = M.legs[i];
+        // stance: foot planted, leg sweeps back linearly; swing: leg lifts and steps forward
+        var t = (((ph + L.phase) / (Math.PI * 2)) % 1 + 1) % 1, sw, lift;
+        if (t < 0.6) { sw = L.amp * (1 - t / 0.6 * 2); lift = 0; }
+        else { var u = (t - 0.6) / 0.4, e2 = u * u * (3 - 2 * u); sw = L.amp * (-1 + 2 * e2); lift = Math.sin(u * Math.PI) * L.lift; }
+        sw *= bl; lift *= bl;
+        bobSum += lift;
+        if (L.back) { L.hip.rotation.x = -0.6 + sw; L.knee.rotation.x = 1.2 + lift * 0.9; L.foot.rotation.x = -0.6 - sw - lift * 0.9; }
+        else if (L.spread) { if (L.hip.userData.y0 == null) L.hip.userData.y0 = L.hip.rotation.y; L.hip.rotation.y = L.hip.userData.y0 + sw * 0.7; L.knee.rotation.z = L.baseKneeZ + lift * 0.45 * L.side; }
+        else { L.hip.rotation.x = sw; L.knee.rotation.x = -lift * 0.9 - 0.04; L.foot.rotation.x = -sw + lift * 0.9; }
       }
-      if (M.top) M.top.position.y = M.hipY + (moving ? Math.abs(Math.sin(ph * 2)) * (M.big ? 0.5 : 0.15) : 0);
+      if (M.top) { M.top.position.y = M.hipY - (M.big ? 0.35 : 0.1) * (1 - Math.min(1, bobSum)) * bl; M.top.rotation.z = Math.sin(ph) * (M.gait === 'biped' ? 0.05 : 0.012) * bl; }
     }
   };
 
