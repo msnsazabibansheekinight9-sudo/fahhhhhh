@@ -4,11 +4,12 @@
 
 const M = {
   AIR: 0, BEDROCK: 1, DIRT: 2, GRASS: 3, SAND: 4, ASPHALT: 5, CONCRETE: 6, BRICK: 7, PLASTER: 8, WOOD: 9,
-  PLANK: 10, GLASS: 11, METAL: 12, ROOF: 13, LEAVES: 14, TILE: 15, STEEL: 16, HAY: 17, LADDER: 18, RUBBER: 19
+  PLANK: 10, GLASS: 11, METAL: 12, ROOF: 13, LEAVES: 14, TILE: 15, STEEL: 16, HAY: 17, LADDER: 18, RUBBER: 19,
+  STONE: 20, GRAVEL: 21, BARREL: 22, CLOTH: 23, MARBLE: 24, POOL: 25
 };
 const MATS = [];
 function defMat(id, name, rgb, hard, o) {
-  MATS[id] = Object.assign({ id, name, rgb, hard, flam: 0, anchor: false, glass: false, ladder: false, vary: 0.07, snd: 'stone' }, o || {});
+  MATS[id] = Object.assign({ id, name, rgb, hard, flam: 0, anchor: false, glass: false, ladder: false, nonsolid: false, vary: 0.07, snd: 'stone' }, o || {});
 }
 defMat(M.AIR, 'air', [0, 0, 0], 0);
 defMat(M.BEDROCK, 'bedrock', [58, 56, 54], 9, { anchor: true });
@@ -30,12 +31,18 @@ defMat(M.STEEL, 'steel', [76, 82, 90], 4, { snd: 'metal' });
 defMat(M.HAY, 'hay', [214, 184, 92], 0, { flam: 1, vary: 0.12, snd: 'leaf' });
 defMat(M.LADDER, 'ladder', [150, 108, 64], 1, { flam: 1, ladder: true, snd: 'wood' });
 defMat(M.RUBBER, 'rubber', [34, 34, 36], 2, { flam: 0.3 });
+defMat(M.STONE, 'rock', [128, 116, 104], 3, { anchor: true, vary: 0.12 });
+defMat(M.GRAVEL, 'gravel', [146, 138, 126], 3, { anchor: true, vary: 0.22, snd: 'dirt' });
+defMat(M.BARREL, 'fuel barrel', [178, 44, 36], 1, { flam: 1, snd: 'metal' });
+defMat(M.CLOTH, 'canvas', [200, 196, 180], 0, { flam: 1, snd: 'leaf' });
+defMat(M.MARBLE, 'stonework', [222, 218, 206], 2, { vary: 0.04 });
+defMat(M.POOL, 'water', [70, 150, 190], 0, { glass: true, nonsolid: true, snd: 'leaf' });
 
 const SOLID = new Uint8Array(256), OPAQUE = new Uint8Array(256), GLASSY = new Uint8Array(256), ANCHOR = new Uint8Array(256), HARD = new Uint8Array(256);
 const FLAM = new Float32Array(256);
 for (const mt of MATS) {
   if (!mt || !mt.id) continue;
-  SOLID[mt.id] = mt.ladder ? 0 : 1; OPAQUE[mt.id] = mt.glass ? 0 : 1; GLASSY[mt.id] = mt.glass ? 1 : 0;
+  SOLID[mt.id] = mt.ladder || mt.nonsolid ? 0 : 1; OPAQUE[mt.id] = mt.glass ? 0 : 1; GLASSY[mt.id] = mt.glass ? 1 : 0;
   ANCHOR[mt.id] = mt.anchor ? 1 : 0; HARD[mt.id] = mt.hard; FLAM[mt.id] = mt.flam;
 }
 
@@ -63,6 +70,10 @@ function voxRGB(m, x, y, z, p, out) {
     case M.TILE: if (x % 4 === 0 || z % 4 === 0 || y % 4 === 0) f = 0.86; break;
     case M.CONCRETE: if (y % 12 === 0) f = 0.9; break;
     case M.LADDER: if (y & 1) f = 0.62; break;
+    case M.BARREL: if (y % 4 === 1) { r = 60; g = 60; b = 62; } break;
+    case M.CLOTH: if ((x + z) % 6 < 3) { r = 186; g = 64; b = 52; } break;
+    case M.STONE: if (y % 7 === 0) f = 0.88; break;
+    case M.MARBLE: if (y % 6 === 0) f = 0.9; break;
     case M.ASPHALT: if ((x % 24 < 8) && (z % 64 === 6 || z % 64 === 7) && z < 120) { r = 220; g = 210; b = 150; } break;
   }
   f *= 1 + (hash3(x, y, z) - 0.5) * 2 * mt.vary;
@@ -110,6 +121,7 @@ class World {
     this.matGlass = new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.36, depthWrite: false });
     this.Q = new Int32Array(BFS_CAP + 16);
     this.shadows = true;
+    this.blasts = [];
   }
   idx(x, y, z) { return (y * this.sz + z) * this.sx + x; }
   inb(x, y, z) { return x >= 0 && y >= 0 && z >= 0 && x < this.sx && y < this.sy && z < this.sz; }
@@ -229,7 +241,7 @@ class World {
     let t = 0, nx = 0, ny = 0, nz = 0;
     for (let guard = 0; guard < 2000; guard++) {
       const m = this.get(x, y, z);
-      if (m && !(skipGlass && GLASSY[m])) {
+      if (m && m !== M.POOL && !(skipGlass && GLASSY[m])) {
         return { x, y, z, m, nx, ny, nz, t, px: ox + dx * t, py: oy + dy * t, pz: oz + dz * t };
       }
       if (tX < tY && tX < tZ) { t = tX; tX += tdX; x += sX; nx = -sX; ny = 0; nz = 0; }
@@ -257,6 +269,7 @@ class World {
       const ddx = x + 0.5 - cx, ddy = y + 0.5 - cy, ddz = z + 0.5 - cz;
       const d = Math.sqrt(ddx * ddx + ddy * ddy + ddz * ddz) + (hash3(x, y, z) - 0.5) * 1.1;
       if (d > reff) continue;
+      if (m === M.BARREL) this.blasts.push(x + 0.5, y + 0.5, z + 0.5);
       if (res.samples.length < 240 && (res.n < 30 || Math.random() < 0.25)) res.samples.push(x, y, z, m, this.paint[i]);
       res.mats[m] = (res.mats[m] || 0) + 1;
       this.data[i] = 0; this.paint[i] = 0; res.n++;

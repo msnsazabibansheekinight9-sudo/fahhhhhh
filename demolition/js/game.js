@@ -2,31 +2,75 @@
 /* Crumble — renderer, input, missions, HUD and the main loop. */
 
 const INF = 1e9;
+const ALL_TOOLS = { hammer: INF, torch: INF, ext: INF, spray: INF, pistol: INF, shotgun: INF, rifle: INF, planks: INF, bomb: INF, charge: INF, rocket: INF };
 const MISSIONS = [
   {
-    id: 'cleanslate', name: 'Clean Slate', where: 'Halloway house · north lot', light: 'day',
-    brief: 'The Halloways sold the lot and the developer wants the old brick house gone by lunch. Bring at least 85% of it down. The loader is parked across the road.',
-    loadout: { hammer: INF, spray: INF, shotgun: 16, bomb: 3, planks: 4 },
-    goal: { type: 'demolish', building: 'house', pct: 0.85 }, spawn: { x: 40, z: 88, yaw: 0 }
+    id: 'cleanslate', map: 'gullpoint', name: 'Clean Slate', where: 'Halloway house', light: 'day',
+    brief: 'The Halloways sold the lot and the developer wants the old brick house gone by lunch. Bring at least 85% of it down. There is a wrecking crane and an excavator across the road.',
+    loadout: { hammer: INF, spray: INF, shotgun: 16, bomb: 3, planks: 4, charge: 2 },
+    goal: { type: 'demolish', building: 'house', label: 'the Halloway house', pct: 0.85 }, spawn: { x: 40, z: 88, yaw: 0 }
   },
   {
-    id: 'kindling', name: 'Kindling', where: 'Pruitt barn · west field', light: 'overcast',
+    id: 'kindling', map: 'gullpoint', name: 'Kindling', where: 'Pruitt barn', light: 'overcast',
     brief: 'Old man Pruitt wants the rotten barn burned for the insurance before the volunteer brigade finishes their card game. Bring 75% of it down in four minutes. No explosives.',
     loadout: { hammer: INF, torch: 40, spray: INF },
-    goal: { type: 'demolish', building: 'barn', pct: 0.75, limit: 240 }, spawn: { x: 47, z: 150, yaw: Math.PI }
+    goal: { type: 'demolish', building: 'barn', label: 'the Pruitt barn', pct: 0.75, limit: 240 }, spawn: { x: 47, z: 150, yaw: Math.PI }
   },
   {
-    id: 'nightshift', name: 'Night Shift', where: 'Gull Point · whole town', light: 'dusk',
-    brief: 'Four items, four buildings, one alarm. The moment you lift an alarmed item you have 75 seconds to grab the rest and reach the boat at the end of the pier. Plan your route first: cut holes, lay planks, move the loader.',
-    loadout: { hammer: INF, spray: INF, torch: 30, shotgun: 8, planks: 8, bomb: 3, rocket: 2 },
+    id: 'nightshift', map: 'gullpoint', name: 'Night Shift', where: 'Whole town', light: 'dusk',
+    brief: 'Four items, four buildings, one alarm. The moment you lift an alarmed item you have 75 seconds to grab the rest and reach the boat at the end of the pier. Plan first: cut holes, lay planks, park a car where you need it.',
+    loadout: { hammer: INF, spray: INF, torch: 30, pistol: 12, shotgun: 8, planks: 8, bomb: 3, charge: 2, rocket: 2 },
     goal: { type: 'heist', alarm: 75 }, spawn: { x: 106, z: 214, yaw: 0 }
   },
+  { id: 'gp_free', map: 'gullpoint', name: 'Free Roam', where: 'No rules', light: 'day', brief: 'Every tool and every vehicle, no limits. Topple the water tower, fly the helicopter, drive the armoured vehicle through the bank.', loadout: ALL_TOOLS, goal: { type: 'none' }, spawn: { x: 106, z: 214, yaw: 0 } },
+
   {
-    id: 'sandbox', name: 'Free Roam', where: 'Gull Point · no rules', light: 'day',
-    brief: 'Every tool, no limits, nobody watching. Knock the water tower over. Drive the loader through the bank.',
-    loadout: { hammer: INF, torch: INF, ext: INF, spray: INF, shotgun: INF, planks: INF, bomb: INF, rocket: INF },
-    goal: { type: 'none' }, spawn: { x: 106, z: 214, yaw: 0 }
-  }
+    id: 'cranedown', map: 'quarry', name: 'Crane Down', where: 'Tower crane', light: 'overcast',
+    brief: 'The crane hire firm went bust and nobody is coming to dismantle it. Bring 60% of the tower crane down. Steel only gives way to the torch, rockets and heavy charges.',
+    loadout: { hammer: INF, spray: INF, torch: 60, rocket: 2, charge: 3, bomb: 2 },
+    goal: { type: 'demolish', building: 'crane', label: 'the tower crane', pct: 0.6 }, spawn: { x: 110, z: 130, yaw: 0 }
+  },
+  {
+    id: 'payroll', map: 'quarry', name: 'Payroll', where: 'Whole quarry', light: 'dusk',
+    brief: 'Friday wages are spread across the site: the cabins, the crusher control room, the crane cab and the explosives bunker. 80 seconds from the first alarm to the weighbridge gate.',
+    loadout: { hammer: INF, spray: INF, torch: 30, pistol: 12, planks: 8, bomb: 3, charge: 3, rocket: 1 },
+    goal: { type: 'heist', alarm: 80 }, spawn: { x: 126, z: 40, yaw: Math.PI }
+  },
+  { id: 'q_free', map: 'quarry', name: 'Free Roam', where: 'No rules', light: 'day', brief: 'Dig with the excavator, push rock with the bulldozer, swing the wrecking ball into the crusher.', loadout: ALL_TOOLS, goal: { type: 'none' }, spawn: { x: 126, z: 40, yaw: Math.PI } },
+
+  {
+    id: 'eastwing', map: 'estate', name: 'Renovation', where: 'East wing', light: 'day',
+    brief: 'The new owners want the east wing gone and the main house untouched. Bring 75% of the east wing down. Mind the portico.',
+    loadout: { hammer: INF, spray: INF, shotgun: 12, bomb: 4, charge: 2, rocket: 1, planks: 4 },
+    goal: { type: 'demolish', building: 'eastwing', label: 'the east wing', pct: 0.75 }, spawn: { x: 190, z: 36, yaw: Math.PI }
+  },
+  {
+    id: 'collector', map: 'estate', name: "Collector's Evening", where: 'Whole estate', light: 'dusk',
+    brief: 'The family is at the opera. A portrait, an orchid, the garage safe and the estate ledger, then out through the front gate. 90 seconds once the first alarm trips. The statuette in the maze is a bonus.',
+    loadout: { hammer: INF, spray: INF, torch: 30, pistol: 12, shotgun: 6, planks: 8, bomb: 2, charge: 2, rocket: 1 },
+    goal: { type: 'heist', alarm: 90 }, spawn: { x: 128, z: 14, yaw: Math.PI }
+  },
+  { id: 'e_free', map: 'estate', name: 'Free Roam', where: 'No rules', light: 'day', brief: 'Drop the portico, bulldoze the maze, crash the sports car into the pool.', loadout: ALL_TOOLS, goal: { type: 'none' }, spawn: { x: 128, z: 14, yaw: Math.PI } },
+
+  {
+    id: 'belltower', map: 'oldtown', name: 'Bell Tower', where: 'St. Ansel tower', light: 'day',
+    brief: 'The bell tower is leaning over the market and the council voted to take it down before it falls on its own. Bring 70% of it down.',
+    loadout: { hammer: INF, spray: INF, shotgun: 10, bomb: 4, charge: 3, planks: 4 },
+    goal: { type: 'demolish', building: 'tower', label: 'the bell tower', pct: 0.7 }, spawn: { x: 66, z: 100, yaw: Math.PI / 2 }
+  },
+  {
+    id: 'oldflames', map: 'oldtown', name: 'Old Flames', where: 'Timber row', light: 'overcast',
+    brief: 'The landlord of the rotten timber row south of the canal wants it gone and the insurance paid. Burn 70% of it in four minutes. The fire engine is parked on the corner. Leave it there.',
+    loadout: { hammer: INF, torch: 40, spray: INF },
+    goal: { type: 'demolish', building: 'timber', label: 'the timber row', pct: 0.7, limit: 240 }, spawn: { x: 120, z: 168, yaw: 0 }
+  },
+  {
+    id: 'marketday', map: 'oldtown', name: 'Market Day', where: 'Whole town', light: 'dusk',
+    brief: 'A reliquary in the bell tower, the town archive box, the market cash box and a miniature from a canal house. 80 seconds from the first alarm to the boat moorings at the east end of the canal.',
+    loadout: { hammer: INF, spray: INF, torch: 30, pistol: 12, planks: 10, bomb: 3, charge: 2, rocket: 1 },
+    goal: { type: 'heist', alarm: 80 }, spawn: { x: 66, z: 168, yaw: 0 }
+  },
+  { id: 'o_free', map: 'oldtown', name: 'Free Roam', where: 'No rules', light: 'day', brief: 'Swing the wrecking ball through the row houses, race the boat up the canal, drop the clock tower.', loadout: ALL_TOOLS, goal: { type: 'none' }, spawn: { x: 66, z: 168, yaw: 0 } }
 ];
 const LIGHTS = {
   day: { top: 0x5d97cf, hor: 0xcfe2ec, fog: 0xc4d8e2, sun: 0xfff0d8, sunI: 1.05, sunDir: [-0.45, 1, 0.35], hemiS: 0xbfd8ff, hemiG: 0x6d5c46, hemiI: 0.6, water: 0x0c3448 },
@@ -40,7 +84,7 @@ const Input = {
 };
 
 const Game = {
-  state: 'menu', world: null, loader: null, mission: null, checks: [], targets: [], stats: {},
+  state: 'menu', world: null, vehicles: [], grab: null, blastQ: [], recent: [], mapTab: 'gullpoint', mission: null, checks: [], targets: [], stats: {},
   settings: { sens: 1, shadows: true, volume: 0.7, invert: false },
   hud: {},
 
@@ -98,7 +142,7 @@ const Game = {
     this.applySettings();
     this.renderMenu();
     // Show the town behind the menu.
-    this.loadWorld(MISSIONS[3]); this.menuCam = 0;
+    this.loadWorld(MISSIONS.find(m => m.id === 'gp_free')); this.menuCam = 0;
     this.last = performance.now();
     requestAnimationFrame(t => this.frame(t));
   },
@@ -150,10 +194,10 @@ const Game = {
   keysDown(e) { Input.keys.add(e.code); },
   lock() { const c = this.renderer.domElement; try { const p = c.requestPointerLock(); if (p && p.catch) p.catch(() => { }); } catch (e) { } },
   onKey(code) {
-    if (code.startsWith('Digit')) { const n = +code.slice(5) - 1; if (n >= 0 && n < TOOL_DEFS.length && !Player.vehicle) Tools.select(n); }
+    const n = TOOL_KEYS.indexOf(code); if (n >= 0 && n < TOOL_DEFS.length && !Player.vehicle) Tools.select(n);
     if (code === 'KeyQ' && !Player.vehicle) Tools.cycle(1);
     if (code === 'KeyE') this.interact();
-    if (code === 'KeyR' && this.state === 'play') this.toast('Press Esc and choose Restart to start the job again.');
+    if (code === 'KeyF' && !Player.vehicle) this.toggleGrab();
   },
 
   bindUI() {
@@ -173,11 +217,16 @@ const Game = {
       hud: $('hud'), obj: $('objectives'), timer: $('timer'), prompt: $('prompt'), toolbar: $('toolbar'), health: $('healthFill'),
       toast: $('toast'), markers: $('markers'), progress: $('progress'), progFill: $('progFill'), progTxt: $('progTxt'), hurt: $('hurt'), toolName: $('toolName')
     };
-    this.el.toolbar.innerHTML = TOOL_DEFS.map((d, i) => `<div class="slot" data-i="${i}"><span class="k">${i + 1}</span><span class="nm">${d.name}</span><span class="am"></span></div>`).join('');
+    this.el.toolbar.innerHTML = TOOL_DEFS.map((d, i) => `<div class="slot" data-i="${i}"><span class="k">${i < 9 ? i + 1 : i === 9 ? 0 : '−'}</span><span class="nm">${d.name}</span><span class="am"></span></div>`).join('');
   },
   renderMenu() {
+    const tabs = document.getElementById('mapTabs');
+    tabs.innerHTML = Object.keys(MAPS).map(k => `<button class="tab ${k === this.mapTab ? 'on' : ''}" data-k="${k}" id="tab-${k}">${MAPS[k].name}</button>`).join('');
+    tabs.querySelectorAll('.tab').forEach(b => b.onclick = () => { this.mapTab = b.dataset.k; this.renderMenu(); });
+    document.getElementById('mapBlurb').textContent = MAPS[this.mapTab].blurb;
     const list = document.getElementById('missionList');
     list.innerHTML = MISSIONS.map((m, i) => {
+      if (m.map !== this.mapTab) return '';
       const b = this.best[m.id];
       return `<button class="mission" data-i="${i}" id="mission-${m.id}">
         <span class="mtop"><b>${m.name}</b><em>${m.where}</em></span>
@@ -199,12 +248,13 @@ const Game = {
 
   loadWorld(m) {
     if (this.world) this.world.dispose();
-    Bodies.clear(); Fire.clear(); FX.clear(); this.checks = [];
+    Bodies.clear(); Fire.clear(); FX.clear(); Shards.clear(); this.checks = []; this.blastQ = []; this.recent = []; this.grab = null;
     for (const t of this.targets) this.scene.remove(t.mesh);
-    if (this.loader) this.loader.dispose();
+    for (const v of this.vehicles) v.dispose(); this.vehicles = [];
+    Player.vehicle = null;
     this.world = new World(WORLD_X, WORLD_Y, WORLD_Z, this.scene);
     this.world.shadows = this.settings.shadows;
-    this.level = Level.build(this.world);
+    this.level = Level.build(this.world, m.map);
     this.world.buildAll();
     const L = LIGHTS[m.light];
     this.sky.material.uniforms.top.value.set(L.top); this.sky.material.uniforms.hor.value.set(L.hor);
@@ -212,7 +262,7 @@ const Game = {
     this.sun.color.set(L.sun); this.sun.intensity = L.sunI; this.sunDir = new THREE.Vector3(...L.sunDir).normalize();
     this.hemi.color.set(L.hemiS); this.hemi.groundColor.set(L.hemiG); this.hemi.intensity = L.hemiI;
     this.water.material.color.set(L.water);
-    this.loader = new Loader(this.scene, this.level.loader.x, this.level.loader.z, this.level.loader.yaw);
+    this.vehicles = this.level.vehicles.map(d => new Vehicle(this.scene, d.type, d.x, d.z, d.yaw, d));
     this.targets = [];
   },
 
@@ -291,24 +341,68 @@ const Game = {
     }
   },
 
+  exitVehicle() {
+    const l = Player.vehicle; if (!l) return;
+    const [fx, fz] = l.fwd();
+    Player.vehicle = null; SFX.setEngine(false, 0); SFX.setLoop('ext', 0);
+    const ground = l.T.air ? l.groundAt(this.world, l.pos.x, l.pos.z) : l.pos.y;
+    Player.pos.set(l.pos.x - fz * (l.W / 2 + 3), Math.max(ground, l.pos.y) + 1, l.pos.z + fx * (l.W / 2 + 3));
+    for (let k = 0; k < 16 && Player.collides(this.world, Player.pos.x, Player.pos.y, Player.pos.z); k++) Player.pos.y += 1;
+    Player.vel.set(0, 0, 0); Player.yaw = l.yaw;
+    Tools.hideVM(false);
+  },
   interact() {
-    if (Player.vehicle) {
-      const l = this.loader, [fx, fz] = l.fwd();
-      Player.vehicle = null;
-      Player.pos.set(l.pos.x - fz * 8, l.pos.y + 1, l.pos.z + fx * 8);
-      for (let k = 0; k < 12 && Player.collides(this.world, Player.pos.x, Player.pos.y, Player.pos.z); k++) Player.pos.y += 1;
-      Tools.hideVM(false); return;
-    }
+    if (Player.vehicle) { this.exitVehicle(); return; }
     const t = this.lookTarget();
     if (t) {
       t.taken = true; this.scene.remove(t.mesh); SFX.pickup();
-      if (t.alarm && !this.alarm) { this.alarm = { t: this.mission.goal.alarm }; this.toast('Alarm! ' + this.mission.goal.alarm + ' seconds to reach the boat.'); }
+      if (t.alarm && !this.alarm) { this.alarm = { t: this.mission.goal.alarm }; this.toast('Alarm! ' + this.mission.goal.alarm + ' seconds to reach the getaway.'); }
       else this.toast(t.name + ' taken.');
       this.renderObjectives(); return;
     }
-    if (this.nearLoader()) { Player.vehicle = this.loader; Tools.hideVM(true); this.toast('W/S drive · A/D steer · Space brake · E get out'); }
+    const v = this.nearVehicle();
+    if (v) {
+      if (this.grab) this.grab = null;
+      Player.vehicle = v; Tools.hideVM(true); Player.yaw = v.yaw; Player.pitch = -0.1;
+      this.toast(v.name + ': ' + (v.T.air ? 'W/S fly · A/D turn' : 'W/S drive · A/D steer · Space brake') + (v.T.work ? ' · ' + v.T.work : '') + ' · E get out');
+    }
   },
-  nearLoader() { return this.loader && Player.pos.distanceTo(this.loader.pos) < 13; },
+  nearVehicle() {
+    let best = null, bd = 1e9;
+    for (const v of this.vehicles) { if (v.dead) continue; const lo = v.toLocal(Player.pos); const d = Math.max(0, Math.abs(lo.z) - v.L / 2) + Math.max(0, Math.abs(lo.x) - v.W / 2); if (d < 5 && Math.abs(lo.y) < v.T.H + 4 && d < bd) { bd = d; best = v; } }
+    return best;
+  },
+  // Grab loose debris with F: carry it in front of you, click to throw.
+  toggleGrab() {
+    if (this.grab) { this.grab = null; return; }
+    if (Player.vehicle) return;
+    const eye = Player.eye(new THREE.Vector3()), dir = Player.dir(new THREE.Vector3());
+    const h = Bodies.raycast(eye, dir, 16);
+    if (h && h.body.mass <= 700) { this.grab = h.body; SFX.click(); }
+    else if (h) this.toast('Too heavy to lift. Use the forklift or the helicopter.');
+  },
+  updateGrab(dt) {
+    const b = this.grab; if (!b) return;
+    if (b.dead || !Bodies.list.includes(b)) { this.grab = null; return; }
+    const eye = Player.eye(new THREE.Vector3()), dir = Player.dir(new THREE.Vector3());
+    const target = eye.addScaledVector(dir, b.radius + 4);
+    b.v.copy(target.sub(b.pos).multiplyScalar(10)); b.w.multiplyScalar(0.8); b.rest = 0; b.age = 0;
+    if (Input.pressed0) { b.v.copy(dir.multiplyScalar(Math.min(70, 9000 / (b.mass + 60)))); b.w.set(Math.random() * 4, Math.random() * 4, Math.random() * 4); this.grab = null; Input.pressed0 = false; SFX.whoosh(); }
+  },
+  // Barrels set off by impacts, cuts and fire go up after a short delay, and set off their neighbours.
+  queueBlasts(dt) {
+    const B = this.world.blasts;
+    for (let k = 0; k < B.length; k += 3) {
+      const p = new THREE.Vector3(B[k], B[k + 1], B[k + 2]);
+      if (this.recent.some(r => r.p.distanceTo(p) < 5) || this.blastQ.some(q => q.p.distanceTo(p) < 5)) continue;
+      this.blastQ.push({ p, t: 0.12 + Math.random() * 0.25 });
+    }
+    B.length = 0;
+    for (const q of this.blastQ) { q.t -= dt; if (q.t <= 0) { this.recent.push({ p: q.p, t: 0.6 }); Tools.explode(this.world, q.p, 5.5, 2); Fire.igniteSphere(this.world, q.p.x, q.p.y, q.p.z, 6, 0.8); } }
+    this.blastQ = this.blastQ.filter(q => q.t > 0);
+    for (const r of this.recent) r.t -= dt;
+    this.recent = this.recent.filter(r => r.t > 0);
+  },
   lookTarget() {
     const eye = Player.eye(new THREE.Vector3()), dir = Player.dir(new THREE.Vector3());
     let best = null, bd = 1e9;
@@ -330,8 +424,8 @@ const Game = {
     if (g.type === 'heist') {
       for (const t of this.targets) h += `<div class="ob ${t.taken ? 'done' : ''}"><i class="${t.alarm ? 'al' : 'op'}"></i>${t.name}${t.required ? '' : ' <small>optional</small>'}</div>`;
       const all = this.targets.filter(t => t.required).every(t => t.taken);
-      h += `<div class="ob ${all ? '' : 'dim'}"><i class="ex"></i>Reach the boat at the pier</div>`;
-    } else if (g.type === 'demolish') h += `<div class="ob"><i class="op"></i>Bring down ${Math.round(g.pct * 100)}% of the ${g.building === 'house' ? 'Halloway house' : 'Pruitt barn'}</div>`;
+      h += `<div class="ob ${all ? '' : 'dim'}"><i class="ex"></i>Reach the getaway</div>`;
+    } else if (g.type === 'demolish') h += `<div class="ob"><i class="op"></i>Bring down ${Math.round(g.pct * 100)}% of ${g.label}</div>`;
     else h += `<div class="ob dim">No objectives. Break things.</div>`;
     this.el.obj.innerHTML = h;
   },
@@ -352,13 +446,13 @@ const Game = {
       }
       if (this.alarm) {
         this.alarm.t -= dt;
-        if (this.alarm.t <= 0) return this.fail('The alarm ran out. The police reached the pier first.');
+        if (this.alarm.t <= 0) return this.fail('The alarm ran out. The police got there first.');
       }
       const req = this.targets.filter(t => t.required), got = req.every(t => t.taken);
-      const e = this.level.escape, p = Player.vehicle ? this.loader.pos : Player.pos;
+      const e = this.level.escape, p = Player.vehicle ? Player.vehicle.pos : Player.pos;
       if (got && Math.hypot(p.x - e.x, p.z - e.z) < e.r && p.y < GY + 6) {
         const opt = this.targets.filter(t => !t.required && t.taken).length;
-        this.finish(true, `You made the boat with ${this.alarm ? Math.ceil(this.alarm.t) + ' s on the clock' : 'the alarm never tripped'}${opt ? ' and the painting under your arm' : ''}.`);
+        this.finish(true, `You got away with ${this.alarm ? Math.ceil(this.alarm.t) + ' s on the clock' : 'the alarm never tripped'}${opt ? ' and the painting under your arm' : ''}.`);
       }
     } else if (g.type === 'demolish') {
       this.demoT -= dt;
@@ -371,7 +465,7 @@ const Game = {
         this.demoPct = Math.max(0, 1 - left / this.demo0);
         if (this.demoPct >= g.pct) this.finish(true, `Down to ${Math.round((1 - this.demoPct) * 100)}% of what was standing.`);
       }
-      if (g.limit && this.stats.t > g.limit) this.fail('The fire brigade arrived. The barn is still standing.');
+      if (g.limit && this.stats.t > g.limit) this.fail('The fire brigade arrived. ' + g.label[0].toUpperCase() + g.label.slice(1) + ' is still standing.');
     }
   },
 
@@ -391,17 +485,17 @@ const Game = {
       slots[i].classList.toggle('none', !(a > 0));
       slots[i].lastChild.textContent = a >= INF / 2 ? '∞' : a > 0 ? (d.unit ? Math.ceil(a) + d.unit : a) : '–';
     }
-    e.toolName.textContent = Player.vehicle ? 'Wheel loader' : Tools.def().name + ' · ' + Tools.def().hint + (Tools.def().id === 'planks' && Tools.plankA ? ' · pick the second point' : '');
+    e.toolName.textContent = Player.vehicle ? Player.vehicle.name + ' · ' + Math.max(0, Math.ceil(Player.vehicle.hp / Player.vehicle.T.hp * 100)) + '% condition' + (Player.vehicle.T.work ? ' · ' + Player.vehicle.T.work : '') : Tools.def().name + ' · ' + Tools.def().hint + (Tools.def().id === 'planks' && Tools.plankA ? ' · pick the second point' : '');
     // Prompt.
     let pr = '';
     if (Player.vehicle) pr = '<kbd>E</kbd> Get out';
-    else { const t = this.lookTarget(); if (t) pr = `<kbd>E</kbd> Take ${t.name}${t.alarm && !this.alarm ? ' <span class="warn">starts alarm</span>' : ''}`; else if (this.nearLoader()) pr = '<kbd>E</kbd> Drive loader'; }
+    else { const t = this.lookTarget(); if (t) pr = `<kbd>E</kbd> Take ${t.name}${t.alarm && !this.alarm ? ' <span class="warn">starts alarm</span>' : ''}`; else { const v = this.nearVehicle(); if (v) pr = `<kbd>E</kbd> ${v.T.air ? 'Fly' : 'Drive'} ${v.name}`; } if (!pr && this.grab) pr = '<kbd>Click</kbd> Throw · <kbd>F</kbd> Drop'; }
     if (pr !== this._pr) { e.prompt.innerHTML = pr; this._pr = pr; }
     // Item markers.
     let mh = '';
     const W = innerWidth, H = innerHeight, v = new THREE.Vector3();
     const marks = this.targets.filter(t => !t.taken).map(t => ({ p: t.pos.clone().add(new THREE.Vector3(0, 2.5, 0)), n: t.name, c: t.alarm ? 'al' : 'op' }));
-    if (g.type === 'heist' && this.targets.filter(t => t.required).every(t => t.taken)) marks.push({ p: new THREE.Vector3(this.level.escape.x, GY + 3, this.level.escape.z), n: 'Boat', c: 'ex' });
+    if (g.type === 'heist' && this.targets.filter(t => t.required).every(t => t.taken)) marks.push({ p: new THREE.Vector3(this.level.escape.x, GY + 3, this.level.escape.z), n: 'Getaway', c: 'ex' });
     for (const mk of marks) {
       v.copy(mk.p).project(this.camera);
       if (v.z > 1) continue;
@@ -418,8 +512,13 @@ const Game = {
     dt = Math.min(0.05, Math.max(0.0001, dt));
     const w = this.world, cam = this.camera;
     if (this.state === 'play') {
-      if (Player.vehicle) { this.loader.update(dt, w, Input, true); Player.pos.copy(this.loader.pos); Player.pos.y += 4; SFX.setEngine(true, this.loader.speed); }
-      else { Player.update(dt, w, Input); this.loader.update(dt, w, Input, false); this.loader.pushOut(Player); SFX.setEngine(false, 0); }
+      for (const v of this.vehicles) v.update(dt, w, Input, v === Player.vehicle);
+      collideVehicles(this.vehicles);
+      if (Player.vehicle) { Player.pos.copy(Player.vehicle.pos); Player.pos.y += 4; Player.vel.set(0, 0, 0); SFX.setEngine(true, Player.vehicle.speed); }
+      else { Player.update(dt, w, Input); for (const v of this.vehicles) v.pushOut(Player); SFX.setEngine(false, 0); }
+      Shards.update(dt, w);
+      this.updateGrab(dt);
+      this.queueBlasts(dt);
       const eye = Player.eye(new THREE.Vector3()), dir = Player.dir(new THREE.Vector3());
       if (!Player.vehicle) Tools.update(dt, Input, w, eye, dir); else Tools.updateProj(dt, w);
       Bodies.update(dt, w);
@@ -437,9 +536,9 @@ const Game = {
       Input.pressed0 = Input.pressed2 = false;
       // Camera.
       if (Player.vehicle) {
-        const l = this.loader, d = 26, cp = Math.cos(Player.pitch * 0.6 - 0.35);
+        const l = Player.vehicle, d = l.T.cam, cp = Math.cos(Player.pitch * 0.6 - 0.35);
         cam.position.set(l.pos.x + Math.sin(Player.yaw) * d * cp, l.pos.y + 8 + Math.sin(0.35 - Player.pitch * 0.6) * d, l.pos.z + Math.cos(Player.yaw) * d * cp);
-        cam.lookAt(l.pos.x, l.pos.y + 6, l.pos.z);
+        cam.lookAt(l.pos.x, l.pos.y + l.T.H * 0.6, l.pos.z);
       } else {
         cam.position.copy(eye); cam.rotation.set(Player.pitch, Player.yaw, 0);
       }

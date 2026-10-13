@@ -6,9 +6,10 @@ const GY = 4;             // first air voxel above flat ground
 const WATER_Y = 2.6;      // harbour water surface
 const STOREY = 12;
 
-const Level = {
-  build(w) {
-    let seed = 1337;
+
+// Building kit shared by every map. All maps are deterministic so each job starts the same.
+function Kit(w, seed) {
+    seed = seed || 1337;
     const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) | 0; return (seed >>> 0) / 4294967296; };
     const S = (x, y, z, m, p) => w.setRaw(x, y, z, m, p);
     const box = (x0, y0, z0, x1, y1, z1, m, p) => { for (let y = y0; y < y1; y++) for (let z = z0; z < z1; z++) for (let x = x0; x < x1; x++) S(x, y, z, m, p); };
@@ -16,26 +17,7 @@ const Level = {
       box(x0, y0, z0, x1, y1, z0 + t, m, p); box(x0, y0, z1 - t, x1, y1, z1, m, p);
       box(x0, y0, z0, x0 + t, y1, z1, m, p); box(x1 - t, y0, z0, x1, y1, z1, m, p);
     };
-    const L = { buildings: {}, targets: [], props: [] };
-
-    // Terrain: flat town ground, a beach falling into the harbour on the south side.
-    for (let z = 0; z < WORLD_Z; z++) for (let x = 0; x < WORLD_X; x++) {
-      let top = GY;
-      if (z >= 200) top = Math.max(1, Math.round(GY - (z - 200) * 0.22));
-      for (let y = 0; y < top; y++) {
-        let m = y === 0 ? M.BEDROCK : M.DIRT;
-        if (y === top - 1) m = z >= 194 ? M.SAND : M.GRASS;
-        S(x, y, z, m);
-      }
-    }
-    // Roads and sidewalks.
-    box(0, GY - 1, 96, WORLD_X, GY, 110, M.ASPHALT);
-    box(118, GY - 1, 0, 132, GY, 196, M.ASPHALT);
-    box(0, GY - 1, 94, WORLD_X, GY, 96, M.CONCRETE); box(0, GY - 1, 110, WORLD_X, GY, 112, M.CONCRETE);
-    box(116, GY - 1, 0, 118, GY, 196, M.CONCRETE); box(132, GY - 1, 0, 134, GY, 196, M.CONCRETE);
-    // Turn the sidewalk concrete into anchoring ground so it never falls as debris.
-    for (let z = 0; z < WORLD_Z; z++) for (let x = 0; x < WORLD_X; x++) { const i = w.idx(x, GY - 1, z); if (w.data[i] === M.CONCRETE) w.data[i] = M.ASPHALT, w.paint[i] = 6; }
-
+    const L = { buildings: {}, targets: [], props: [], vehicles: [] };
     // A storey-by-storey house: slabs, walls with windows, a front door, stairs and a roof.
     const house = (o) => {
       const { x, z, wdt, dep, floors, wall, t = 1, floor = M.PLANK, roof = 'gable', winGap = 8, door = 'south', paint = 0 } = o;
@@ -107,6 +89,39 @@ const Level = {
       if (along) box(x + bx - 1, y + 1, z + 2, x + bx, y + 9, z + bz - 2, M.AIR); else box(x + 2, y + 1, z + bz - 1, x + bx - 2, y + 9, z + bz, M.AIR);
     };
     const target = (name, x, y, z, alarm, required) => L.targets.push({ name, x, y, z, alarm, required });
+    const barrel = (x, z, y) => { y = y || GY; for (let yy = 0; yy < 4; yy++) for (let dz = 0; dz < 3; dz++) for (let dx = 0; dx < 3; dx++) if (!((dx === 0 || dx === 2) && (dz === 0 || dz === 2))) S(x + dx, y + yy, z + dz, M.BARREL); };
+    const crate = (x, z, s, y) => { y = y || GY; box(x, y, z, x + s, y + s, z + s, M.PLANK); box(x + 1, y + 1, z, x + s - 1, y + s - 1, z + s, M.WOOD); box(x, y + 1, z + 1, x + s, y + s - 1, z + s - 1, M.WOOD); };
+    const cyl = (cx, cz, r, y0, y1, m, hollow, p) => { for (let y = y0; y < y1; y++) for (let z = Math.floor(cz - r - 1); z <= cz + r; z++) for (let x = Math.floor(cx - r - 1); x <= cx + r; x++) { const d = Math.hypot(x + 0.5 - cx, z + 0.5 - cz); if (d <= r && (!hollow || d > r - hollow)) S(x, y, z, m, p); } };
+    const line = (x0, y0, z0, x1, y1, z1, m, t) => { t = t || 1; const n = Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), Math.abs(z1 - z0)) * 2) + 1; for (let k = 0; k <= n; k++) { const f = k / n; box(Math.floor(x0 + (x1 - x0) * f), Math.floor(y0 + (y1 - y0) * f), Math.floor(z0 + (z1 - z0) * f), Math.floor(x0 + (x1 - x0) * f) + t, Math.floor(y0 + (y1 - y0) * f) + t, Math.floor(z0 + (z1 - z0) * f) + t, m); } };
+    const ground = (fn) => { for (let z = 0; z < WORLD_Z; z++) for (let x = 0; x < WORLD_X; x++) { const [top, m] = fn(x, z); for (let y = 0; y < top; y++) S(x, y, z, y === 0 ? M.BEDROCK : y === top - 1 ? m : (m === M.STONE || m === M.GRAVEL ? M.STONE : M.DIRT)); } };
+    const vehicle = (type, x, z, yaw, opts) => L.vehicles.push(Object.assign({ type, x, z, yaw }, opts || {}));
+    return { rnd, S, box, shell, house, tree, fence, car, container, target, barrel, crate, cyl, line, ground, vehicle, L };
+}
+
+const MAPS = {};
+MAPS.gullpoint = {
+  name: 'Gull Point', where: 'Harbour town', blurb: 'A small harbour town: houses, a warehouse, a bank, an office block, a water tower and a timber pier.',
+  build(w) {
+    const { rnd, S, box, shell, house, tree, fence, car, container, target, barrel, crate, vehicle, L } = Kit(w, 1337);
+
+    // Terrain: flat town ground, a beach falling into the harbour on the south side.
+    for (let z = 0; z < WORLD_Z; z++) for (let x = 0; x < WORLD_X; x++) {
+      let top = GY;
+      if (z >= 200) top = Math.max(1, Math.round(GY - (z - 200) * 0.22));
+      for (let y = 0; y < top; y++) {
+        let m = y === 0 ? M.BEDROCK : M.DIRT;
+        if (y === top - 1) m = z >= 194 ? M.SAND : M.GRASS;
+        S(x, y, z, m);
+      }
+    }
+    // Roads and sidewalks.
+    box(0, GY - 1, 96, WORLD_X, GY, 110, M.ASPHALT);
+    box(118, GY - 1, 0, 132, GY, 196, M.ASPHALT);
+    box(0, GY - 1, 94, WORLD_X, GY, 96, M.CONCRETE); box(0, GY - 1, 110, WORLD_X, GY, 112, M.CONCRETE);
+    box(116, GY - 1, 0, 118, GY, 196, M.CONCRETE); box(132, GY - 1, 0, 134, GY, 196, M.CONCRETE);
+    // Turn the sidewalk concrete into anchoring ground so it never falls as debris.
+    for (let z = 0; z < WORLD_Z; z++) for (let x = 0; x < WORLD_X; x++) { const i = w.idx(x, GY - 1, z); if (w.data[i] === M.CONCRETE) w.data[i] = M.ASPHALT, w.paint[i] = 6; }
+
 
     // --- Halloway house (brick, two storeys): the Clean Slate demolition job.
     L.buildings.house = house({ x: 22, z: 28, wdt: 34, dep: 26, floors: 2, wall: M.BRICK, t: 2, door: 'south' });
@@ -244,8 +259,15 @@ const Level = {
     for (let i = 0; i < 6; i++) { const lx = 20 + i * 40; box(lx, GY, 112, lx + 1, GY + 18, 113, M.STEEL); box(lx, GY + 17, 110, lx + 1, GY + 18, 113, M.STEEL); }
 
     L.spawn = { x: 106, y: GY, z: 214, yaw: 0 };
-    L.loader = { x: 106, z: 84, yaw: Math.PI };
+    vehicle('loader', 106, 84, Math.PI); vehicle('pickup', 196, 84, Math.PI / 2); vehicle('sedan', 40, 116, -Math.PI / 2, { color: 0x6b2a2a });
+    vehicle('sports', 64, 60, Math.PI); vehicle('truck', 222, 84, Math.PI / 2); vehicle('boat', 128, 232, Math.PI / 2);
+    vehicle('wrecker', 26, 100, -Math.PI / 2); vehicle('fire', 148, 100, Math.PI / 2); vehicle('forklift', 200, 68, 0);
+    vehicle('excavator', 80, 84, Math.PI); vehicle('heli', 224, 180, 0); vehicle('tank', 160, 180, Math.PI);
+    // Fuel barrels: they go up when hit hard, shot or burned.
+    for (const [bx, bz] of [[214, 66], [218, 66], [214, 70], [196, 120], [200, 120], [90, 170], [138, 214], [142, 214]]) barrel(bx, bz);
     L.escape = { x: 106, y: GY, z: 240, r: 8 };
     return L;
   }
 };
+
+const Level = { build(w, id) { return MAPS[id || 'gullpoint'].build(w); } };

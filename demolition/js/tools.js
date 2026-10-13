@@ -6,11 +6,15 @@ const TOOL_DEFS = [
   { id: 'torch', name: 'Blowtorch', hint: 'Cuts anything, slowly. Lights timber', hold: true, cd: 0.07, unit: 's' },
   { id: 'ext', name: 'Extinguisher', hint: 'Puts out fires', hold: true, cd: 0.05, unit: 's' },
   { id: 'spray', name: 'Spray can', hint: 'Mark your route. Right-click: colour', hold: true, cd: 0.03 },
+  { id: 'pistol', name: 'Pistol', hint: 'Punches through glass, timber and plaster', hold: false, cd: 0.22 },
   { id: 'shotgun', name: 'Shotgun', hint: 'Blows holes in soft walls', hold: false, cd: 0.9 },
+  { id: 'rifle', name: 'Hunting rifle', hint: 'Long range, goes through soft walls', hold: false, cd: 1.1 },
   { id: 'planks', name: 'Planks', hint: 'Click two points to bridge them', hold: false, cd: 0.25 },
   { id: 'bomb', name: 'Pipe bomb', hint: '3 s fuse. Concrete and brick', hold: false, cd: 0.6 },
+  { id: 'charge', name: 'Remote charge', hint: 'Click to stick one on · right-click sets them all off', hold: false, cd: 0.35 },
   { id: 'rocket', name: 'Rocket launcher', hint: 'Detonates on impact. Cuts steel', hold: false, cd: 1.3 }
 ];
+const TOOL_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'Minus'];
 
 const Tools = {
   cur: 0, ammo: {}, cdT: 0, plankA: null, proj: [], swing: 0, recoil: 0, sprayIdx: 0, firing: false,
@@ -33,6 +37,9 @@ const Tools = {
     if (id === 'ext') { cyl(0.09, 0.42, 0, -0.08, 0, L(0xc02a22), 0); box(0.04, 0.04, 0.3, 0.02, 0.16, -0.16, dark); }
     if (id === 'spray') { this.sprayBody = cyl(0.045, 0.2, 0, 0, -0.05, L(0xd63a2e), 0); cyl(0.02, 0.04, 0, 0.12, -0.05, L(0xdddddd), 0); }
     if (id === 'shotgun') { cyl(0.025, 0.7, 0, 0.02, -0.35, steel, Math.PI / 2); cyl(0.022, 0.6, 0, -0.03, -0.3, steel, Math.PI / 2); box(0.06, 0.12, 0.3, 0, -0.04, 0.05, wood); box(0.07, 0.07, 0.18, 0, -0.04, -0.28, wood); }
+    if (id === 'pistol') { box(0.05, 0.08, 0.26, 0, 0.03, -0.12, dark); box(0.045, 0.14, 0.07, 0, -0.06, 0, dark); box(0.03, 0.02, 0.05, 0, 0.08, -0.22, steel); }
+    if (id === 'rifle') { cyl(0.02, 0.85, 0, 0.03, -0.45, steel, Math.PI / 2); box(0.06, 0.1, 0.5, 0, -0.01, -0.05, wood); box(0.05, 0.14, 0.26, 0, -0.05, 0.28, wood); cyl(0.03, 0.32, 0, 0.1, -0.15, dark, Math.PI / 2); box(0.03, 0.03, 0.06, 0.04, 0.04, 0.0, steel); }
+    if (id === 'charge') { box(0.18, 0.1, 0.24, 0, 0, -0.1, L(0x8c7a52)); box(0.06, 0.03, 0.06, 0.04, 0.065, -0.14, L(0xff2a1a, 0xaa0000)); box(0.14, 0.02, 0.02, 0, 0.06, -0.02, dark); }
     if (id === 'planks') { box(0.3, 0.04, 0.7, 0, 0, -0.25, L(0xb48a58)); box(0.3, 0.04, 0.7, 0.02, 0.05, -0.22, L(0xa67c4c)); }
     if (id === 'bomb') { cyl(0.05, 0.26, 0, 0, -0.1, steel, Math.PI / 2); cyl(0.058, 0.04, 0, 0, -0.24, dark, Math.PI / 2); cyl(0.058, 0.04, 0, 0, 0.04, dark, Math.PI / 2); }
     if (id === 'rocket') { cyl(0.07, 0.9, 0, 0.04, -0.2, L(0x4d5a3a), Math.PI / 2); box(0.04, 0.14, 0.06, 0, -0.08, -0.05, dark); box(0.05, 0.06, 0.12, -0.08, 0.1, -0.1, dark); }
@@ -43,6 +50,7 @@ const Tools = {
     this.ammo = {}; for (const d of TOOL_DEFS) this.ammo[d.id] = lo[d.id] == null ? 0 : lo[d.id];
     this.cur = 0; this.plankA = null; this.marker.visible = false; this.select(0);
     for (const p of this.proj) this.scene.remove(p.mesh); this.proj = [];
+    for (const c of this.charges || []) this.scene.remove(c.mesh); this.charges = [];
   },
   available() { return TOOL_DEFS.map((d, i) => i).filter(i => this.ammo[TOOL_DEFS[i].id] > 0); },
   select(i) {
@@ -68,12 +76,13 @@ const Tools = {
     if (inp.pressed2) {
       if (id === 'spray') { this.sprayIdx = (this.sprayIdx + 1) % SPRAY_COLORS.length; const c = PAINTS[SPRAY_COLORS[this.sprayIdx]]; this.sprayBody.material.color.setRGB(c[0] / 255, c[1] / 255, c[2] / 255); SFX.click(); }
       if (id === 'planks' && this.plankA) { this.plankA = null; this.marker.visible = false; SFX.click(); }
+      if (id === 'charge') this.detonate(w);
     }
     SFX.setLoop('torch', id === 'torch' && this.firing ? 0.18 : 0);
     SFX.setLoop('spray', id === 'spray' && this.firing ? 0.07 : 0);
     SFX.setLoop('ext', id === 'ext' && this.firing ? 0.25 : 0);
     if (this.flame) this.flame.visible = id === 'torch' && this.firing;
-    this.updateProj(dt, w);
+    this.updateProj(dt, w); this.updateCharges(dt);
     // Viewmodel motion.
     this.swing = Math.max(0, this.swing - dt * 3.2);
     this.recoil = Math.max(0, this.recoil - dt * 5);
@@ -86,6 +95,7 @@ const Tools = {
     const hit = (range) => w.raycast(eye.x, eye.y, eye.z, dir.x, dir.y, dir.z, range, false);
     if (id === 'hammer') {
       this.swing = 1; SFX.whoosh();
+      if (this.strikeOther(eye, dir, 12, 2.3, 18, 1)) return;
       const h = hit(12);
       if (!h) return;
       const cx = h.px + dir.x * 0.6, cy = h.py + dir.y * 0.6, cz = h.pz + dir.z * 0.6;
@@ -116,12 +126,37 @@ const Tools = {
         if (Math.hypot(x + 0.5 - h.px, y + 0.5 - h.py, z + 0.5 - h.pz) > r || Math.random() < 0.25) continue;
         if (w.get(x, y, z) && !w.get(x + h.nx, y + h.ny, z + h.nz)) w.setPaint(x, y, z, col);
       }
+    } else if (id === 'pistol') {
+      this.ammo.pistol--; this.recoil = 0.5; Player.pitch = Math.min(1.5, Player.pitch + 0.015);
+      SFX.burst(0.18, 2200, 0.6, 0.6, 'lowpass', null, 0.3); FX.flash(eye.x + dir.x * 2, eye.y + dir.y * 2, eye.z + dir.z * 2, 1.5, 0.05);
+      this.bullet(w, eye, dir, 0.75, 1, 10);
+    } else if (id === 'rifle') {
+      this.ammo.rifle--; this.recoil = 1.1; Player.pitch = Math.min(1.5, Player.pitch + 0.07);
+      SFX.shot(); SFX.burst(0.6, 900, 0.5, 0.5, 'lowpass', null, 0.2); FX.flash(eye.x + dir.x * 2, eye.y + dir.y * 2, eye.z + dir.z * 2, 3, 0.08);
+      // Up to three soft surfaces punched through.
+      let o = eye.clone();
+      for (let k = 0; k < 3; k++) {
+        const r = this.bullet(w, o, dir, 0.9, 2, 40);
+        if (!r || r.stop) break;
+        o = r.point.clone().addScaledVector(dir, 1.2);
+      }
+    } else if (id === 'charge') {
+      const h = hit(14); if (!h) { SFX.empty(); return; }
+      this.ammo.charge--; SFX.click();
+      const mesh = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.4, 1.4), new THREE.MeshLambertMaterial({ color: 0x8c7a52 })); mesh.add(body);
+      const led = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshBasicMaterial({ color: 0xff2a1a })); led.position.set(0, 0.8, 0); mesh.add(led);
+      mesh.position.set(h.px + h.nx * 0.7, h.py + h.ny * 0.7, h.pz + h.nz * 0.7); this.scene.add(mesh);
+      this.charges.push({ mesh, led, cell: [h.x, h.y, h.z], t: 0 });
+      Game.toast(this.charges.length + ' charge' + (this.charges.length > 1 ? 's' : '') + ' set. Right-click to detonate.');
     } else if (id === 'shotgun') {
       this.ammo.shotgun--; this.recoil = 1; Player.pitch = Math.min(1.5, Player.pitch + 0.05); SFX.shot();
       FX.flash(eye.x + dir.x * 2, eye.y + dir.y * 2, eye.z + dir.z * 2, 3, 0.08);
       let bx0 = 1e9, by0 = 1e9, bz0 = 1e9, bx1 = -1, by1 = -1, bz1 = -1, broke = 0, lastM = 0;
       for (let k = 0; k < 12; k++) {
         const sx = dir.x + (Math.random() - 0.5) * 0.12, sy = dir.y + (Math.random() - 0.5) * 0.12, sz = dir.z + (Math.random() - 0.5) * 0.12, l = Math.hypot(sx, sy, sz);
+        const pd = new THREE.Vector3(sx / l, sy / l, sz / l);
+        if (this.strikeOther(eye, pd, 140, 1.1, 6, 1)) continue;
         const h = w.raycast(eye.x, eye.y, eye.z, sx / l, sy / l, sz / l, 140, false); if (!h) continue;
         const res = w.carve(h.px + sx / l * 0.4, h.py + sy / l * 0.4, h.pz + sz / l * 0.4, 1.05, 2, false, i => Fire.map.delete(i));
         if (res.n) { broke += res.n; lastM = h.m; FX.burst(res.samples, h.px, h.py, h.pz, 5); bx0 = Math.min(bx0, res.x0); by0 = Math.min(by0, res.y0); bz0 = Math.min(bz0, res.z0); bx1 = Math.max(bx1, res.x1); by1 = Math.max(by1, res.y1); bz1 = Math.max(bz1, res.z1); }
@@ -172,13 +207,15 @@ const Tools = {
       } else {
         const sp = p.vel.length(), d = p.vel.clone().divideScalar(sp);
         const h = w.raycast(p.pos.x, p.pos.y, p.pos.z, d.x, d.y, d.z, sp * dt, false);
-        if (h) { this.explode(w, new THREE.Vector3(h.px, h.py, h.pz), 5.5, 4); p.dead = true; }
+        const vh = this.otherHit(p.pos, d, sp * dt);
+        if (vh && (!h || vh.t < h.t)) { this.explode(w, p.pos.clone().addScaledVector(d, vh.t), p.r || 5.5, p.power || 4); p.dead = true; }
+        else if (h) { this.explode(w, new THREE.Vector3(h.px, h.py, h.pz), p.r || 5.5, p.power || 4); p.dead = true; }
         else {
           p.pos.addScaledVector(p.vel, dt);
           p.mesh.position.copy(p.pos); p.mesh.lookAt(p.pos.clone().add(d)); p.mesh.rotateX(Math.PI / 2);
           FX.smoke(p.pos.x - d.x * 1.5, p.pos.y - d.y * 1.5, p.pos.z - d.z * 1.5, 1.5, 0.45);
           FX.flame(p.pos.x - d.x * 1.4, p.pos.y - d.y * 1.4, p.pos.z - d.z * 1.4, 1);
-          if (p.t <= 0 || p.pos.y < -5) { this.explode(w, p.pos, 5.5, 4); p.dead = true; }
+          if (p.t <= 0 || p.pos.y < -5) { this.explode(w, p.pos, p.r || 5.5, p.power || 4); p.dead = true; }
         }
       }
       if (p.dead) this.scene.remove(p.mesh);
@@ -199,8 +236,56 @@ const Tools = {
     const d = pc.distanceTo(p);
     FX.shake = Math.max(FX.shake, Math.min(1.2, 26 / (d + 6)));
     if (d < r * 1.9) Player.damage((1 - d / (r * 1.9)) * 95, 'blast');
-    if (Game.loader) { const dl = Game.loader.pos.distanceTo(p); if (dl < r * 2) Game.loader.speed *= 0.3; }
+    for (const v of Game.vehicles) {
+      const c = v.pos.clone(); c.y += v.T.H * 0.4;
+      const dv = Math.max(0, c.distanceTo(p) - Math.min(v.L, v.W) * 0.4);
+      if (dv < r * 2.4) { const k = 1 - dv / (r * 2.4); v.damage(k * k * 160 * (power >= 4 ? 1.6 : 1), c.clone().sub(p).normalize()); v.impulse(p, k * 40 * (power >= 4 ? 1.4 : 1)); }
+    }
+    Shards.blast(p, r * 3, 30);
+    if (d < r * 2.5 && !Player.vehicle) { const kd = Player.pos.clone().sub(p); kd.y = Math.max(kd.y, 2); kd.normalize(); Player.vel.addScaledVector(kd, (1 - d / (r * 2.5)) * 40); }
     SFX.boom(p, power >= 4);
     Game.stats.explosions++;
+  },
+
+  // Shared hit for loose pieces and vehicles. Returns true if something other than the world was nearer.
+  otherHit(o, d, maxT) {
+    const hw = Game.world.raycast(o.x, o.y, o.z, d.x, d.y, d.z, maxT, false), lim = hw ? hw.t : maxT;
+    let best = null;
+    const hb = Bodies.raycast(o, d, lim); if (hb) best = { t: hb.t, body: hb.body, point: hb.point };
+    for (const v of Game.vehicles) {
+      if (v === Player.vehicle) continue;
+      const t = v.hitTest(o, d, best ? best.t : lim);
+      if (t != null && (!best || t < best.t)) best = { t, veh: v, point: o.clone().addScaledVector(d, t) };
+    }
+    return best;
+  },
+  strikeOther(o, d, maxT, r, vdmg, push) {
+    const h = this.otherHit(o, d, maxT); if (!h) return false;
+    if (h.body) { const n = h.body.chip(h.point, r); h.body.v.addScaledVector(d, push * 60 / Math.sqrt(h.body.mass)); h.body.rest = 0; if (n) SFX.breakMat(M.BRICK, n, h.point); else SFX.hammer(h.point); }
+    else { h.veh.damage(vdmg, d); h.veh.push.x += d.x * push * 2; h.veh.push.y += d.z * push * 2; SFX.burst(0.15, 2600, 4, 0.5, 'bandpass', h.point); for (let k = 0; k < 6; k++) FX.spark(h.point.x, h.point.y, h.point.z, (Math.random() - 0.5) * 16, Math.random() * 12, (Math.random() - 0.5) * 16); }
+    return true;
+  },
+  // One bullet. Returns where it stopped and whether it should stop.
+  bullet(w, o, dir, r, power, vdmg) {
+    const oh = this.otherHit(o, dir, 180);
+    if (oh) { this.strikeOther(o, dir, 180, r, vdmg, 0.5); return { point: oh.point, stop: true }; }
+    const h = w.raycast(o.x, o.y, o.z, dir.x, dir.y, dir.z, 180, false); if (!h) return null;
+    const res = w.carve(h.px + dir.x * 0.4, h.py + dir.y * 0.4, h.pz + dir.z * 0.4, r, power, false, i => Fire.map.delete(i));
+    const pt = new THREE.Vector3(h.px, h.py, h.pz);
+    if (res.n) { FX.burst(res.samples, h.px, h.py, h.pz, 5); Game.queueCheck([res.x0, res.y0, res.z0, res.x1, res.y1, res.z1]); SFX.breakMat(h.m, res.n, pt); }
+    else { FX.spark(h.px, h.py, h.pz, h.nx * 10, 6, h.nz * 10); FX.dust(h.px, h.py, h.pz); }
+    return { point: pt, stop: !res.n || HARD[h.m] > 1 };
+  },
+  launch(kind, pos, vel, opts) {
+    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 2.6, 8), this.projMatRocket); this.scene.add(mesh);
+    this.proj.push(Object.assign({ kind: 'rocket', pos: pos.clone(), vel: vel.clone(), t: 4, mesh }, opts || {}));
+  },
+  detonate(w) {
+    if (!this.charges.length) { SFX.empty(); return; }
+    const list = this.charges; this.charges = [];
+    list.forEach((c, i) => setTimeout(() => { this.scene.remove(c.mesh); if (Game.state === 'play') this.explode(w, c.mesh.position.clone(), 7, 3); }, i * 110));
+  },
+  updateCharges(dt) {
+    for (const c of this.charges) { c.t += dt; c.led.visible = (c.t % 0.8) < 0.15; }
   }
 };
