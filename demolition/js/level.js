@@ -1,0 +1,251 @@
+'use strict';
+/* Crumble — Gull Point, a small harbour town built voxel by voxel. Deterministic, so every job starts the same. */
+
+const WORLD_X = 256, WORLD_Y = 80, WORLD_Z = 256;
+const GY = 4;             // first air voxel above flat ground
+const WATER_Y = 2.6;      // harbour water surface
+const STOREY = 12;
+
+const Level = {
+  build(w) {
+    let seed = 1337;
+    const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) | 0; return (seed >>> 0) / 4294967296; };
+    const S = (x, y, z, m, p) => w.setRaw(x, y, z, m, p);
+    const box = (x0, y0, z0, x1, y1, z1, m, p) => { for (let y = y0; y < y1; y++) for (let z = z0; z < z1; z++) for (let x = x0; x < x1; x++) S(x, y, z, m, p); };
+    const shell = (x0, y0, z0, x1, y1, z1, t, m, p) => {
+      box(x0, y0, z0, x1, y1, z0 + t, m, p); box(x0, y0, z1 - t, x1, y1, z1, m, p);
+      box(x0, y0, z0, x0 + t, y1, z1, m, p); box(x1 - t, y0, z0, x1, y1, z1, m, p);
+    };
+    const L = { buildings: {}, targets: [], props: [] };
+
+    // Terrain: flat town ground, a beach falling into the harbour on the south side.
+    for (let z = 0; z < WORLD_Z; z++) for (let x = 0; x < WORLD_X; x++) {
+      let top = GY;
+      if (z >= 200) top = Math.max(1, Math.round(GY - (z - 200) * 0.22));
+      for (let y = 0; y < top; y++) {
+        let m = y === 0 ? M.BEDROCK : M.DIRT;
+        if (y === top - 1) m = z >= 194 ? M.SAND : M.GRASS;
+        S(x, y, z, m);
+      }
+    }
+    // Roads and sidewalks.
+    box(0, GY - 1, 96, WORLD_X, GY, 110, M.ASPHALT);
+    box(118, GY - 1, 0, 132, GY, 196, M.ASPHALT);
+    box(0, GY - 1, 94, WORLD_X, GY, 96, M.CONCRETE); box(0, GY - 1, 110, WORLD_X, GY, 112, M.CONCRETE);
+    box(116, GY - 1, 0, 118, GY, 196, M.CONCRETE); box(132, GY - 1, 0, 134, GY, 196, M.CONCRETE);
+    // Turn the sidewalk concrete into anchoring ground so it never falls as debris.
+    for (let z = 0; z < WORLD_Z; z++) for (let x = 0; x < WORLD_X; x++) { const i = w.idx(x, GY - 1, z); if (w.data[i] === M.CONCRETE) w.data[i] = M.ASPHALT, w.paint[i] = 6; }
+
+    // A storey-by-storey house: slabs, walls with windows, a front door, stairs and a roof.
+    const house = (o) => {
+      const { x, z, wdt, dep, floors, wall, t = 1, floor = M.PLANK, roof = 'gable', winGap = 8, door = 'south', paint = 0 } = o;
+      const x1 = x + wdt, z1 = z + dep, top = GY + floors * STOREY;
+      for (let f = 0; f < floors; f++) {
+        const fy = GY + f * STOREY;
+        box(x, fy, z, x1, fy + 1, z1, f === 0 ? M.CONCRETE : floor);
+        shell(x, fy + 1, z, x1, fy + STOREY, z1, t, wall, paint);
+        // Windows on every wall.
+        for (let k = x + 4; k + 4 <= x1 - 3; k += winGap) { box(k, fy + 4, z, k + 4, fy + 9, z + t, M.GLASS); box(k, fy + 4, z1 - t, k + 4, fy + 9, z1, M.GLASS); }
+        for (let k = z + 4; k + 4 <= z1 - 3; k += winGap) { box(x, fy + 4, k, x + t, fy + 9, k + 4, M.GLASS); box(x1 - t, fy + 4, k, x1, fy + 9, k + 4, M.GLASS); }
+        // Interior partition with a doorway.
+        const mx = x + (wdt * 0.45 | 0);
+        box(mx, fy + 1, z + t, mx + 1, fy + STOREY, z1 - t, f === 0 && wall === M.BRICK ? M.PLASTER : wall === M.WOOD ? M.WOOD : M.PLASTER);
+        box(mx, fy + 1, z + (dep / 2 | 0) - 2, mx + 1, fy + 9, z + (dep / 2 | 0) + 2, M.AIR);
+        // Stairs up along the east wall.
+        if (f < floors - 1) {
+          const sx = x1 - t - 5, sz = z + t + 1;
+          for (let s = 0; s < STOREY; s++) box(sx, fy + 1, sz + s, sx + 4, fy + 2 + s, sz + s + 1, floor === M.CONCRETE ? M.CONCRETE : M.PLANK);
+          box(sx, fy + STOREY, sz + 1, sx + 4, fy + STOREY + 1, sz + STOREY - 1, M.AIR);
+        }
+      }
+      // Front door.
+      const dx = x + (wdt / 2 | 0) - 2;
+      if (door === 'south') box(dx, GY + 1, z1 - t, dx + 4, GY + 9, z1, M.AIR); else box(dx, GY + 1, z, dx + 4, GY + 9, z + t, M.AIR);
+      if (roof === 'flat') { box(x, top, z, x1, top + 1, z1, M.CONCRETE); shell(x, top + 1, z, x1, top + 3, z1, 1, wall, paint); }
+      else {
+        box(x, top, z, x1, top + 1, z1, floor);
+        for (let k = 0; ; k++) {
+          const za = z - 1 + k, zb = z1 - k, y = top + k;
+          if (za > zb) break;
+          box(x - 1, y, za, x1 + 1, y + 1, za + 1, M.ROOF); box(x - 1, y, zb, x1 + 1, y + 1, zb + 1, M.ROOF);
+          if (zb - za > 1) { box(x, y, za + 1, x + 1, y + 1, zb, wall, paint); box(x1 - 1, y, za + 1, x1, y + 1, zb, wall, paint); }
+        }
+      }
+      return [x - 1, GY, z - 1, x1, top + (roof === 'flat' ? 3 : (dep / 2 | 0) + 2), z1];
+    };
+
+    const tree = (x, z, h) => {
+      box(x, GY, z, x + 2, GY + h, z + 2, M.WOOD);
+      const cy = GY + h, r = 4 + (rnd() * 2 | 0);
+      for (let y = -r; y <= r; y++) for (let zz = -r; zz <= r; zz++) for (let xx = -r; xx <= r; xx++) {
+        const d = Math.hypot(xx, y * 1.2, zz);
+        if (d <= r && rnd() > 0.12 && w.get(x + 1 + xx, cy + y, z + 1 + zz) === 0) S(x + 1 + xx, cy + y, z + 1 + zz, M.LEAVES);
+      }
+    };
+    const fence = (x0, z0, x1, z1) => {
+      const len = Math.max(Math.abs(x1 - x0), Math.abs(z1 - z0)), dx = Math.sign(x1 - x0), dz = Math.sign(z1 - z0);
+      for (let k = 0; k <= len; k++) {
+        const x = x0 + dx * k, z = z0 + dz * k;
+        if (k % 4 === 0) box(x, GY, z, x + 1, GY + 4, z + 1, M.WOOD); else { S(x, GY + 1, z, M.PLANK); S(x, GY + 3, z, M.PLANK); }
+      }
+    };
+    const car = (x, z, along, paint) => {
+      const L0 = 17, W0 = 8;
+      const bx = along ? [x, x + L0] : [x, x + W0], bz = along ? [z, z + W0] : [z, z + L0];
+      box(bx[0], GY + 1, bz[0], bx[1], GY + 4, bz[1], M.METAL, paint);
+      const ix = along ? [x + 4, x + 12] : [x + 1, x + W0 - 1], iz = along ? [z + 1, z + W0 - 1] : [z + 4, z + 12];
+      box(ix[0], GY + 4, iz[0], ix[1], GY + 7, iz[1], M.GLASS);
+      box(ix[0] + 1, GY + 7, iz[0], ix[1] - 1, GY + 8, iz[1], M.METAL, paint);
+      for (const [wx, wz] of along ? [[x + 2, z - 1], [x + 12, z - 1], [x + 2, z + W0 - 1], [x + 12, z + W0 - 1]] : [[x - 1, z + 2], [x - 1, z + 12], [x + W0 - 1, z + 2], [x + W0 - 1, z + 12]])
+        box(wx, GY, wz, wx + (along ? 3 : 2), GY + 3, wz + (along ? 2 : 3), M.RUBBER);
+    };
+    const container = (x, z, along, paint, y) => {
+      y = y || GY;
+      const bx = along ? 24 : 10, bz = along ? 10 : 24;
+      shell(x, y, z, x + bx, y + 10, z + bz, 1, M.METAL, paint);
+      box(x, y + 9, z, x + bx, y + 10, z + bz, M.METAL, paint); box(x, y, z, x + bx, y + 1, z + bz, M.METAL, paint);
+      if (along) box(x + bx - 1, y + 1, z + 2, x + bx, y + 9, z + bz - 2, M.AIR); else box(x + 2, y + 1, z + bz - 1, x + bx - 2, y + 9, z + bz, M.AIR);
+    };
+    const target = (name, x, y, z, alarm, required) => L.targets.push({ name, x, y, z, alarm, required });
+
+    // --- Halloway house (brick, two storeys): the Clean Slate demolition job.
+    L.buildings.house = house({ x: 22, z: 28, wdt: 34, dep: 26, floors: 2, wall: M.BRICK, t: 2, door: 'south' });
+    fence(16, 22, 64, 22); fence(16, 22, 16, 86); fence(64, 22, 64, 86);
+    tree(10, 70, 12); tree(68, 64, 14); tree(40, 74, 11);
+    // --- Townhouse row on the north side of the main road.
+    house({ x: 22, z: 122, wdt: 20, dep: 22, floors: 3, wall: M.PLASTER, roof: 'flat', door: 'north', paint: 0 });
+    house({ x: 44, z: 122, wdt: 20, dep: 22, floors: 3, wall: M.PLASTER, roof: 'flat', door: 'north', paint: 5 });
+    house({ x: 66, z: 122, wdt: 20, dep: 22, floors: 3, wall: M.BRICK, t: 1, roof: 'flat', door: 'north' });
+    target('Oil painting', 72, GY + 2 * STOREY + 1, 140, false, false);
+
+    // --- Pruitt barn (all timber): the Kindling job.
+    {
+      const x = 30, z = 166, x1 = 64, z1 = 190;
+      box(x, GY, z, x1, GY + 1, z1, M.PLANK);
+      shell(x, GY + 1, z, x1, GY + 16, z1, 1, M.WOOD, 2);
+      box(x + 13, GY + 1, z, x + 21, GY + 13, z + 1, M.AIR);
+      box(x + 1, GY + 9, z + 1, x + 10, GY + 10, z1 - 1, M.PLANK);
+      for (let k = 0; ; k++) {
+        const za = z - 1 + k, zb = z1 - k, y = GY + 16 + k; if (za > zb) break;
+        box(x - 1, y, za, x1 + 1, y + 1, za + 1, M.ROOF); box(x - 1, y, zb, x1 + 1, y + 1, zb + 1, M.ROOF);
+        if (zb - za > 1) { box(x, y, za + 1, x + 1, y + 1, zb, M.WOOD, 2); box(x1 - 1, y, za + 1, x1, y + 1, zb, M.WOOD, 2); }
+      }
+      for (let i = 0; i < 9; i++) { const hx = x + 3 + (i % 3) * 4, hz = z + 3 + ((i / 3) | 0) * 6; box(hx, GY + 1, hz, hx + 3, GY + 4, hz + 4, M.HAY); }
+      for (let i = 0; i < 5; i++) box(x + 24 + (i % 2) * 4, GY + 1, z + 4 + i * 4, x + 27 + (i % 2) * 4, GY + 3, z + 7 + i * 4, M.HAY);
+      L.buildings.barn = [x - 1, GY, z - 1, x1, GY + 30, z1];
+      fence(26, 160, 26, 196); fence(26, 160, 70, 160);
+      tree(72, 172, 13); tree(74, 186, 12);
+    }
+
+    // --- Water tower: steel legs, cross-bracing, a ladder and a timber tank.
+    {
+      const cx = 92, cz = 56, half = 7, legTop = GY + 34;
+      const legs = [[cx - half, cz - half], [cx + half - 2, cz - half], [cx - half, cz + half - 2], [cx + half - 2, cz + half - 2]];
+      for (const [lx, lz] of legs) box(lx, GY, lz, lx + 2, legTop, lz + 2, M.STEEL);
+      for (const by of [GY + 12, GY + 24]) {
+        box(cx - half, by, cz - half, cx + half, by + 1, cz - half + 1, M.STEEL); box(cx - half, by, cz + half - 1, cx + half, by + 1, cz + half, M.STEEL);
+        box(cx - half, by, cz - half, cx - half + 1, by + 1, cz + half, M.STEEL); box(cx + half - 1, by, cz - half, cx + half, by + 1, cz + half, M.STEEL);
+      }
+      const r = 9, ty0 = legTop, ty1 = legTop + 12;
+      for (let y = ty0; y < ty1 + 6; y++) for (let z = cz - r - 1; z <= cz + r; z++) for (let x = cx - r - 1; x <= cx + r; x++) {
+        const d = Math.hypot(x + 0.5 - cx, z + 0.5 - cz);
+        if (y === ty0 && d <= r) S(x, y, z, M.PLANK);
+        else if (y < ty1 && d <= r && d > r - 1.2) S(x, y, z, M.WOOD, 0);
+        else if (y >= ty1 && d <= r + 1 - (y - ty1) * 1.8 && d > r - 1 - (y - ty1) * 1.8) S(x, y, z, M.ROOF);
+      }
+      box(cx - 1, ty0 + 1, cz + r - 1, cx + 2, ty0 + 7, cz + r + 1, M.AIR);
+      box(cx - 2, ty0, cz + r - 1, cx + 3, ty0 + 1, cz + r + 2, M.PLANK);
+      box(cx - 1, GY, cz + r + 2, cx + 2, ty0 + 1, cz + r + 3, M.LADDER);
+      L.buildings.tower = [cx - r - 2, GY, cz - r - 2, cx + r + 2, ty1 + 6, cz + r + 2];
+      target('Strongbox', cx, ty0 + 1, cz, true, true);
+    }
+
+    // --- Warehouse: steel frame, corrugated metal skin, shelving and containers.
+    {
+      const x = 148, z = 14, x1 = 212, z1 = 60, h = 26;
+      box(x, GY, z, x1, GY + 1, z1, M.CONCRETE);
+      shell(x, GY + 1, z, x1, GY + h, z1, 1, M.METAL, 0);
+      for (let k = x; k < x1; k += 10) { box(k, GY + 1, z, k + 2, GY + h, z + 2, M.STEEL); box(k, GY + 1, z1 - 2, k + 2, GY + h, z1, M.STEEL); }
+      box(x1 - 2, GY + 1, z, x1, GY + h, z + 2, M.STEEL); box(x1 - 2, GY + 1, z1 - 2, x1, GY + h, z1, M.STEEL);
+      box(x, GY + h, z, x1, GY + h + 1, z1, M.METAL);
+      for (let k = x; k < x1; k += 10) box(k, GY + h - 1, z, k + 2, GY + h, z1, M.STEEL);
+      box(x + 20, GY + 1, z1 - 1, x + 36, GY + 19, z1, M.AIR);            // roller door
+      box(x1 - 1, GY + 1, z + 20, x1, GY + 9, z + 24, M.AIR);             // side door
+      for (let k = x + 6; k + 4 < x1 - 6; k += 9) box(k, GY + h - 6, z, k + 4, GY + h - 3, z + 1, M.GLASS);
+      for (let row = 0; row < 3; row++) {
+        const sz = z + 8 + row * 10;
+        for (let lvl = 0; lvl < 3; lvl++) box(x + 6, GY + 1 + lvl * 6, sz, x + 34, GY + 2 + lvl * 6, sz + 4, M.PLANK);
+        for (let k = x + 6; k <= x + 33; k += 9) box(k, GY + 1, sz, k + 1, GY + 18, sz + 4, M.WOOD);
+      }
+      container(x + 40, z + 6, false, 2); container(x + 52, z + 6, false, 4); container(x + 40, z + 6, false, 5, GY + 10);
+      // Mezzanine office.
+      box(x + 40, GY + 1, z + 34, x + 62, GY + 12, z + 35, M.PLASTER);
+      box(x + 40, GY + 12, z + 34, x + 62, GY + 13, z1 - 1, M.CONCRETE);
+      box(x + 50, GY + 1, z + 34, x + 54, GY + 9, z + 35, M.AIR);
+      for (let s = 0; s < 12; s++) box(x + 36, GY + 1, z + 22 + s, x + 40, GY + 2 + s, z + 23 + s, M.STEEL);
+      box(x + 38, GY + 12, z + 33, x + 40, GY + 13, z + 35, M.STEEL);
+      L.buildings.warehouse = [x, GY, z, x1, GY + h + 1, z1];
+      target('Keycase', x + 20, GY + 14, z + 19, true, true);
+    }
+    container(150, 72, true, 7); container(176, 72, true, 3); container(150, 72, true, 4, GY + 10);
+
+    // --- Bank with a steel-doored concrete vault.
+    {
+      const x = 156, z = 124, x1 = 190, z1 = 160;
+      box(x, GY, z, x1, GY + 1, z1, M.TILE);
+      shell(x, GY + 1, z, x1, GY + 16, z1, 3, M.CONCRETE);
+      box(x, GY + 16, z, x1, GY + 18, z1, M.CONCRETE);
+      for (let k = x + 5; k + 5 <= x1 - 5; k += 8) box(k, GY + 5, z, k + 5, GY + 12, z + 3, M.GLASS);
+      box(x + 14, GY + 1, z, x + 20, GY + 11, z + 3, M.AIR);
+      box(x + 4, GY + 1, z + 10, x + 30, GY + 5, z + 12, M.WOOD);          // teller counter
+      const vx = x + 18, vz = z + 20;
+      shell(vx, GY + 1, vz, vx + 13, GY + 15, vz + 13, 3, M.CONCRETE);
+      box(vx, GY + 15, vz, vx + 13, GY + 16, vz + 13, M.CONCRETE);
+      box(vx + 4, GY + 1, vz, vx + 9, GY + 10, vz + 3, M.STEEL);
+      L.buildings.bank = [x, GY, z, x1, GY + 18, z1];
+      target('Ledger', vx + 6, GY + 1, vz + 7, true, true);
+    }
+
+    // --- Five-storey office block: concrete frame with glass curtain walls.
+    {
+      const x = 204, z = 116, x1 = 236, z1 = 148, floors = 5;
+      for (let f = 0; f < floors; f++) {
+        const fy = GY + f * STOREY;
+        box(x, fy, z, x1, fy + 1, z1, M.CONCRETE);
+        shell(x, fy + 1, z, x1, fy + STOREY, z1, 1, M.GLASS);
+        box(x, fy + 1, z, x1, fy + 3, z1, M.CONCRETE); box(x + 1, fy + 1, z + 1, x1 - 1, fy + 3, z1 - 1, M.AIR);
+        for (let k = x; k < x1; k += 8) for (let q = z; q < z1; q += 8) {
+          if (k === x || q === z || k + 8 >= x1 || q + 8 >= z1) box(Math.min(k, x1 - 2), fy + 1, Math.min(q, z1 - 2), Math.min(k, x1 - 2) + 2, fy + STOREY, Math.min(q, z1 - 2) + 2, M.CONCRETE);
+        }
+        box(x + 2, fy + 1, z + 16, x + 20, fy + STOREY, z + 17, M.PLASTER); box(x + 8, fy + 1, z + 16, x + 12, fy + 9, z + 17, M.AIR);
+        for (let d = 0; d < 3; d++) box(x + 4 + d * 6, fy + 1, z + 4, x + 8 + d * 6, fy + 3, z + 7, M.WOOD);
+        if (f < floors - 1) {
+          const sx = x1 - 7, sz = z + 3;
+          for (let s = 0; s < STOREY; s++) box(sx, fy + 1, sz + s, sx + 4, fy + 2 + s, sz + s + 1, M.CONCRETE);
+          box(sx, fy + STOREY, sz + 1, sx + 4, fy + STOREY + 1, sz + STOREY - 1, M.AIR);
+        }
+      }
+      const top = GY + floors * STOREY;
+      box(x, top, z, x1, top + 1, z1, M.CONCRETE); shell(x, top + 1, z, x1, top + 3, z1, 1, M.CONCRETE);
+      box(x + 14, GY + 1, z, x + 20, GY + 10, z + 1, M.AIR);
+      L.buildings.office = [x, GY, z, x1, top + 3, z1];
+      target('Hard drive', x + 8, GY + 4 * STOREY + 1, z + 26, true, true);
+    }
+
+    // --- Harbour: timber pier on piles, a boathouse and a few parked cars.
+    box(96, GY - 1, 196, 116, GY, 250, M.PLANK);
+    for (let z = 198; z < 250; z += 6) { box(96, 0, z, 98, GY - 1, z + 2, M.WOOD); box(114, 0, z, 116, GY - 1, z + 2, M.WOOD); }
+    box(96, GY, 196, 97, GY + 3, 250, M.WOOD); box(115, GY, 196, 116, GY + 3, 250, M.WOOD);
+    box(96, GY, 249, 116, GY + 3, 250, M.WOOD);
+    box(102, GY, 196, 110, GY + 3, 197, M.AIR);
+    house({ x: 140, z: 198, wdt: 22, dep: 18, floors: 1, wall: M.WOOD, floor: M.PLANK, roof: 'gable', door: 'north', paint: 4 });
+    car(60, 99, true, 2); car(140, 99, true, 4); car(200, 102, true, 6); car(122, 140, false, 3); car(84, 164, false, 8);
+    tree(100, 30, 14); tree(104, 160, 12); tree(140, 120, 13); tree(4, 140, 12); tree(240, 70, 14); tree(236, 20, 12); tree(200, 176, 13); tree(10, 10, 12);
+    for (let i = 0; i < 6; i++) { const lx = 20 + i * 40; box(lx, GY, 112, lx + 1, GY + 18, 113, M.STEEL); box(lx, GY + 17, 110, lx + 1, GY + 18, 113, M.STEEL); }
+
+    L.spawn = { x: 106, y: GY, z: 214, yaw: 0 };
+    L.loader = { x: 106, z: 84, yaw: Math.PI };
+    L.escape = { x: 106, y: GY, z: 240, r: 8 };
+    return L;
+  }
+};

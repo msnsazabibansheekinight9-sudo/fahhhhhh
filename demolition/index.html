@@ -1,0 +1,181 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Crumble</title>
+<meta name="description" content="Crumble: a voxel demolition and heist sandbox. Everything breaks, burns and falls.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;700;800&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: full-bleed WebGL canvas; menu is a job board pinned left; HUD sits in the four corners like a site foreman's clipboard. */
+:root {
+  --ink: #111316; --panel: rgba(17, 19, 22, .9); --line: #2c3036; --fg: #e8e4da; --muted: #9a978e; --dim: #6a6a66;
+  --hazard: #f2b33d; --alarm: #e5483a; --go: #57e08a; --cool: #7fc8ff;
+  --f-display: 'Saira Condensed', 'Arial Narrow', 'Helvetica Neue', sans-serif;
+  --f-mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--ink); color: var(--fg); font: 15px/1.4 var(--f-mono); overflow: hidden; user-select: none; -webkit-user-select: none; }
+#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; background: var(--ink); }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--hazard); outline-offset: 2px; }
+.screen { position: fixed; inset: 0; z-index: 10; display: flex; }
+
+/* menu */
+#menu { pointer-events: none; }
+#menu .board { pointer-events: auto; width: min(560px, 100%); box-sizing: border-box; padding: clamp(20px, 5vh, 56px) clamp(16px, 4vw, 48px); background: linear-gradient(90deg, rgba(17,19,22,.96) 62%, rgba(17,19,22,0)); overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
+.logo { font: 800 clamp(64px, 13vw, 128px)/.8 var(--f-display); letter-spacing: -.01em; text-transform: uppercase; margin: 0; }
+.logo span { display: inline-block; background: repeating-linear-gradient(-45deg, var(--hazard) 0 14px, var(--ink) 14px 28px); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.tag { color: var(--muted); max-width: 40ch; margin: 0; }
+.label { font: 600 11px/1 var(--f-mono); letter-spacing: .16em; text-transform: uppercase; color: var(--hazard); }
+#missionList { display: flex; flex-direction: column; gap: 8px; }
+.mission { text-align: left; background: rgba(255,255,255,.02); border: 1px solid var(--line); border-left: 4px solid var(--line); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; transition: border-color .15s, background .15s; }
+.mission:hover, .mission:focus-visible { border-color: var(--hazard); background: rgba(242,179,61,.06); }
+.mtop { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.mtop b { font: 700 26px/1 var(--f-display); text-transform: uppercase; letter-spacing: .02em; }
+.mtop em { font-style: normal; font-size: 12px; color: var(--muted); }
+.mbrief { color: #c9c5bb; font-size: 13px; }
+.mbest { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+.keys { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 12px; color: var(--muted); }
+.keys kbd, kbd { font: 600 11px var(--f-mono); color: var(--fg); border: 1px solid var(--line); border-bottom-width: 2px; padding: 1px 6px; border-radius: 3px; background: #1a1d21; }
+.settings { display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; align-items: center; font-size: 12px; color: var(--muted); }
+.settings input[type=range] { width: 100%; accent-color: var(--hazard); }
+.settings input[type=checkbox] { accent-color: var(--hazard); justify-self: start; }
+details summary { cursor: pointer; }
+.foot { font-size: 11px; color: var(--dim); margin-top: auto; }
+
+/* overlays */
+.overlay { background: rgba(10,11,13,.72); backdrop-filter: blur(3px); align-items: center; justify-content: center; z-index: 30; padding: 16px; }
+.dialog { background: var(--panel); border: 1px solid var(--line); border-top: 4px solid var(--hazard); padding: 24px; width: min(420px, 100%); box-sizing: border-box; display: flex; flex-direction: column; gap: 14px; }
+.dialog h2 { margin: 0; font: 800 44px/1 var(--f-display); text-transform: uppercase; }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { background: transparent; border: 1px solid var(--line); padding: 9px 16px; font: 700 17px var(--f-display); text-transform: uppercase; letter-spacing: .06em; }
+.btn:hover { border-color: var(--hazard); color: var(--hazard); }
+.btn.primary { background: var(--hazard); border-color: var(--hazard); color: var(--ink); }
+.btn.primary:hover { color: var(--ink); filter: brightness(1.1); }
+#resTable { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+#resTable div { display: flex; justify-content: space-between; border-bottom: 1px dashed var(--line); padding: 3px 0; font-variant-numeric: tabular-nums; }
+#resWhy { color: #c9c5bb; margin: 0; }
+#loading { align-items: center; justify-content: center; background: var(--ink); z-index: 40; font: 700 28px var(--f-display); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+
+/* HUD */
+#hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+#cross { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: rgba(255,255,255,.85); box-shadow: 0 0 0 1px rgba(0,0,0,.5); }
+#objectives { position: absolute; left: 16px; top: 16px; background: var(--panel); border-left: 4px solid var(--hazard); padding: 10px 14px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; max-width: 280px; }
+#objectives .mname { font: 700 20px/1 var(--f-display); text-transform: uppercase; margin-bottom: 4px; }
+.ob { display: flex; align-items: center; gap: 8px; }
+.ob i { width: 9px; height: 9px; transform: rotate(45deg); flex: none; }
+.ob .al { background: var(--hazard); } .ob .op { background: var(--cool); } .ob .ex { background: var(--go); }
+.ob.done { color: var(--dim); text-decoration: line-through; } .ob.dim { color: var(--dim); }
+.ob small { color: var(--dim); font-size: 11px; }
+#timer { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); font: 800 40px/1 var(--f-display); font-variant-numeric: tabular-nums; text-shadow: 0 2px 8px rgba(0,0,0,.6); }
+#timer.quiet { font-size: 22px; color: var(--muted); }
+#timer.alarm { color: var(--alarm); font-size: 56px; animation: pulse .5s steps(2) infinite; }
+@keyframes pulse { 50% { opacity: .55; } }
+#progress { position: absolute; right: 16px; top: 16px; width: 220px; background: var(--panel); padding: 10px 14px; font-size: 12px; }
+#progress .bar { height: 8px; background: #23262b; margin-top: 6px; }
+#progFill { height: 100%; width: 0; background: repeating-linear-gradient(-45deg, var(--hazard) 0 6px, #c88f22 6px 12px); transition: width .3s; }
+#toolbar { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; }
+.slot { width: 86px; background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--line); padding: 5px 7px; display: grid; grid-template-columns: auto 1fr; gap: 0 6px; font-size: 11px; }
+.slot .k { color: var(--dim); } .slot .nm { grid-column: 1 / 3; font: 700 14px/1.1 var(--f-display); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.slot .am { grid-row: 1; grid-column: 2; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+.slot.on { border-top-color: var(--hazard); background: rgba(40,34,20,.92); }
+.slot.none { opacity: .3; }
+#toolName { position: absolute; bottom: 74px; left: 50%; transform: translateX(-50%); font-size: 12px; color: var(--muted); text-shadow: 0 1px 4px #000; white-space: nowrap; }
+#health { position: absolute; left: 16px; bottom: 16px; width: 180px; font-size: 11px; letter-spacing: .14em; color: var(--muted); }
+#health .bar { height: 8px; background: #23262b; margin-top: 4px; }
+#healthFill { height: 100%; width: 100%; background: var(--go); transition: width .2s; }
+#prompt { position: absolute; left: 50%; top: calc(50% + 34px); transform: translateX(-50%); font-size: 14px; text-shadow: 0 1px 4px #000; white-space: nowrap; }
+#prompt .warn { color: var(--alarm); font-size: 12px; margin-left: 6px; }
+#toast { position: absolute; left: 50%; top: 80px; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line); padding: 8px 14px; font-size: 13px; opacity: 0; transition: opacity .3s; max-width: min(560px, 90vw); text-align: center; }
+#toast.on { opacity: 1; }
+#markers .mk { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; margin: -6px 0 0 -60px; width: 120px; font-size: 11px; text-shadow: 0 1px 3px #000; }
+#markers .mk i { width: 10px; height: 10px; transform: rotate(45deg); border: 2px solid currentColor; }
+#markers .al { color: var(--hazard); } #markers .op { color: var(--cool); } #markers .ex { color: var(--go); }
+#hurt { position: absolute; inset: 0; box-shadow: inset 0 0 160px rgba(229,72,58,.9); opacity: 0; }
+#mobileNote { display: none; }
+@media (max-width: 720px) {
+  #toolbar { display: none; } #progress { width: 150px; } #mobileNote { display: block; color: var(--alarm); font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { #timer.alarm { animation: none; } }
+</style>
+
+<canvas id="c"></canvas>
+
+<div id="menu" class="screen">
+  <div class="board">
+    <div>
+      <div class="label">Gull Point · contractor board</div>
+      <h1 class="logo">Crum<span>ble</span></h1>
+    </div>
+    <p class="tag">A voxel demolition and heist sandbox. Every wall breaks, timber burns, and anything that loses its support falls.</p>
+    <p id="mobileNote">Crumble needs a keyboard and mouse.</p>
+    <div class="label">Open jobs</div>
+    <div id="missionList"></div>
+    <details>
+      <summary class="label">Controls</summary>
+      <div class="keys" style="margin-top:10px">
+        <kbd>WASD</kbd><span>Move · <kbd>Shift</kbd> sprint · <kbd>C</kbd> crouch · <kbd>Space</kbd> jump</span>
+        <kbd>Mouse</kbd><span>Look · left click uses the tool · right click is its alt</span>
+        <kbd>1–8</kbd><span>Pick a tool · <kbd>Q</kbd> or wheel cycles</span>
+        <kbd>E</kbd><span>Take an item · get in or out of the loader</span>
+        <kbd>Esc</kbd><span>Pause</span>
+      </div>
+    </details>
+    <details>
+      <summary class="label">Settings</summary>
+      <div class="settings" style="margin-top:10px">
+        <label for="setSens">Mouse</label><input id="setSens" type="range" min="0.3" max="2.5" step="0.05">
+        <label for="setVol">Volume</label><input id="setVol" type="range" min="0" max="1" step="0.05">
+        <label for="setShadows">Shadows</label><input id="setShadows" type="checkbox">
+        <label for="setInvert">Invert Y</label><input id="setInvert" type="checkbox">
+      </div>
+    </details>
+    <div class="foot">One voxel is 25 cm. Brick needs a hammer, concrete needs explosives, steel needs the torch or a rocket.</div>
+  </div>
+</div>
+
+<div id="loading" class="screen" hidden>Building Gull Point…</div>
+
+<div id="pause" class="screen overlay" hidden>
+  <div class="dialog">
+    <div class="label">Paused</div>
+    <h2>Coffee break</h2>
+    <div class="btns"><button class="btn primary" id="btnResume">Resume</button><button class="btn" id="btnRestart">Restart</button><button class="btn" id="btnQuit">Job board</button></div>
+  </div>
+</div>
+
+<div id="result" class="screen overlay" hidden>
+  <div class="dialog">
+    <div class="label">Report</div>
+    <h2 id="resTitle"></h2>
+    <p id="resWhy"></p>
+    <div id="resTable"></div>
+    <div class="btns"><button class="btn primary" id="resRetry">Play again</button><button class="btn" id="resMenu">Job board</button></div>
+  </div>
+</div>
+
+<div id="hud" hidden>
+  <div id="hurt"></div>
+  <div id="markers"></div>
+  <div id="cross"></div>
+  <div id="objectives"></div>
+  <div id="timer" hidden></div>
+  <div id="progress" hidden>Demolished <span id="progTxt"></span><div class="bar"><div id="progFill"></div></div></div>
+  <div id="prompt"></div>
+  <div id="toast"></div>
+  <div id="toolName"></div>
+  <div id="toolbar"></div>
+  <div id="health">HEALTH<div class="bar"><div id="healthFill"></div></div></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="js/voxel.js"></script>
+<script src="js/physics.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/level.js"></script>
+<script src="js/player.js"></script>
+<script src="js/tools.js"></script>
+<script src="js/game.js"></script>
