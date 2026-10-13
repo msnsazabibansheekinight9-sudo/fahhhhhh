@@ -32,6 +32,7 @@ class Body {
     this.dims = [W, H, D];
     this.radius = 0.5 * Math.sqrt(W * W + H * H + D * D);
     this.mass = n; this.invM = 1 / n;
+    let fl = 0; for (let a = 0; a < n; a++) if (FLAM[rec.ms[idx[a]]] >= 0.7) fl++; this.floaty = fl / n;
     this.invI = 1 / (n * (W * W + H * H + D * D) / 18 * 1.4 + 1);
     const grid = new Int32Array(W * H * D).fill(-1);
     for (let a = 0; a < n; a++) { const k = idx[a]; grid[((rec.ys[k] - y0) * D + (rec.zs[k] - z0)) * W + (rec.xs[k] - x0)] = a; }
@@ -208,6 +209,17 @@ class Body {
       this.chips.push([hp[0], hp[1], hp[2], Math.min(3.5, 1.2 + hardest / 14)]);
     }
     if (pen) { const s = 0.8 / pen; this.pos.x += cx * s; this.pos.y += cy * s; this.pos.z += cz * s; }
+    // Water: drag, buoyancy for timber, a splash on the way in.
+    if (this.pos.y < WATER_Y) {
+      if (!this.wet && this.v.y < -6) { for (let k = 0; k < 10; k++) FX.steam(this.pos.x + (Math.random() - 0.5) * this.radius, WATER_Y + 0.4, this.pos.z + (Math.random() - 0.5) * this.radius); SFX.burst(0.5, 700, 0.5, Math.min(1, this.mass / 400), 'lowpass', this.pos); }
+      this.wet = true;
+      const sub = Math.min(1, (WATER_Y - this.pos.y) / Math.max(1, this.dims[1] * 0.5));
+      this.v.y += G * dt * sub * (0.35 + this.floaty * 1.4);
+      this.v.multiplyScalar(1 - Math.min(0.9, 1.6 * dt)); w.multiplyScalar(1 - Math.min(0.9, 2 * dt));
+    } else this.wet = false;
+    // Keep integration sane after big impulses.
+    const vl = this.v.length(); if (vl > 140) this.v.multiplyScalar(140 / vl);
+    const wl = w.length(); if (wl > 9) w.multiplyScalar(9 / wl);
     const damp = contacts ? Math.max(0, 1 - 3 * dt) : 1 - 0.2 * dt;
     w.multiplyScalar(damp);
     if (contacts) this.v.multiplyScalar(1 - 0.6 * dt);

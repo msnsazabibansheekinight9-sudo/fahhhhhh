@@ -1,7 +1,7 @@
 'use strict';
 /* Crumble — Gull Point, a small harbour town built voxel by voxel. Deterministic, so every job starts the same. */
 
-const WORLD_X = 768, WORLD_Y = 112, WORLD_Z = 768;
+const WORLD_X = 1024, WORLD_Y = 112, WORLD_Z = 1024;
 const TILE = 256;         // a district is one 256 × 256 tile
 const GY = 16;            // first air voxel above flat ground: 4 m of ground below
 const WATER_Y = GY - 1.4; // sea, harbour and canal surface
@@ -19,7 +19,39 @@ function Kit(w, seed, L, ox, oz) {
       box(x0, y0, z0, x1, y1, z0 + t, m, p); box(x0, y0, z1 - t, x1, y1, z1, m, p);
       box(x0, y0, z0, x0 + t, y1, z1, m, p); box(x1 - t, y0, z0, x1, y1, z1, m, p);
     };
-    L = L || { buildings: {}, targets: [], props: [], vehicles: [], floors: [] };
+    L = L || { buildings: {}, targets: [], props: [], vehicles: [], floors: [], roads: [] };
+    // Furniture for one storey of a home: kitchen, sofa and dining table downstairs; beds, wardrobes, desks and a bath upstairs.
+    // Everything stays west of the stairwell (keepX), out of the front and back hallways and clear of the partition doorway.
+    const furnish = (x, z, x1, z1, t, fy, keepX, f, kind, mx, dep, door) => {
+      const ax = x + t, bx = Math.min(keepX - 4, x1 - t - 1), az = z + t + 4, bz = z1 - t - 5, y = fy + 1;
+      if (bx - ax < 5 || bz - az < 7) return;
+      const col = [2, 3, 4, 5, 7, 8][(rnd() * 6) | 0];
+      const doorZ0 = z + (dep / 2 | 0) - 3, doorZ1 = z + (dep / 2 | 0) + 3;
+      const westEnd = mx ? mx - 1 : bx;
+      const clearOfDoor = (z0, z1b) => !mx || z1b <= doorZ0 || z0 >= doorZ1;
+      let cz = az;
+      // A west door keeps the ground floor's west wall clear around it.
+      const blockZ0 = door === 'west' && f === 0 ? doorZ0 - 2 : 1e9, blockZ1 = door === 'west' && f === 0 ? doorZ1 + 2 : -1e9;
+      const along = (len, fn) => { if (cz < blockZ1 && cz + len > blockZ0) cz = blockZ1; if (cz + len > bz) return; fn(cz); cz += len + 2; };
+      if (kind === 'home' && f === 0) {
+        along(9, zz => { box(ax, y, zz, ax + 3, y + 3, zz + 9, M.WOOD); box(ax, y + 3, zz, ax + 3, y + 4, zz + 9, M.TILE); S(ax + 1, y + 3, zz + 4, M.POOL); box(ax, y + 7, zz, ax + 2, y + 9, zz + 9, M.WOOD); });
+        along(3, zz => box(ax, y, zz, ax + 3, y + 8, zz + 3, M.METAL, 6));
+        along(10, zz => { box(ax, y, zz, ax + 3, y + 2, zz + 10, M.CLOTH, col); box(ax, y + 2, zz, ax + 1, y + 4, zz + 10, M.CLOTH, col); box(ax, y, zz - 1, ax + 3, y + 3, zz, M.CLOTH, col); box(ax, y, zz + 10, ax + 3, y + 3, zz + 11, M.CLOTH, col); });
+        if (westEnd - ax >= 12) { const tx = ax + 6, tz = az + ((bz - az) >> 1) - 3; if (clearOfDoor(tz, tz + 6)) { box(tx, y + 3, tz, tx + 5, y + 4, tz + 6, M.PLANK); for (const [a, b] of [[0, 0], [4, 0], [0, 5], [4, 5]]) box(tx + a, y, tz + b, tx + a + 1, y + 3, tz + b + 1, M.WOOD); for (const q of [1, 4]) { box(tx - 2, y, tz + q, tx - 1, y + 2, tz + q + 1, M.WOOD); box(tx - 3, y, tz + q, tx - 2, y + 4, tz + q + 1, M.WOOD); } } }
+      } else if (kind === 'home') {
+        along(10, zz => { box(ax, y, zz, ax + 6, y + 2, zz + 10, M.WOOD); box(ax, y + 2, zz, ax + 6, y + 3, zz + 10, M.CLOTH, 6); box(ax, y + 2, zz + 3, ax + 6, y + 3, zz + 10, M.CLOTH, col); box(ax, y, zz, ax + 6, y + 5, zz + 1, M.WOOD); box(ax + 1, y + 3, zz + 1, ax + 5, y + 4, zz + 3, M.CLOTH, 6); });
+        along(4, zz => { box(ax, y, zz, ax + 3, y + 9, zz + 4, M.WOOD); box(ax + 2, y + 1, zz + 1, ax + 3, y + 8, zz + 3, M.PLANK); });
+        if (f % 2) along(9, zz => { box(ax, y, zz, ax + 4, y + 3, zz + 9, M.TILE); box(ax + 1, y + 1, zz + 1, ax + 3, y + 3, zz + 8, M.POOL); });
+        else along(6, zz => { box(ax, y + 3, zz, ax + 3, y + 4, zz + 6, M.PLANK); box(ax, y, zz, ax + 1, y + 3, zz + 6, M.WOOD); S(ax + 1, y + 4, zz + 2, M.METAL, 8); box(ax + 4, y, zz + 2, ax + 5, y + 2, zz + 4, M.WOOD); box(ax + 5, y, zz + 2, ax + 6, y + 4, zz + 4, M.WOOD); });
+        along(5, zz => { box(ax, y, zz, ax + 2, y + 8, zz + 5, M.WOOD); for (let h = 1; h < 8; h += 2) box(ax + 1, y + h, zz, ax + 2, y + h + 1, zz + 5, M.CLOTH, [2, 4, 5, 7][h >> 1]); });
+      } else if (kind === 'bunks') {
+        for (let zz = az; zz + 9 <= bz; zz += 11) { if (zz < blockZ1 && zz + 9 > blockZ0) continue; box(ax, y, zz, ax + 5, y + 2, zz + 9, M.STEEL); box(ax, y + 2, zz, ax + 5, y + 3, zz + 9, M.CLOTH, 5); box(ax, y + 6, zz, ax + 5, y + 7, zz + 9, M.STEEL); box(ax, y + 7, zz, ax + 5, y + 8, zz + 9, M.CLOTH, 5); box(ax, y, zz, ax + 1, y + 8, zz + 1, M.STEEL); }
+      } else if (kind === 'office') {
+        for (let zz = az; zz + 6 <= bz; zz += 8) { if (zz < blockZ1 && zz + 6 > blockZ0) continue; box(ax, y + 3, zz, ax + 4, y + 4, zz + 6, M.PLANK); box(ax, y, zz, ax + 1, y + 3, zz + 6, M.WOOD); S(ax + 1, y + 4, zz + 2, M.METAL, 8); S(ax + 1, y + 5, zz + 2, M.METAL, 8); box(ax + 5, y, zz + 2, ax + 6, y + 2, zz + 4, M.WOOD); box(ax + 6, y, zz + 2, ax + 7, y + 4, zz + 4, M.WOOD); }
+        if (bz - 4 > az) box(bx - 2, y, bz - 3, bx, y + 6, bz, M.METAL, 6);
+      }
+      S(ax + ((westEnd - ax) >> 1), fy + STOREY - 1, az + ((bz - az) >> 1), M.GLASS);
+    };
     // A storey-by-storey house: slabs, walls with windows, a front door, stairs and a roof.
     // A straight flight up one storey along +z from (sx, sz). Storeys alternate between two side-by-side positions so a flight
     // never sits under the next one; a 3-row landing must be free before sz and after the top.
@@ -72,6 +104,10 @@ function Kit(w, seed, L, ox, oz) {
           if (zb - za > 1) { box(x, y, za + 1, x + 1, y + 1, zb, wall, paint); box(x1 - 1, y, za + 1, x1, y + 1, zb, wall, paint); }
         }
       }
+      // Interiors, by what the building is for.
+      const nm = o.name || 'house';
+      const kind = o.furnish || (/barracks/.test(nm) ? 'bunks' : /house|apartments|row house|farmhouse/.test(nm) ? 'home' : /office|headquarters|hut|tower|clubhouse/.test(nm) ? 'office' : null);
+      if (kind) { const mxp = wdt >= 18 && dep >= 16 && x + (wdt * 0.4 | 0) < sx - 4 ? x + (wdt * 0.4 | 0) : 0; for (let f = 0; f < floors; f++) furnish(x, z, x1, z1, t, GY + f * STOREY, fits ? sx - 4 : x1 - t - 8, f, kind, mxp, dep, door); }
       for (const h of holes) cut(h);
       return [x - 1, GY, z - 1, x1, top + (roof === 'flat' ? 3 : (dep / 2 | 0) + 2), z1];
     };

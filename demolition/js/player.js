@@ -15,6 +15,18 @@ const Player = {
     const y0 = Math.floor(py), y1 = Math.floor(py + (h || this.h) - 1e-6);
     const z0 = Math.floor(pz - hw), z1 = Math.floor(pz + hw - 1e-6);
     for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) if (SOLID[w.get(x, y, z)]) return true;
+    // Loose debris is solid too: sample the box against each nearby piece's own voxel grid.
+    const hh = h || this.h;
+    for (const b of Bodies.list) {
+      if (b.dead || Math.abs(b.pos.x - px) > b.radius + 3 || Math.abs(b.pos.z - pz) > b.radius + 3 || Math.abs(b.pos.y - py - hh / 2) > b.radius + hh) continue;
+      if (Game.grab === b) continue;
+      const e = b.rot();
+      for (let sy = 0; sy <= hh; sy += Math.max(1, hh / 4)) for (const ox of [-hw, 0, hw]) for (const oz of [-hw, 0, hw]) {
+        const dx = px + ox - b.pos.x, dy = py + Math.min(sy, hh - 0.05) - b.pos.y, dz = pz + oz - b.pos.z;
+        const lx = e[0] * dx + e[1] * dy + e[2] * dz, ly = e[4] * dx + e[5] * dy + e[6] * dz, lz = e[8] * dx + e[9] * dy + e[10] * dz;
+        if (b.occ(Math.floor(lx + b.com.x), Math.floor(ly + b.com.y), Math.floor(lz + b.com.z)) >= 0) return true;
+      }
+    }
     return false;
   },
   touches(w, mat) {

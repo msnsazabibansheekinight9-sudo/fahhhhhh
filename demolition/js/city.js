@@ -15,6 +15,7 @@ const CITY = {
   road(K, axis, a0, a1, c, rw) {
     const { box, S } = K; rw = rw || 14;
     const sw = 3, w = rw + sw * 2;
+    (K.L.roads = K.L.roads || []).push({ axis, a0: a0 + (axis === 'x' ? K.ox : K.oz), a1: a1 + (axis === 'x' ? K.ox : K.oz), c: c + (axis === 'x' ? K.oz : K.ox), rw });
     if (axis === 'x') {
       box(a0, GY - 1, c, a1, GY, c + w, M.ASPHALT, 6);
       box(a0, GY - 1, c + sw, a1, GY, c + sw + rw, M.ASPHALT);
@@ -407,80 +408,149 @@ const CITY = {
   }
 };
 
-// ---------- the four maps
+// ---------- leisure and rural zones
+Object.assign(CITY, {
+  // Indices of the n biggest blocks, for things that need room (building sites).
+  largest(blocks, n) { return blocks.map((b, i) => [(b[2] - b[0]) * (b[3] - b[1]) * ((b[2] - b[0]) >= 90 && (b[3] - b[1]) >= 90 ? 1 : 0), i]).sort((a, b) => b[0] - a[0]).slice(0, n).filter(e => e[0] > 0).map(e => e[1]); },
+  // Fairground: a covered bumper-car arena, a big wheel, stalls and the cars themselves.
+  fairground(K, x0, z0, x1, z1) {
+    const { box, shell, cyl, line, L } = K;
+    box(x0, GY - 1, z0, x1, GY, z1, M.ASPHALT, 6);
+    const ax = x0 + 10, az = z0 + 10, aw = 70, ad = 50;
+    box(ax, GY - 1, az, ax + aw, GY, az + ad, M.METAL, 8);
+    for (let k = ax; k <= ax + aw; k += 10) for (const q of [az, az + ad - 1]) box(Math.min(k, ax + aw - 1), GY, q, Math.min(k, ax + aw - 1) + 1, GY + 16, q + 1, M.STEEL);
+    box(ax, GY, az, ax + aw, GY + 2, az + 1, M.RUBBER); box(ax, GY, az + ad - 1, ax + aw, GY + 2, az + ad, M.RUBBER);
+    box(ax, GY, az, ax + 1, GY + 2, az + ad, M.RUBBER); box(ax + aw - 1, GY, az, ax + aw, GY + 2, az + ad, M.RUBBER);
+    box(ax + 30, GY, az, ax + 40, GY + 2, az + 1, M.AIR);
+    box(ax, GY + 16, az, ax + aw, GY + 17, az + ad, M.METAL, 2);
+    for (let k = 0; k < aw; k += 6) box(ax + k, GY + 15, az + 1, ax + k + 3, GY + 16, az + ad - 1, M.GLASS);
+    L.floors.push({ x: ax + K.ox, z: az + K.oz, x1: ax + aw + K.ox, z1: az + ad + K.oz, y: GY, name: 'bumper car arena' });
+    for (let k = 0; k < 8; k++) K.vehicle('bumper', ax + 10 + (k % 4) * 15, az + 14 + ((k / 4) | 0) * 20, k * 0.8, { color: [0xd8331c, 0x2f6aa8, 0xe2c02a, 0x3e8a4a][k % 4] });
+    // Big wheel: two rings of steel on an A-frame with gondolas.
+    const wx = x0 + 110, wz = z0 + 40, wy = GY + 34, r = 28;
+    for (const s of [-1, 1]) { line(wx - 16, GY, wz + s * 5, wx, wy, wz + s * 5, M.STEEL); line(wx + 16, GY, wz + s * 5, wx, wy, wz + s * 5, M.STEEL); }
+    box(wx, wy, wz - 5, wx + 1, wy + 1, wz + 6, M.STEEL);
+    for (let a = 0; a < 64; a++) { const t = a / 64 * Math.PI * 2, x = Math.round(wx + Math.cos(t) * r), y = Math.round(wy + Math.sin(t) * r); for (const s of [-3, 3]) K.S(x, y, wz + s, M.STEEL, 2); if (a % 8 === 0) { line(wx, wy, wz - 3, x, y, wz - 3, M.STEEL); line(wx, wy, wz + 3, x, y, wz + 3, M.STEEL); box(x - 2, y - 5, wz - 2, x + 3, y - 1, wz + 3, M.METAL, [2, 3, 4, 5][a / 8 % 4]); } }
+    for (let k = 0; k < 5; k++) { const sx = x0 + 10 + k * 16, sz = z1 - 30; for (const [a, b] of [[0, 0], [11, 0], [0, 9], [11, 9]]) box(sx + a, GY, sz + b, sx + a + 1, GY + 9, sz + b + 1, M.WOOD); box(sx, GY, sz, sx + 12, GY + 3, sz + 2, M.PLANK, [2, 3, 4, 5, 7][k]); for (let q = 0; q < 3; q++) box(sx - 1, GY + 9 + q, sz - 1 + q * 3, sx + 13, GY + 10 + q, sz + 2 + q * 3, M.CLOTH); }
+    K.vehicle('foodtruck', x1 - 30, z0 + 100, Math.PI / 2); K.vehicle('icecream', x1 - 30, z0 + 140, Math.PI / 2);
+  },
+  // Farm: fields of crops, a barn, a grain silo, hay bales, fences and the tractors.
+  farm(K, x0, z0, x1, z1) {
+    const { box, cyl, house, fence } = K;
+    for (let z = z0; z < z1; z++) for (let x = x0; x < x1; x++) K.S(x, GY - 1, z, (x >> 2) % 3 === 0 ? M.DIRT : M.GRASS, (x >> 2) % 3 === 0 ? 0 : 5);
+    for (let z = z0 + 10; z < z1 - 90; z += 4) for (let x = x0 + 10; x < x1 - 120; x += 4) if (((x >> 2) % 3) !== 0) K.S(x, GY, z, M.HAY);
+    const bx = x1 - 100, bz = z0 + 20;
+    house({ x: bx, z: bz, wdt: 40, dep: 30, floors: 2, wall: M.WOOD, t: 1, floor: M.PLANK, roof: 'gable', door: 'south', paint: 2, winGap: 8, name: 'farm barn' });
+    house({ x: bx, z: bz + 50, wdt: 30, dep: 22, floors: 2, wall: M.PLASTER, t: 1, roof: 'gable', door: 'west', paint: 6, winGap: 6, name: 'farmhouse' });
+    cyl(bx + 60, bz + 12, 7, GY, GY + 40, M.METAL, 1.2, 6); for (let y = 0; y < 6; y++) cyl(bx + 60, bz + 12, 7 - y, GY + 40 + y, GY + 41 + y, M.METAL, 0, 6);
+    for (let k = 0; k < 12; k++) cyl(x0 + 20 + (k % 6) * 10, z1 - 60 + ((k / 6) | 0) * 10, 2.5, GY, GY + 4, M.HAY);
+    fence(x0 + 4, z0 + 4, x1 - 4, z0 + 4); fence(x0 + 4, z0 + 4, x0 + 4, z1 - 4);
+    K.vehicle('tractor', bx + 10, bz + 40, Math.PI / 2, { color: 0x3e8a4a }); K.vehicle('tractor', x0 + 60, z1 - 30, 0, { color: 0xc4231c }); K.vehicle('tractor', bx - 20, bz + 10, 0, { color: 0x2f6aa8 });
+    K.vehicle('pickup', bx + 40, bz + 40, 0, { color: 0x8a6040 });
+  },
+  // Folkrace track: a dirt oval with banked tyre walls, a grandstand and a paddock of junk racers.
+  raceTrack(K, x0, z0, x1, z1) {
+    const { box, cyl } = K;
+    box(x0, GY - 1, z0, x1, GY, z1, M.GRASS);
+    const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2 - 10, rx = (x1 - x0) / 2 - 30, rz = (z1 - z0) / 2 - 40;
+    for (let z = z0; z < z1; z++) for (let x = x0; x < x1; x++) {
+      const d = Math.hypot((x - cx) / rx, (z - cz) / rz);
+      if (d > 0.72 && d < 1.0) K.S(x, GY - 1, z, M.DIRT);
+      else if (d >= 1.0 && d < 1.03) { K.S(x, GY, z, M.RUBBER); K.S(x, GY + 1, z, M.RUBBER); }
+      else if (d <= 0.72 && d > 0.69) { K.S(x, GY, z, M.RUBBER); }
+    }
+    for (let k = 0; k < 6; k++) { const jx = Math.round(cx - rx * 0.86), jz = Math.round(cz - 20 + k * 8); }
+    for (let q = 0; q < 6; q++) box(Math.round(cx - rx * 0.86) - 6, GY, Math.round(cz) + q - 3, Math.round(cx - rx * 0.86) + 6, GY + Math.min(q, 5 - q) + 1, Math.round(cz) + q - 2, M.DIRT);
+    // Grandstand on the north side: stepped plank seating on steel.
+    const gx = x0 + 40, gz = z0 + 4;
+    for (let r = 0; r < 6; r++) box(gx, GY + r * 2, gz + r * 3, gx + 90, GY + r * 2 + 2, gz + r * 3 + 3, M.PLANK, 6);
+    for (const px of [gx, gx + 44, gx + 89]) box(px, GY, gz + 18, px + 1, GY + 24, gz + 19, M.STEEL);
+    box(gx, GY + 24, gz, gx + 90, GY + 25, gz + 19, M.METAL, 2);
+    K.L.floors.push({ x: gx + K.ox, z: gz + K.oz, x1: gx + 90 + K.ox, z1: gz + 18 + K.oz, y: GY + 12, name: 'grandstand' });
+    const racers = ['rallywagon', 'tuktuk', 'buggy', 'rally4x4', 'rallycoupe', 'roadster', 'flowervan', 'campervan', 'monsterbus', 'couch', 'bathtub', 'trolley'];
+    racers.forEach((t, i) => K.vehicle(t, x0 + 30 + (i % 6) * 22, z1 - 34 + ((i / 6) | 0) * 18, 0));
+  }
+});
+
+// ---------- the four maps (1024 × 1024 voxels each)
 const MAPS = {
   gullpoint: {
-    name: 'Gull Point', where: 'Harbour city', blurb: 'A harbour city: downtown towers and car parks, suburbs, the old waterfront town, a marina and an airport.',
+    name: 'Gull Point', where: 'Harbour city', blurb: 'A harbour city: downtown towers and car parks, suburbs, the old waterfront town, a fairground, a marina and an international airport.',
     build(w) {
-      CITY.terrain(w, (x, z) => z >= 680 ? [Math.max(4, Math.round(GY - (z - 680) * 0.3)), M.SAND] : z >= 668 ? [GY, M.SAND] : [GY, M.GRASS]);
+      CITY.terrain(w, (x, z) => z >= 940 ? [Math.max(4, Math.round(GY - (z - 940) * 0.3)), M.SAND] : z >= 926 ? [GY, M.SAND] : [GY, M.GRASS]);
       const K = Kit(w, 31), L = K.L; L.districts = {};
       const D = (name, tx, tz) => { L.districts[name] = [tx, tz]; DISTRICTS[name].build(Kit(w, 1337, L, tx, tz)); };
-      D('gullpoint', 256, 512);
-      const blocks = CITY.grid(K, 0, 0, 512, 512, 112);
-      blocks.forEach((b, i) => CITY.fillBlock(K, b, b[0] >= 220 ? 'downtown' : 'residential'));
-      CITY.road(K, 'z', 512, 680, 120); CITY.road(K, 'x', 0, 512, 512 - 20);
-      CITY.marina(K, 0, 512, 250, 768, 680);
-      CITY.airport(K, 512, 0, 768, 768);
-      CITY.depot(K, 150, 540, 250, 630);
+      D('gullpoint', 384, 704);
+      const blocks = CITY.grid(K, 0, 0, 740, 690, 112);
+      blocks.forEach(b => { const d = Math.hypot((b[0] + b[2]) / 2 - 370, (b[1] + b[3]) / 2 - 340); CITY.fillBlock(K, b, d < 230 ? 'downtown' : 'residential'); });
+      CITY.road(K, 'z', 690, 930, 120); CITY.road(K, 'x', 0, 740, 690);
+      CITY.marina(K, 0, 712, 370, 1024, 940);
+      CITY.fairground(K, 640, 712, 750, 920);
+      CITY.airport(K, 760, 0, 1024, 1024);
+      L.busStops = true;
       return L;
     }
   },
   quarry: {
-    name: 'Redcut', where: 'Industrial town', blurb: 'An industrial town: factories, warehouses and a container yard, a lumber yard, a construction site, Redcut quarry and a fenced military base.',
+    name: 'Redcut', where: 'Industrial town', blurb: 'An industrial town: factories, warehouses and a container yard, a construction site, a folkrace dirt track, a lumber yard, Redcut quarry and a large military base.',
     build(w) {
       CITY.terrain(w);
       const K = Kit(w, 47), L = K.L; L.districts = {};
       const D = (name, tx, tz) => { L.districts[name] = [tx, tz]; DISTRICTS[name].build(Kit(w, 4242, L, tx, tz)); };
-      D('quarry', 256, 512);
-      K.vehicle('monster', 256 + 126, 512 + 196, Math.PI / 2); K.vehicle('supercar', 256 + 60, 512 + 20, 0);
-      const blocks = CITY.grid(K, 0, 0, 512, 512, 128);
-      blocks.forEach((b, i) => { if (i === 5) K.bld('site', CITY.construction(K, b[0], b[1], b[2], b[3])); else CITY.fillBlock(K, b, 'industrial'); });
-      CITY.lumberyard(K, 0, 520, 250, 768);
-      CITY.militaryBase(K, 520, 0, 768, 768);
-      CITY.road(K, 'z', 512, 768, 236); CITY.road(K, 'x', 0, 520, 492);
+      D('quarry', 384, 768);
+      K.vehicle('monster', 384 + 126, 768 + 196, Math.PI / 2); K.vehicle('supercar', 384 + 60, 768 + 20, 0);
+      const blocks = CITY.grid(K, 0, 0, 680, 560, 128);
+      const big = CITY.largest(blocks, 1);
+      blocks.forEach((b, i) => { if (big.includes(i)) K.bld('site', CITY.construction(K, b[0], b[1], b[2], b[3])); else CITY.fillBlock(K, b, 'industrial'); });
+      CITY.raceTrack(K, 0, 580, 370, 760);
+      CITY.lumberyard(K, 0, 768, 370, 1024);
+      CITY.militaryBase(K, 700, 0, 1024, 1024);
+      CITY.road(K, 'z', 560, 1024, 372); CITY.road(K, 'x', 0, 700, 748);
+      L.busStops = true;
       return L;
     }
   },
   estate: {
-    name: 'Ashgrove', where: 'Suburbs', blurb: 'Leafy suburbs with Ashgrove Estate, a golf course, a park, shops, a works depot and a small airfield.',
+    name: 'Ashgrove', where: 'Suburbs', blurb: 'Leafy suburbs with Ashgrove Estate, a golf course, a working farm, a park, shops, a works depot and a small airfield.',
     build(w) {
       CITY.terrain(w);
       const K = Kit(w, 53), L = K.L; L.districts = {};
       const D = (name, tx, tz) => { L.districts[name] = [tx, tz]; DISTRICTS[name].build(Kit(w, 9001, L, tx, tz)); };
-      D('estate', 256, 0);
-      CITY.golf(K, 0, 0, 250, 520);
-      const blocks = CITY.grid(K, 256, 260, 768, 768, 112);
-      blocks.forEach((b, i) => { if (i === 4) CITY.park(K, b[0], b[1], b[2] - b[0], b[3] - b[1]); else if (i === 9) CITY.fillBlock(K, b, 'downtown'); else CITY.fillBlock(K, b, 'residential'); });
-      CITY.grid(K, 520, 0, 768, 236, 112).forEach(b => CITY.fillBlock(K, b, 'residential'));
-      CITY.road(K, 'z', 0, 260, 520); CITY.road(K, 'x', 0, 768, 236);
-      // Airfield: a single strip, hangars, light aircraft.
-      const ax = 20, az = 540;
-      K.box(ax, GY - 1, az, ax + 230, GY, az + 26, M.ASPHALT);
-      for (let x = ax + 10; x < ax + 220; x += 20) K.box(x, GY - 1, az + 12, x + 10, GY, az + 14, M.ASPHALT, 6);
-      for (let k = 0; k < 3; k++) { const hx = ax + 20 + k * 60; K.box(hx, GY - 1, az + 40, hx + 44, GY, az + 80, M.CONCRETE); K.shell(hx, GY, az + 40, hx + 44, GY + 16, az + 80, 1, M.METAL, 4); K.box(hx, GY + 16, az + 40, hx + 44, GY + 17, az + 80, M.METAL, 4); K.box(hx + 4, GY, az + 40, hx + 40, GY + 13, az + 41, M.AIR); L.floors.push({ x: hx, z: az + 40, x1: hx + 44, z1: az + 80, y: GY, name: 'hangar' }); K.vehicle(k === 1 ? 'bizjet' : 'plane', hx + 22, az + 60, 0, { color: [0xc4231c, 0xe8e6de, 0x2f6aa8][k] }); }
-      K.vehicle('plane', ax + 200, az + 13, -Math.PI / 2, { color: 0xd8a21c });
-      CITY.depot(K, 20, 650, 240, 760);
+      D('estate', 384, 0);
+      CITY.golf(K, 0, 0, 370, 700);
+      CITY.farm(K, 680, 0, 1024, 260);
+      const blocks = CITY.grid(K, 384, 280, 1024, 1024, 112);
+      blocks.forEach((b, i) => { if (i === 4) CITY.park(K, b[0], b[1], b[2] - b[0], b[3] - b[1]); else if (i === 9 || i === 10) CITY.fillBlock(K, b, 'downtown'); else CITY.fillBlock(K, b, 'residential'); });
+      CITY.road(K, 'z', 0, 280, 650); CITY.road(K, 'x', 0, 1024, 260);
+      const ax = 20, az = 720;
+      K.box(ax, GY - 1, az, ax + 340, GY, az + 26, M.ASPHALT);
+      for (let x = ax + 10; x < ax + 330; x += 20) K.box(x, GY - 1, az + 12, x + 10, GY, az + 14, M.ASPHALT, 6);
+      for (let k = 0; k < 4; k++) { const hx = ax + 20 + k * 80; K.box(hx, GY - 1, az + 40, hx + 44, GY, az + 80, M.CONCRETE); K.shell(hx, GY, az + 40, hx + 44, GY + 16, az + 80, 1, M.METAL, 4); K.box(hx, GY + 16, az + 40, hx + 44, GY + 17, az + 80, M.METAL, 4); K.box(hx + 4, GY, az + 40, hx + 40, GY + 13, az + 41, M.AIR); L.floors.push({ x: hx, z: az + 40, x1: hx + 44, z1: az + 80, y: GY, name: 'hangar' }); K.vehicle(k === 1 ? 'bizjet' : k === 3 ? 'minicopter' : 'plane', hx + 22, az + 60, 0, { color: [0xc4231c, 0xe8e6de, 0x2f6aa8, 0xe2c02a][k] }); }
+      K.vehicle('plane', ax + 300, az + 13, -Math.PI / 2, { color: 0xd8a21c });
+      CITY.depot(K, 20, 860, 360, 1000);
+      L.busStops = true;
       return L;
     }
   },
   oldtown: {
-    name: 'Tollbridge', where: 'Old canal city', blurb: 'A dense old city on a canal: timber and brick rows, a bell tower, a town hall, a busy harbour basin and a building site.',
+    name: 'Tollbridge', where: 'Old canal city', blurb: 'A dense old city on a canal: timber and brick rows, a bell tower, a town hall, a busy harbour basin, a fairground and two building sites.',
     build(w) {
-      CITY.terrain(w, (x, z) => (z >= 374 && z < 394) || (x >= 640 && z >= 300 && z < 520) ? [4, M.STONE] : [GY, M.GRASS]);
+      CITY.terrain(w, (x, z) => (z >= 502 && z < 522) || (x >= 880 && z >= 420 && z < 660) ? [4, M.STONE] : [GY, M.GRASS]);
       const K = Kit(w, 59), L = K.L; L.districts = {};
       const D = (name, tx, tz) => { L.districts[name] = [tx, tz]; DISTRICTS[name].build(Kit(w, 777, L, tx, tz)); };
-      D('oldtown', 256, 256);
-      const north = CITY.grid(K, 0, 0, 768, 250, 96, { carPool: ['vintage', 'hatch', 'micro', 'classic', 'cruiser', 'wagon'] });
+      D('oldtown', 384, 384);
+      const north = CITY.grid(K, 0, 0, 1024, 370, 96, { carPool: ['vintage', 'hatch', 'micro', 'classic', 'cruiser', 'wagon'] });
       north.forEach((b, i) => CITY.fillBlock(K, b, i % 5 === 2 ? 'downtown' : 'oldtown'));
-      const south = CITY.grid(K, 0, 500, 640, 768, 96, { carPool: ['vintage', 'hatch', 'micro', 'muscle', 'suv', 'wagon'] });
-      south.forEach((b, i) => { if (i === 3) K.bld('site', CITY.construction(K, b[0], b[1], b[2], b[3])); else CITY.fillBlock(K, b, i % 4 === 1 ? 'downtown' : 'oldtown'); });
-      // Canal walls west and east of the old town, and the harbour basin.
-      for (const [a, b] of [[0, 256], [512, 640]]) { K.box(a, 4, 372, b, GY, 374, M.STONE); K.box(a, 4, 394, b, GY, 396, M.STONE); }
-      for (const [a, b] of [[0, 256], [512, 768]]) { K.box(a, GY - 1, 290, b, GY, 372, M.GRASS); K.box(a, GY - 1, 396, b, GY, 500, M.GRASS); }
-      for (const [a, b] of [[0, 250], [520, 640]]) { CITY.road(K, 'x', a, b, 296); CITY.road(K, 'x', a, b, 476); }
-      CITY.marina(K, 640, 300, 768, 520, 300);
-      for (const bx of [120, 560]) { K.box(bx, GY - 1, 370, bx + 14, GY, 398, M.BRICK); K.box(bx, GY, 370, bx + 1, GY + 3, 398, M.BRICK); K.box(bx + 13, GY, 370, bx + 14, GY + 3, 398, M.BRICK); }
-      K.vehicle('boat', 60, 384, Math.PI / 2); K.vehicle('rowboat', 600, 384, -Math.PI / 2);
+      const south = CITY.grid(K, 0, 660, 880, 1024, 96, { carPool: ['vintage', 'hatch', 'micro', 'muscle', 'suv', 'wagon'] });
+      const big = CITY.largest(south, 2);
+      south.forEach((b, i) => { if (big.includes(i)) K.bld(i === big[0] ? 'site' : 'site2', CITY.construction(K, b[0], b[1], b[2], b[3])); else CITY.fillBlock(K, b, i % 4 === 1 ? 'downtown' : 'oldtown'); });
+      for (const [a, b] of [[0, 384], [640, 880]]) { K.box(a, 4, 500, b, GY, 502, M.STONE); K.box(a, 4, 522, b, GY, 524, M.STONE); }
+      for (const [a, b] of [[0, 370], [650, 880]]) { CITY.road(K, 'x', a, b, 400); CITY.road(K, 'x', a, b, 620); }
+      CITY.marina(K, 880, 420, 1024, 660, 420);
+      CITY.fairground(K, 0, 540, 360, 650);
+      for (const bx of [120, 300, 700, 820]) { K.box(bx, GY - 1, 498, bx + 14, GY, 526, M.BRICK); K.box(bx, GY, 498, bx + 1, GY + 3, 526, M.BRICK); K.box(bx + 13, GY, 498, bx + 14, GY + 3, 526, M.BRICK); }
+      K.vehicle('boat', 60, 512, Math.PI / 2); K.vehicle('rowboat', 600 + 160, 512, -Math.PI / 2); K.vehicle('raceboat', 200, 512, Math.PI / 2);
+      L.busStops = true;
       return L;
     }
   }

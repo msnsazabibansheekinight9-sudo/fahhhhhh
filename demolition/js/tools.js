@@ -262,7 +262,7 @@ const Tools = {
   strikeOther(o, d, maxT, r, vdmg, push) {
     const h = this.otherHit(o, d, maxT); if (!h) return false;
     if (h.body) { const n = h.body.chip(h.point, r); h.body.v.addScaledVector(d, push * 60 / Math.sqrt(h.body.mass)); h.body.rest = 0; if (n) SFX.breakMat(M.BRICK, n, h.point); else SFX.hammer(h.point); }
-    else { h.veh.damage(vdmg, d); h.veh.push.x += d.x * push * 2; h.veh.push.y += d.z * push * 2; SFX.burst(0.15, 2600, 4, 0.5, 'bandpass', h.point); for (let k = 0; k < 6; k++) FX.spark(h.point.x, h.point.y, h.point.z, (Math.random() - 0.5) * 16, Math.random() * 12, (Math.random() - 0.5) * 16); }
+    else { h.veh.damage(vdmg, d, h.point); h.veh.push.x += d.x * push * 2; h.veh.push.y += d.z * push * 2; SFX.burst(0.15, 2600, 4, 0.5, 'bandpass', h.point); for (let k = 0; k < 6; k++) FX.spark(h.point.x, h.point.y, h.point.z, (Math.random() - 0.5) * 16, Math.random() * 12, (Math.random() - 0.5) * 16); }
     return true;
   },
   // One bullet. Returns where it stopped and whether it should stop.

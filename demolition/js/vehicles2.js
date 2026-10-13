@@ -214,6 +214,8 @@ class Vehicle {
     this.wheels = []; this.M = VModel.mats(opts.color || this.T.color);
     this.root = new THREE.Group(); this.mesh = new THREE.Group(); this.root.add(this.mesh);
     VModel.build(this, type); VModel.build2(this, type); if (VModel.build3) VModel.build3(this, type);
+    this.colorKey = opts.color || this.T.color;
+    if (typeof voxelizeVehicle === 'function') voxelizeVehicle(this);
     // Everything that is not a pivot holder can be knocked off.
     this.parts = [];
     this.mesh.traverse(o => { if (o.isMesh && o.parent === this.mesh) this.parts.push(o); });

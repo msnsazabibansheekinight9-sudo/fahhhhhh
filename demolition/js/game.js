@@ -250,7 +250,7 @@ const Game = {
     if (this.world) this.world.dispose();
     Bodies.clear(); Fire.clear(); FX.clear(); Shards.clear(); this.checks = []; this.blastQ = []; this.recent = []; this.grab = null;
     for (const t of this.targets) this.scene.remove(t.mesh);
-    for (const v of this.vehicles) v.dispose(); this.vehicles = [];
+    for (const v of this.vehicles) v.dispose(); this.vehicles = []; Traffic.clear();
     Player.vehicle = null;
     this.world = new World(WORLD_X, WORLD_Y, WORLD_Z, this.scene);
     this.world.shadows = this.settings.shadows;
@@ -266,6 +266,7 @@ const Game = {
     this.water.material.color.set(L.water);
     this.vehicles = this.level.vehicles.map(d => new Vehicle(this.scene, d.type, d.x, d.z, d.yaw, d));
     { const sp = this.spawnFor(m), pp = new THREE.Vector3(sp.x, GY, sp.z); for (const v of this.vehicles) v.lod(pp, false); }
+    Traffic.setup(this.level);
     this.targets = [];
   },
 
@@ -292,6 +293,7 @@ const Game = {
           return Object.assign({}, t, { pos: new THREE.Vector3(t.x + 0.5, t.y, t.z + 0.5), vy: 0, taken: false, mesh });
         });
         this.beacon.visible = true; this.beacon.position.set(this.level.escape.x, GY + 60, this.level.escape.z);
+        const e = this.level.escape; if (e.y >= GY - 1) { const gv = new Vehicle(this.scene, 'getaway', e.x, e.z + 4, 0, {}); this.vehicles.push(gv); }
       } else this.beacon.visible = false;
       if (g.type === 'demolish') {
         const b = this.level.buildings[g.building];
@@ -374,7 +376,7 @@ const Game = {
     const t = this.lookTarget();
     if (t) {
       t.taken = true; this.scene.remove(t.mesh); SFX.pickup();
-      if (t.alarm && !this.alarm) { this.alarm = { t: this.mission.goal.alarm }; this.toast('Alarm! ' + this.mission.goal.alarm + ' seconds to reach the getaway.'); }
+      if (t.alarm && !this.alarm) { this.alarm = { t: this.mission.goal.alarm }; Traffic.alarm(); this.toast('Alarm! Police are on the way. ' + this.mission.goal.alarm + ' seconds to reach the getaway.'); }
       else this.toast(t.name + ' taken.');
       this.renderObjectives(); return;
     }
@@ -534,7 +536,7 @@ const Game = {
       collideVehicles(this.vehicles);
       if (Player.vehicle) { Player.pos.copy(Player.vehicle.pos); Player.pos.y += 4; Player.vel.set(0, 0, 0); SFX.setEngine(true, Player.vehicle.speed); }
       else { Player.update(dt, w, Input); for (const v of this.vehicles) v.pushOut(Player); this.standOnLifts(); SFX.setEngine(false, 0); }
-      Shards.update(dt, w);
+      Shards.update(dt, w); Traffic.update(dt);
       this.updateGrab(dt);
       this.queueBlasts(dt);
       const eye = Player.eye(new THREE.Vector3()), dir = Player.dir(new THREE.Vector3());

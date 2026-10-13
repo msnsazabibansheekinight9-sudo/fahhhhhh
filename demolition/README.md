@@ -2,7 +2,7 @@
 
 A voxel demolition and heist sandbox for the browser, built with Three.js (r128). Open `demolition/index.html` from any static server.
 
-Everything is made of 25 cm voxels. Each map is a 192 × 192 m city, 768 × 112 × 768 voxels (66 million cells), on 4 m of solid ground. Chunks are meshed nearest-first while you play, and parked vehicles are merged into a few meshes until disturbed.
+Everything is made of 25 cm voxels. Each map is a 256 × 256 m city, 1024 × 112 × 1024 voxels (117 million cells), on 4 m of solid ground. Chunks are meshed nearest-first while you play, and parked vehicles are merged into a few meshes until disturbed.
 
 - **Destruction by material.** Glass, foliage and hay shatter at a touch. Timber and plaster break under the sledgehammer, and so does brick. Concrete needs explosives. Steel needs the blowtorch or a rocket.
 - **Structural collapse.** After every break the game flood-fills outward to see what still reaches the ground. Anything that doesn't becomes a rigid body: it falls, tumbles, smashes what it lands on, and settles back into the grid.
@@ -13,16 +13,19 @@ Everything is made of 25 cm voxels. Each map is a 192 × 192 m city, 768 × 112 
   - *Redcut*: an industrial town with factories, warehouses, a container yard, a lumber yard, a construction site, Redcut quarry and a fenced military base (battle tanks, tracked carriers, army trucks and vans, rocket launcher vans, jet fighters in hardened shelters, attack helicopters, watchtowers, bunkers).
   - *Ashgrove*: suburbs with Ashgrove Estate, a golf course with carts, a park, shops, a works depot and a small airfield.
   - *Tollbridge*: a dense old city on a canal with timber and brick rows, a bell tower, a town hall, a harbour basin and a building site.
-- **56 drivable, destructible vehicles**, spawned where they belong:
+- **76 vehicle types, all built from blocks.** Every vehicle is voxelised into blocks half the size of a world voxel. Shots, blasts and crashes chip blocks out where they hit, wheels and work parts come off whole, and wrecks scorch and burn. Vehicles spawn where they belong:
   - *Civilian*, parked along the streets, in car parks and in driveways: saloons, a finned convertible, a fifties saloon, coupes, a boxy hatchback, a utility 4×4, a wedge supercar, a chrome cruiser, a big SUV, an estate wagon, a microcar, a muscle car, pickups, a golf cart, an ice cream van, a monster truck that crushes cars, and an articulated lorry.
   - *Industrial*: dump truck, wheel loader, bulldozer, excavator and mini excavator that dig, a cement mixer that pours concrete, a bucket truck, a snow plough and a fire engine with a water cannon.
   - *Utility*: forklifts (standard, heavy and warehouse), a telehandler, a mobile crane that hooks debris, a boom lift you can stand in, a wrecking-ball crane and a wood chipper that shreds timber and debris.
   - *Military*: battle tank, tracked carrier, army truck, army van, field jeep and a rocket launcher van.
   - *Boats*: speedboat, mahogany runabout, rowing boat, trawler, river cruiser, motor yacht and harbour tug.
   - *Aircraft*: light aircraft, business jet, airliner, cargo plane and jet fighter, all flyable, plus helicopters with a magnet winch or rockets.
-  - Every vehicle can be destroyed. Shots, blasts, crashes and falling rubble knock parts off it, and a wreck bursts apart and burns.
-- **Every building is walkable.** Each house, flat, office, shop, car park, hangar, barracks and tower has a street door and stairs (or a ladder) to every floor, and flat roofs are reachable. An automated walk-through checks this on every map by flood-filling every spot a player can stand from the spawn: all 1,436 floors pass.
-- **Physics.** Falling debris breaks up where it hits and splits into separate pieces. Pieces collide with each other. Blasts throw vehicles around. Fuel barrels chain-react. Press F to grab loose debris and throw it.
+  - *Fairground and farm*: bumper cars in a covered arena, farm tractors.
+  - *Folkrace*, in the paddock of a dirt oval with a grandstand: a rally estate, an auto rickshaw, a dune buggy, a rally 4×4, a rally coupe, a little roadster, a food truck, a flower-power van, a camper van, a monster school bus, plus a couch kart, a bathtub racer and a shopping-trolley kart.
+  - *AI traffic*: city buses drive the street grid; an ambient helicopter flies about. When a heist alarm trips, police cars come in from the edge of town and chase you, a security helicopter hunts you with a searchlight, and a getaway van waits at the escape point.
+- **Interiors.** Homes have kitchens, sofas, dining tables, beds, wardrobes, desks, bookshelves and baths; barracks have bunks; offices have desks and cabinets. Furniture is kept clear of stairs, hallways and doors.
+- **Every building is walkable.** Each house, flat, office, shop, car park, hangar, barracks and tower has a street door and stairs (or a ladder) to every floor, and flat roofs are reachable. An automated walk-through checks this on every map by flood-filling every spot a player can stand from the spawn: all 2,747 floors pass.
+- **Physics.** Falling debris breaks up where it hits and splits into separate pieces. Pieces collide with each other, and you can stand on them. Timber floats and stone sinks; anything that is not a boat floods and stalls in deep water. Blasts throw vehicles around. Fuel barrels chain-react. Press F to grab loose debris and throw it.
 - **Jobs.**
   - *Gull Point*:
     - *Clean Slate*: demolish the Halloway house.
