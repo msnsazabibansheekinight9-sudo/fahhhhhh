@@ -74,7 +74,6 @@ function voxRGB(m, x, y, z, p, out) {
     case M.CLOTH: if ((x + z) % 6 < 3) { r = 186; g = 64; b = 52; } break;
     case M.STONE: if (y % 7 === 0) f = 0.88; break;
     case M.MARBLE: if (y % 6 === 0) f = 0.9; break;
-    case M.ASPHALT: if ((x % 24 < 8) && (z % 64 === 6 || z % 64 === 7) && z < 120) { r = 220; g = 210; b = 150; } break;
   }
   f *= 1 + (hash3(x, y, z) - 0.5) * 2 * mt.vary;
   r *= f; g *= f; b *= f;
@@ -112,9 +111,10 @@ class World {
   constructor(sx, sy, sz, scene) {
     this.sx = sx; this.sy = sy; this.sz = sz; this.n = sx * sy * sz;
     this.data = new Uint8Array(this.n); this.paint = new Uint8Array(this.n);
-    this.stamp = new Uint32Array(this.n); this.gen = 0;
+    this.built = null;
     this.ncx = sx >> 4; this.ncy = sy >> 4; this.ncz = sz >> 4;
     this.chunks = new Array(this.ncx * this.ncy * this.ncz).fill(null);
+    this.built = new Uint8Array(this.chunks.length); this.viewR = 340; this.visT = 0;
     this.dirty = new Set();
     this.group = new THREE.Group(); scene.add(this.group); this.scene = scene;
     this.matOpaque = new THREE.MeshLambertMaterial({ vertexColors: true });
@@ -154,7 +154,40 @@ class World {
       this.dirty.add((cy * this.ncz + cz) * this.ncx + cx);
   }
   buildAll() { for (let i = 0; i < this.chunks.length; i++) this.buildChunk(i); this.dirty.clear(); }
-  rebuildDirty() { for (const ci of this.dirty) this.buildChunk(ci); this.dirty.clear(); }
+  // Chunks only get meshed once someone is near; edits to unbuilt chunks wait for that first build.
+  rebuildDirty() { for (const ci of this.dirty) if (this.built[ci]) this.buildChunk(ci); this.dirty.clear(); }
+  chunkCenter(ci) { const cx = ci % this.ncx, t = (ci / this.ncx) | 0, cz = t % this.ncz; return [(cx << 4) + 8, (cz << 4) + 8]; }
+  // Build every chunk column within r of (px,pz), nearest first.
+  buildNear(px, pz, r) {
+    const order = [];
+    for (let ci = 0; ci < this.chunks.length; ci++) { if (this.built[ci]) continue; const [x, z] = this.chunkCenter(ci); const d = Math.hypot(x - px, z - pz); if (d < r) order.push([d, ci]); }
+    order.sort((a, b) => a[0] - b[0]);
+    for (const [, ci] of order) this.buildChunk(ci);
+    return order.length;
+  }
+  // Background streaming: mesh the nearest unbuilt chunks within a time budget; hide far ones.
+  stream(px, pz, ms, dt) {
+    const t0 = performance.now();
+    if (!this._order || this._orderT <= 0 || Math.hypot(px - this._ox, pz - this._oz) > 48) {
+      this._order = []; this._ox = px; this._oz = pz; this._orderT = 2;
+      for (let ci = 0; ci < this.chunks.length; ci++) if (!this.built[ci]) { const [x, z] = this.chunkCenter(ci); this._order.push([Math.hypot(x - px, z - pz), ci]); }
+      this._order.sort((a, b) => b[0] - a[0]);
+    }
+    this._orderT -= dt || 0;
+    while (this._order.length && performance.now() - t0 < ms) { const [, ci] = this._order.pop(); if (!this.built[ci]) this.buildChunk(ci); }
+    this.visT -= dt || 0;
+    if (this.visT <= 0) {
+      this.visT = 0.4;
+      const r2 = this.viewR * this.viewR;
+      for (let ci = 0; ci < this.chunks.length; ci++) {
+        const ch = this.chunks[ci]; if (!ch) continue;
+        const [x, z] = this.chunkCenter(ci), v = (x - px) * (x - px) + (z - pz) * (z - pz) < r2;
+        if (ch.mesh) ch.mesh.visible = v; if (ch.glass) ch.glass.visible = v;
+      }
+    }
+    return this._order.length;
+  }
+  pendingChunks() { return this._order ? this._order.length : this.chunks.length; }
   setShadows(on) {
     this.shadows = on;
     for (const ch of this.chunks) if (ch && ch.mesh) { ch.mesh.castShadow = on; ch.mesh.receiveShadow = on; }
@@ -212,6 +245,7 @@ class World {
     const cx = ci % this.ncx, t = (ci / this.ncx) | 0, cz = t % this.ncz, cy = (t / this.ncz) | 0;
     let ch = this.chunks[ci];
     if (!ch) ch = this.chunks[ci] = { mesh: null, glass: null };
+    this.built[ci] = 1;
     const go = this.meshPass(cx << 4, cy << 4, cz << 4, 0);
     const gg = this.meshPass(cx << 4, cy << 4, cz << 4, 1);
     ch.mesh = this.swap(ch.mesh, go, this.matOpaque, true);
@@ -283,15 +317,15 @@ class World {
   findDetached(x0, y0, z0, x1, y1, z1) {
     x0 = Math.max(0, x0 - 2); y0 = Math.max(0, y0 - 2); z0 = Math.max(0, z0 - 2);
     x1 = Math.min(this.sx - 1, x1 + 2); y1 = Math.min(this.sy - 1, y1 + 2); z1 = Math.min(this.sz - 1, z1 + 2);
-    const data = this.data, stamp = this.stamp, Q = this.Q, sx = this.sx, sz = this.sz, sxz = sx * sz;
-    if (this.gen > 4e9) { stamp.fill(0); this.gen = 0; }
-    const base = this.gen + 1, out = [];
+    const data = this.data, Q = this.Q, sx = this.sx, sz = this.sz, sxz = sx * sz;
+    const vis = new Map(), base = 1, out = [];
+    let gen = 0;
     for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) {
       const i = (y * sz + z) * sx + x, m = data[i];
-      if (!m || ANCHOR[m] || stamp[i] >= base || y === 0) continue;
-      const cur = ++this.gen;
+      if (!m || ANCHOR[m] || vis.has(i) || y === 0) continue;
+      const cur = ++gen;
       let head = 0, tail = 0, anchored = false;
-      Q[tail++] = i; stamp[i] = cur;
+      Q[tail++] = i; vis.set(i, cur);
       while (head < tail && !anchored) {
         const j = Q[head++];
         const jx = j % sx, jt = (j / sx) | 0, jz = jt % sz, jy = (jt / sz) | 0;
@@ -307,11 +341,11 @@ class World {
           const mm = data[nb];
           if (!mm) continue;
           if (ANCHOR[mm]) { anchored = true; break; }
-          const s = stamp[nb];
+          const s = vis.get(nb) || 0;
           if (s === cur) continue;
           if (s >= base) { anchored = true; break; }
           if (tail >= BFS_CAP) { anchored = true; break; }
-          stamp[nb] = cur; Q[tail++] = nb;
+          vis.set(nb, cur); Q[tail++] = nb;
         }
       }
       if (!anchored) out.push(Q.slice(0, tail));

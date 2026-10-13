@@ -107,7 +107,7 @@ const Game = {
     const sc = this.sun.shadow.camera; sc.left = -110; sc.right = 110; sc.top = 110; sc.bottom = -110; sc.near = 1; sc.far = 500;
     this.sun.shadow.bias = -0.0004; this.sun.shadow.normalBias = 0.6;
     this.scene.add(this.sun); this.scene.add(this.sun.target);
-    this.scene.fog = new THREE.Fog(0xffffff, 140, 560);
+    this.scene.fog = new THREE.Fog(0xffffff, 150, 500);
     this.sky = new THREE.Mesh(new THREE.SphereGeometry(1000, 24, 12), new THREE.ShaderMaterial({
       side: THREE.BackSide, depthWrite: false, fog: false,
       uniforms: { top: { value: new THREE.Color() }, hor: { value: new THREE.Color() } },
@@ -255,7 +255,9 @@ const Game = {
     this.world = new World(WORLD_X, WORLD_Y, WORLD_Z, this.scene);
     this.world.shadows = this.settings.shadows;
     this.level = Level.build(this.world, m.map);
-    this.world.buildAll();
+    // Mesh the area around the spawn now; the rest streams in while playing.
+    const menu = this.state === 'menu', sp0 = menu ? { x: WORLD_X / 2, z: WORLD_Z / 2 } : this.spawnFor(m);
+    this.world.buildNear(sp0.x, sp0.z, menu ? 260 : 130);
     const L = LIGHTS[m.light];
     this.sky.material.uniforms.top.value.set(L.top); this.sky.material.uniforms.hor.value.set(L.hor);
     this.scene.fog.color.set(L.fog);
@@ -263,16 +265,23 @@ const Game = {
     this.hemi.color.set(L.hemiS); this.hemi.groundColor.set(L.hemiG); this.hemi.intensity = L.hemiI;
     this.water.material.color.set(L.water);
     this.vehicles = this.level.vehicles.map(d => new Vehicle(this.scene, d.type, d.x, d.z, d.yaw, d));
+    { const sp = this.spawnFor(m), pp = new THREE.Vector3(sp.x, GY, sp.z); for (const v of this.vehicles) v.lod(pp, false); }
     this.targets = [];
   },
 
+  // Mission spawns are given relative to their district; free roam uses the district's own spawn.
+  spawnFor(m) {
+    const L = this.level, off = (L && L.districts && L.districts[m.map]) || [0, 0];
+    if (m.spawn) return { x: m.spawn.x + off[0], z: m.spawn.z + off[1], yaw: m.spawn.yaw };
+    return L && L.spawn ? L.spawn : { x: WORLD_X / 2, z: WORLD_Z / 2, yaw: 0 };
+  },
   start(m) {
     this.mission = m;
     this.show('loading');
     setTimeout(() => {
       this.loadWorld(m);
       const g = m.goal;
-      const sp = m.spawn; Player.reset(sp.x, GY, sp.z, sp.yaw);
+      const sp = this.spawnFor(m); Player.reset(sp.x, GY, sp.z, sp.yaw);
       Tools.setLoadout(m.loadout);
       this.stats = { explosions: 0, pieces: 0, t: 0 };
       this.alarm = null; this.done = false;
@@ -345,11 +354,20 @@ const Game = {
     const l = Player.vehicle; if (!l) return;
     const [fx, fz] = l.fwd();
     Player.vehicle = null; SFX.setEngine(false, 0); SFX.setLoop('ext', 0);
-    const ground = l.T.air ? l.groundAt(this.world, l.pos.x, l.pos.z) : l.pos.y;
-    Player.pos.set(l.pos.x - fz * (l.W / 2 + 3), Math.max(ground, l.pos.y) + 1, l.pos.z + fx * (l.W / 2 + 3));
-    for (let k = 0; k < 16 && Player.collides(this.world, Player.pos.x, Player.pos.y, Player.pos.z); k++) Player.pos.y += 1;
+    const ground = l.T.air || l.T.plane ? l.groundAt(this.world, l.pos.x, l.pos.z) : l.pos.y;
+    const plat = l.platform && l.platform();
+    if (plat) Player.pos.set(plat.x, plat.y + 0.05, plat.z);
+    else Player.pos.set(l.pos.x - fz * (Math.min(l.W, 20) / 2 + 3), Math.max(ground, l.pos.y) + 1, l.pos.z + fx * (Math.min(l.W, 20) / 2 + 3));
+    if (!plat) for (let k = 0; k < 16 && Player.collides(this.world, Player.pos.x, Player.pos.y, Player.pos.z); k++) Player.pos.y += 1;
     Player.vel.set(0, 0, 0); Player.yaw = l.yaw;
     Tools.hideVM(false);
+  },
+  standOnLifts() {
+    for (const v of this.vehicles) {
+      const p = v.platform && v.platform(); if (!p) continue;
+      const P = Player.pos;
+      if (Math.abs(P.x - p.x) < 2 && Math.abs(P.z - p.z) < 2 && P.y > p.y - 1.6 && P.y < p.y + 0.6 && Player.vel.y <= 0.5) { P.y = p.y; Player.vel.y = 0; Player.onGround = true; }
+    }
   },
   interact() {
     if (Player.vehicle) { this.exitVehicle(); return; }
@@ -512,10 +530,10 @@ const Game = {
     dt = Math.min(0.05, Math.max(0.0001, dt));
     const w = this.world, cam = this.camera;
     if (this.state === 'play') {
-      for (const v of this.vehicles) v.update(dt, w, Input, v === Player.vehicle);
+      for (const v of this.vehicles) { v.update(dt, w, Input, v === Player.vehicle); v.lod(Player.pos, v === Player.vehicle); }
       collideVehicles(this.vehicles);
       if (Player.vehicle) { Player.pos.copy(Player.vehicle.pos); Player.pos.y += 4; Player.vel.set(0, 0, 0); SFX.setEngine(true, Player.vehicle.speed); }
-      else { Player.update(dt, w, Input); for (const v of this.vehicles) v.pushOut(Player); SFX.setEngine(false, 0); }
+      else { Player.update(dt, w, Input); for (const v of this.vehicles) v.pushOut(Player); this.standOnLifts(); SFX.setEngine(false, 0); }
       Shards.update(dt, w);
       this.updateGrab(dt);
       this.queueBlasts(dt);
@@ -547,15 +565,18 @@ const Game = {
       this.updateHUD();
       this.beacon.material.opacity = 0.12 + Math.sin(t / 300) * 0.05;
     } else if (this.state === 'menu') {
-      this.menuCam += dt * 0.05;
-      cam.position.set(128 + Math.sin(this.menuCam) * 150, 70, 128 + Math.cos(this.menuCam) * 150);
-      cam.lookAt(128, 10, 110);
+      this.menuCam += dt * 0.04;
+      const mc = WORLD_X / 2;
+      cam.position.set(mc + Math.sin(this.menuCam) * 330, GY + 150, mc + Math.cos(this.menuCam) * 330);
+      cam.lookAt(mc, GY, mc);
+      for (const v of this.vehicles) v.lod(cam.position, false);
       Bodies.update(dt, w); Fire.update(dt, w); this.processChecks();
     }
     if (this.state === 'play' || this.state === 'menu') FX.update(dt, w);
     w.rebuildDirty();
+    { const sp = this.state === 'play' ? Player.pos : cam.position; w.stream(sp.x, sp.z, this.state === 'play' ? 5 : 12, dt); }
     // Sun shadow box follows the camera.
-    const c = this.state === 'play' ? Player.pos : new THREE.Vector3(128, 0, 128);
+    const c = this.state === 'play' ? Player.pos : new THREE.Vector3(WORLD_X / 2, 0, WORLD_Z / 2);
     this.sun.target.position.set(Math.round(c.x / 8) * 8, 0, Math.round(c.z / 8) * 8);
     this.sun.position.copy(this.sun.target.position).addScaledVector(this.sunDir, 250);
     this.sky.position.copy(cam.position);

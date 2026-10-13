@@ -207,16 +207,19 @@ class Vehicle {
   constructor(scene, type, x, z, yaw, opts) {
     opts = opts || {};
     this.type = type; this.T = VTYPES[type]; this.L = this.T.L; this.W = this.T.W;
-    this.pos = new THREE.Vector3(x, this.T.water ? WATER_Y - 1.6 : (opts.y != null ? opts.y : GY), z); this.yaw = yaw;
+    this.pos = new THREE.Vector3(x, this.T.water ? WATER_Y - 1.6 : (opts.y != null ? opts.y : GY), z);
+    this.vel = this.T.air ? new THREE.Vector3() : null; this.yaw = yaw;
     this.speed = 0; this.vy = 0; this.steer = 0; this.hp = this.T.hp; this.dead = false; this.pitchV = 0; this.rollV = 0;
     this.push = new THREE.Vector2(); this.yawRate = 0; this.cd = 0; this.cd2 = 0; this.held = null;
     this.wheels = []; this.M = VModel.mats(opts.color || this.T.color);
     this.root = new THREE.Group(); this.mesh = new THREE.Group(); this.root.add(this.mesh);
-    VModel.build(this, type); VModel.build2(this, type);
+    VModel.build(this, type); VModel.build2(this, type); if (VModel.build3) VModel.build3(this, type);
     // Everything that is not a pivot holder can be knocked off.
     this.parts = [];
     this.mesh.traverse(o => { if (o.isMesh && o.parent === this.mesh) this.parts.push(o); });
     this.lossMarks = [0.8, 0.6, 0.4, 0.2];
+    // Parked vehicles start asleep (merged into a few meshes) until something disturbs them.
+    this.sleeping = !this.T.plane && !this.T.air; this.sleepT = Math.random() * 0.4;
     scene.add(this.root); this.scene = scene; this.smokeT = 0;
     if (this.ballMesh) { scene.add(this.ballMesh); scene.add(this.ropeLine); }
     if (this.T.air) scene.add(this.ropeLine);
@@ -567,11 +570,12 @@ class Vehicle {
 function collideVehicles(list) {
   for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
     const a = list[i], b = list[j];
-    if (a.T.air || b.T.air) continue;
+    if (a.T.air || b.T.air || a.T.plane || b.T.plane) continue;
     const dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z, d = Math.hypot(dx, dz);
     const ra = (a.L + a.W) * 0.27, rb = (b.L + b.W) * 0.27;
     if (d >= ra + rb || d < 0.01 || Math.abs(a.pos.y - b.pos.y) > 6) continue;
     const nx = dx / d, nz = dz / d, pen = ra + rb - d;
+    if (a.wake) { a.wake(); b.wake(); }
     const ma = a.T.hp, mb = b.T.hp, ta = mb / (ma + mb), tb = ma / (ma + mb);
     a.pos.x -= nx * pen * ta; a.pos.z -= nz * pen * ta; b.pos.x += nx * pen * tb; b.pos.z += nz * pen * tb;
     const [afx, afz] = a.fwd(), [bfx, bfz] = b.fwd();
