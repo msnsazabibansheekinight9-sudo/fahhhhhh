@@ -1,0 +1,41 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>RS dev harness</title>
+<style>html,body{margin:0;height:100%;background:#000;overflow:hidden}canvas{display:block}
+#log{position:fixed;left:8px;top:8px;color:#9f9;font:12px monospace;white-space:pre;z-index:9;text-shadow:0 0 3px #000}</style>
+</head><body>
+<canvas id="view"></canvas><div id="log">booting…</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="js/core.js"></script><script src="js/terrain.js"></script><script src="js/biomes.js"></script>
+<script src="js/worldgen.js"></script><script src="js/chunks.js"></script><script src="js/models.js"></script>
+<script src="js/models2.js"></script><script src="js/vmodels.js"></script>
+<script src="js/decor.js"></script><script src="js/fx.js"></script><script src="js/audio.js"></script>
+<script src="js/player.js"></script><script src="js/perks.js"></script><script src="js/weapons.js"></script>
+<script src="js/gear.js"></script><script src="js/enemies.js"></script><script src="js/units.js"></script>
+<script src="js/mission.js"></script><script src="js/game.js"></script>
+<script>
+window.__errors = [];
+window.addEventListener('error', e => window.__errors.push(String(e.message)));
+const log = document.getElementById('log');
+const G = RS.Game.init(document.getElementById('view'));
+G.loadMission({
+  biome: (new URLSearchParams(location.search)).get('b') || 'crystal',
+  seed: 4242, rooms: 9, complexity: 1, dwarfClass: 'scout', type: 'mining', hazard: 3, length: 2, name: 'Dev Hollow',
+  ore: {nitra:360, morkite:340, gold:140, crystal:24}
+}, (p, label) => { log.textContent = 'load ' + (p*100|0) + '% ' + label; },
+() => {
+  window.__loaded = true;
+  // park the view looking across the start cavern and drop a couple of flares
+  const p = G.player;
+  p.pitch = -0.08;
+  G.spawnFlare(p.pos.x+3, p.pos.y+2, p.pos.z+2, 6, 2, 10);
+  G.spawnFlare(p.pos.x-2, p.pos.y+2, p.pos.z-1, -8, 3, -6);
+  for (let i=0;i<40;i++) G.updateFlares(0.05);
+  G.start();
+  setInterval(()=>{ log.textContent =
+    'fps '+G.stats.fps+'  chunks vis '+G.chunks.stats.visible+'  tris '+G.renderer.info.render.triangles+
+    '\ncalls '+G.renderer.info.render.calls+'  ore '+G.world.oreNodes.length+'  props '+G.world.props.length+
+    '\npos '+p.pos.x.toFixed(1)+','+p.pos.y.toFixed(1)+','+p.pos.z.toFixed(1)+'  grounded '+p.grounded+
+    '\nerrors '+window.__errors.length+(window.__errors[0]?(': '+window.__errors[0]):'');
+  }, 250);
+});
+</script></body></html>

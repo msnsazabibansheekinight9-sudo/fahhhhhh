@@ -1,0 +1,98 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>RS model preview</title>
+<style>html,body{margin:0;height:100%;background:#15171c;overflow:hidden}canvas{display:block}
+#lbl{position:fixed;left:0;right:0;bottom:6px;color:#ffb13c;font:13px monospace;text-align:center}</style>
+</head><body><canvas id="v"></canvas><div id="lbl"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="js/core.js"></script><script src="js/terrain.js"></script><script src="js/biomes.js"></script>
+<script src="js/models.js"></script><script src="js/models2.js"></script><script src="js/vmodels.js"></script>
+<script>
+window.__errors=[]; window.addEventListener('error',e=>window.__errors.push(String(e.message)));
+const W=innerWidth,H=innerHeight;
+const r=new THREE.WebGLRenderer({canvas:v,antialias:true}); r.setSize(W,H); r.setClearColor(0x15171c);
+const sc=new THREE.Scene();
+const cam=new THREE.PerspectiveCamera(42,W/H,0.05,200);
+sc.add(new THREE.AmbientLight(0xffffff,0.45));
+const dl=new THREE.DirectionalLight(0xfff0dd,1.0); dl.position.set(4,7,5); sc.add(dl);
+const dl2=new THREE.DirectionalLight(0x6090ff,0.35); dl2.position.set(-5,2,-4); sc.add(dl2);
+sc.add(new THREE.GridHelper(40,40,0x333a44,0x22262e));
+const M=RS.makeMats();
+const set=(new URLSearchParams(location.search)).get('s')||'bugs';
+const items=[];
+function add(geo,label,scale){ const m=new THREE.Mesh(geo,M.flat); m.userData.label=label; m.scale.setScalar(scale||1); items.push(m); sc.add(m); }
+const biome=RS.biomeById('crystal');
+if(set==='bugs'){
+  for(const id of ['swarmer','grunt','slasher','guard','exploder','praetorian','dreadnought']){
+    const d=RS.BUGS? null:null;
+  }
+}
+// bug defs live in enemies.js; replicate the model specs we need here
+const SPECS={
+ swarmer:{scale:0.42,abdoR:0.42,abdoLift:0.12,thorR:0.3,headR:0.24,legLen:0.3,legs:3,colour:0x5a4320,accent:0xc8a030,eyeColour:0xffd040},
+ grunt:{scale:0.85,abdoR:0.45,abdoLift:0.22,thorR:0.36,headR:0.28,legLen:0.44,legs:3,colour:0x4a3526,accent:0xb07a30},
+ slasher:{scale:0.85,abdoR:0.42,abdoLift:0.2,thorR:0.34,headR:0.3,legLen:0.48,legs:3,colour:0x4a2c2c,accent:0xd04a30,spikes:3,eyeColour:0xff5030},
+ guard:{scale:1.05,abdoR:0.5,abdoLift:0.26,thorR:0.42,headR:0.3,legLen:0.5,legs:3,colour:0x3e3a30,accent:0x8a8060,armour:0.8,armourColour:0x7a7260},
+ exploder:{scale:0.82,abdoR:0.62,abdoLift:0.3,thorR:0.3,headR:0.22,legLen:0.42,legs:3,colour:0x3a4a22,accent:0x9aff40,weakColour:0x9aff40,eyeColour:0xa0ff40},
+ praetorian:{scale:1.7,abdoR:0.58,abdoLift:0.34,thorR:0.5,headR:0.38,legLen:0.64,legR:0.075,legs:3,colour:0x3a3228,accent:0xc87a20,armour:1,armourColour:0x6e6050,spikes:4},
+ dreadnought:{scale:2.9,abdoR:0.62,abdoLift:0.4,thorR:0.56,headR:0.44,legLen:0.78,legR:0.1,legs:4,colour:0x2e2820,accent:0xff5a20,armour:1,armourColour:0x5a5244,spikes:5,eyeColour:0xff4020},
+ spitter:{scale:0.7,colour:0x4a5a2a,accent:0xa0d040,wingColour:0xa8c070},
+ mactera:{scale:0.95,colour:0x5a4a6a,accent:0xc07ad0,wingColour:0xb0a0d0}
+};
+function layout(){ let sp=2.4, x=-(items.length-1)*sp/2; for(const m of items){ m.position.x=x; x+=sp; } }
+if(set==='bugs'){
+  for(const id of ['swarmer','grunt','slasher','guard','exploder','praetorian']){
+    const s=SPECS[id];
+    const g=new THREE.Group();
+    g.add(new THREE.Mesh(RS.buildGlyphidBody(s),M.flat));
+    const ll=new THREE.Mesh(RS.buildGlyphidLegs(s,0),M.flat);
+    const lr=new THREE.Mesh(RS.buildGlyphidLegs(s,1),M.flat);
+    g.add(ll); g.add(lr);
+    g.userData.label=id; items.push(g); sc.add(g);
+  }
+  cam.position.set(0,2.0,7.5); cam.lookAt(0,0.5,0);
+} else if(set==='fly'){
+  for(const id of ['spitter','mactera']){
+    const s=SPECS[id]; const g=new THREE.Group();
+    g.add(new THREE.Mesh(RS.buildMactera(s),M.flat));
+    g.add(new THREE.Mesh(RS.buildWing(s,0),M.flat));
+    g.add(new THREE.Mesh(RS.buildWing(s,1),M.flat));
+    g.userData.label=id; items.push(g); sc.add(g);
+  }
+  const s=SPECS.dreadnought; const g=new THREE.Group();
+  g.add(new THREE.Mesh(RS.buildGlyphidBody(s),M.flat));
+  g.add(new THREE.Mesh(RS.buildGlyphidLegs(s,0),M.flat));
+  g.add(new THREE.Mesh(RS.buildGlyphidLegs(s,1),M.flat));
+  g.userData.label='dreadnought'; items.push(g); sc.add(g);
+  cam.position.set(0,3,12); cam.lookAt(0,1.2,0);
+} else if(set==='guns'){
+  const L=[['gk2',{len:.46,recH:.1,recW:.07,barLen:.3,mag:'box',magLen:.19,stock:2,sight:'red',body:0x3f4752,accent:0x3ad0e0}],
+    ['minigun',{len:.4,recH:.17,recW:.14,barLen:.5,barR:.026,barrels:6,mag:'drum',stock:0,sight:'none',body:0x4a4a52,accent:0xe05a2a,shroud:false}],
+    ['boomstick',{len:.34,recH:.11,recW:.085,barLen:.36,barR:.027,barrels:2,mag:'none',stock:1,sight:'iron',body:0x4a3a2c,accent:0x8a6a3a,shroud:false}],
+    ['warthog',{len:.44,recH:.12,recW:.085,barLen:.34,barR:.028,mag:'box',magLen:.12,stock:1,sight:'iron',body:0x4a4038,accent:0xe0b23a}],
+    ['bulldog',{len:.2,recH:.1,recW:.055,barLen:.26,barR:.022,mag:'cyl',stock:0,sight:'iron',body:0x55585f,accent:0x8a5a2a,shroud:false}],
+    ['crspr',{len:.36,recH:.12,recW:.085,barLen:.3,barR:.03,mag:'tank',stock:1,sight:'none',body:0x4a4a3a,accent:0xd8d24a,shroud:false}]];
+  for(const [n,s] of L){ const m=new THREE.Mesh(RS.buildGun(s),M.metal); m.userData.label=n; items.push(m); sc.add(m); }
+  for(const [n,f] of [['pickaxe',RS.buildPickaxe],['drills',RS.buildDrills],['platgun',RS.buildPlatformGun],['c4',RS.buildC4],['axe',RS.buildAxe],['grapple',RS.buildGrapple]]){
+    const m=new THREE.Mesh(f(),M.metal); m.userData.label=n; items.push(m); sc.add(m);
+  }
+  for(const m of items) m.scale.setScalar(2.2);
+  cam.position.set(0,1.2,8); cam.lookAt(0,0,0);
+} else if(set==='machines'){
+  for(const [n,f,sc2] of [['mule',RS.buildMule,1],['bosco',RS.buildBosco,1.4],['resupply',RS.buildResupplyPod,0.8],['sentry',RS.buildSentry,1.6],['minehead',RS.buildMinehead,0.6],['egg',RS.buildEgg,1.4],['aquarq',RS.buildAquarq,1.2]]){
+    const m=new THREE.Mesh(f(),M.metal); m.userData.label=n; m.scale.setScalar(sc2); items.push(m); sc.add(m);
+  }
+  const pod=new THREE.Mesh(RS.buildDropPod(false),M.metal); pod.scale.setScalar(0.45); pod.userData.label='droppod'; items.push(pod); sc.add(pod);
+  cam.position.set(0,3,13); cam.lookAt(0,1,0);
+} else if(set==='props'){
+  for(const t of ['crystal','shard','stalag','mushroom','saltpillar','icespike','lavacrack','plant','vine','root','rubble']){
+    const m=new THREE.Mesh(RS.makeProp(t,biome,1),M.flat); m.userData.label=t; items.push(m); sc.add(m);
+  }
+  cam.position.set(0,2.4,11); cam.lookAt(0,1,0);
+}
+layout();
+document.getElementById('lbl').textContent=items.map(m=>m.userData.label).join('   |   ');
+let t=0;
+(function loop(){ requestAnimationFrame(loop); t+=0.01;
+  for(const m of items) m.rotation.y=2.5;
+  r.render(sc,cam); window.__loaded=true; })();
+</script></body></html>

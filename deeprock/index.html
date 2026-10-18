@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rock &amp; Stone</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;600;700;900&family=Barlow+Semi+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --amber:#ffb13c; --amber-dim:#a8701c; --amber-deep:#5c3a08;
+    --steel:#2b3038; --steel-lo:#1a1d23; --ink:#0a0c10;
+    --panel:rgba(13,15,19,.9); --panel-solid:#11141a;
+    --text:#e9e3d6; --muted:#8e8575; --line:rgba(255,177,60,.22);
+    --ok:#7ae08a; --bad:#e05a3a; --blue:#46d2e6; --purple:#b96ad8;
+    --driller:#d8d24a; --engineer:#e0b23a; --gunner:#e05a2a; --scout:#3ad0e0;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:#05070a;color:var(--text);
+    font-family:'Barlow Semi Condensed',system-ui,sans-serif;user-select:none;-webkit-tap-highlight-color:transparent}
+  /* The canvas fills the viewport edge to edge; the HUD keeps its own
+     safe-area gutters so nothing important sits under a system bar. */
+  #view{position:fixed;inset:0;width:100%;height:100%;display:block}
+  canvas{display:block}
+  button{font-family:inherit;cursor:pointer;color:inherit}
+  h1,h2,h3,.disp{font-family:'Saira Condensed','Barlow Semi Condensed',sans-serif;margin:0}
+
+  /* ---------------- shared chrome ---------------- */
+  .screen{position:fixed;inset:0;display:none;flex-direction:column;z-index:20;overflow-y:auto;
+    background:radial-gradient(ellipse at 50% 0%,rgba(40,30,14,.5),rgba(5,7,10,.97) 62%),var(--ink)}
+  .screen.on{display:flex}
+  .wrap{width:min(1180px,100%);margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));
+    padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 56px}
+  .hdr{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:22px}
+  .hdr h2{font-size:clamp(22px,3.2vw,34px);font-weight:900;letter-spacing:.06em;text-transform:uppercase;color:var(--amber)}
+  .hdr .sub{color:var(--muted);font-size:15px;margin-bottom:3px}
+  .spacer{flex:1}
+  .btn{background:linear-gradient(180deg,#232831,#14171d);border:1px solid var(--line);
+    padding:10px 20px;font-size:15px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+    transition:border-color .14s,transform .08s,background .14s}
+  .btn:hover{border-color:var(--amber);background:linear-gradient(180deg,#2d333e,#191d24)}
+  .btn:active{transform:translateY(1px)}
+  .btn.primary{background:linear-gradient(180deg,#c4851f,#8a5a10);border-color:#ffd27a;color:#1a1206}
+  .btn.primary:hover{background:linear-gradient(180deg,#ffc44a,#a86c14)}
+  .btn.ghost{background:transparent}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .tag{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+
+  /* ---------------- title ---------------- */
+  #menu .hero{text-align:center;padding:4vh 0 2vh}
+  #menu h1{font-size:clamp(46px,10vw,118px);font-weight:900;letter-spacing:.04em;line-height:.92;
+    color:var(--amber);text-shadow:0 0 44px rgba(255,150,30,.3),0 5px 0 #4a2c06}
+  #menu .tagline{letter-spacing:.42em;text-transform:uppercase;color:var(--muted);font-size:13px;margin-top:10px}
+  #menu .credit{color:#6d6557;font-size:13px;margin-top:6px}
+  .mainbtns{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin:30px 0 24px}
+  .mainbtns .btn{min-width:188px;padding:14px 22px;font-size:17px}
+  .rigstats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;max-width:760px;margin:0 auto}
+  .stat{background:var(--panel);border:1px solid var(--line);padding:12px 14px}
+  .stat .k{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
+  .stat .v{font-family:'Saira Condensed',sans-serif;font-size:26px;font-weight:700;color:var(--amber);
+    font-variant-numeric:tabular-nums}
+
+  /* ---------------- mission board ---------------- */
+  #missions .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(258px,1fr));gap:14px}
+  .mcard{position:relative;text-align:left;background:linear-gradient(180deg,rgba(32,26,16,.75),rgba(10,12,16,.92));
+    border:1px solid var(--line);padding:0;display:flex;flex-direction:column;min-height:214px;
+    transition:transform .13s,border-color .13s}
+  .mcard:hover{transform:translateY(-3px);border-color:var(--amber)}
+  .mcard.sel{border-color:var(--amber);box-shadow:inset 0 0 0 1px rgba(255,177,60,.35)}
+  .mcard .bar{height:5px;background:var(--amber)}
+  .mcard .inner{padding:13px 14px 15px;display:flex;flex-direction:column;gap:5px;flex:1}
+  .mcard .mt{font-family:'Saira Condensed',sans-serif;font-size:21px;font-weight:700;letter-spacing:.03em}
+  .mcard .mb{font-size:13.5px;color:var(--muted);line-height:1.38;flex:1}
+  .mcard .mbio{font-size:13px;color:var(--blue);letter-spacing:.04em}
+  .mcard .ico{position:absolute;right:11px;top:10px;font-size:24px;opacity:.5}
+  .pips{display:flex;gap:3px;align-items:center}
+  .pip{width:13px;height:13px;border:1px solid var(--amber-dim);background:transparent;transform:skewX(-14deg)}
+  .pip.on{background:var(--amber)}
+  .pip.hz5{background:var(--bad);border-color:var(--bad)}
+  .meta{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:12px;color:var(--muted);
+    letter-spacing:.1em;text-transform:uppercase}
+  .selector{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;align-items:center}
+  .seg{display:flex;border:1px solid var(--line)}
+  .seg button{background:transparent;border:0;padding:8px 14px;font-size:14px;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--muted)}
+  .seg button.on{background:var(--amber);color:#17100300;color:#1a1206;font-weight:700}
+
+  /* ---------------- class select ---------------- */
+  #classes .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(252px,1fr));gap:14px}
+  .ccard{text-align:left;background:linear-gradient(180deg,rgba(26,28,34,.9),rgba(10,12,16,.95));
+    border:1px solid var(--line);padding:0;display:flex;flex-direction:column;transition:transform .13s,border-color .13s}
+  .ccard:hover{transform:translateY(-3px)}
+  .ccard.sel{border-color:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.3)}
+  .ccard .bar{height:6px}
+  .ccard .inner{padding:14px;display:flex;flex-direction:column;gap:8px}
+  .ccard h3{font-size:25px;font-weight:900;letter-spacing:.05em;text-transform:uppercase}
+  .ccard .blurb{font-size:13.5px;color:var(--muted);line-height:1.4;min-height:54px}
+  .gearlist{display:flex;flex-direction:column;gap:3px;font-size:13px;border-top:1px solid var(--line);padding-top:8px}
+  .gearlist div{display:flex;gap:8px}
+  .gearlist .slot{color:var(--muted);min-width:74px;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;padding-top:2px}
+
+  /* ---------------- perks ---------------- */
+  .perkgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(216px,1fr));gap:9px}
+  .perk{text-align:left;background:rgba(14,16,20,.85);border:1px solid var(--line);padding:10px 12px;
+    display:flex;flex-direction:column;gap:3px;transition:border-color .13s,background .13s}
+  .perk:hover{border-color:var(--amber)}
+  .perk.on{border-color:var(--amber);background:rgba(255,177,60,.13)}
+  .perk .pn{font-family:'Saira Condensed',sans-serif;font-size:16px;font-weight:700;letter-spacing:.04em}
+  .perk.on .pn{color:var(--amber)}
+  .perk .pd{font-size:12.5px;color:var(--muted);line-height:1.35}
+
+  /* ---------------- settings / controls ---------------- */
+  .setrow{display:flex;align-items:center;gap:14px;padding:11px 0;border-bottom:1px solid rgba(255,177,60,.1)}
+  .setrow label{flex:1;font-size:16px}
+  .setrow input[type=range]{width:220px;accent-color:var(--amber)}
+  .setrow .val{width:58px;text-align:right;color:var(--amber);font-variant-numeric:tabular-nums}
+  .keys{display:grid;grid-template-columns:repeat(auto-fill,minmax(248px,1fr));gap:7px 20px}
+  .keys div{display:flex;gap:10px;align-items:baseline;font-size:14.5px;padding:3px 0;border-bottom:1px solid rgba(255,177,60,.08)}
+  .keys kbd{font-family:'Saira Condensed',monospace;background:var(--steel);border:1px solid var(--line);
+    border-bottom-width:2px;padding:1px 8px;font-size:13px;min-width:34px;text-align:center;color:var(--amber)}
+  .keys span{color:var(--muted)}
+
+  /* ---------------- loading ---------------- */
+  #loading{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
+    gap:18px;background:var(--ink);z-index:40}
+  #loading.on{display:flex}
+  #loading .lt{font-family:'Saira Condensed',sans-serif;font-size:clamp(26px,5vw,46px);font-weight:900;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--amber)}
+  #loading .ls{color:var(--muted);letter-spacing:.24em;text-transform:uppercase;font-size:13px;min-height:18px}
+  .barOuter{width:min(460px,78vw);height:7px;background:#1b1e24;border:1px solid var(--line)}
+  .barIn{height:100%;width:0;background:linear-gradient(90deg,var(--amber-dim),var(--amber));transition:width .22s}
+  #loading .tip{color:#6d6557;font-size:14px;max-width:min(520px,84vw);text-align:center;line-height:1.5;min-height:42px}
+
+  /* ---------------- HUD ---------------- */
+  #hud{position:fixed;inset:0;pointer-events:none;z-index:10;display:none;
+    font-family:'Barlow Semi Condensed',sans-serif}
+  #hud.on{display:block}
+  .hudpad{position:absolute;inset:0;
+    padding-left:max(18px,env(safe-area-inset-left,0px));padding-right:max(18px,env(safe-area-inset-right,0px));
+    padding-top:max(14px,env(safe-area-inset-top,0px));padding-bottom:max(14px,env(safe-area-inset-bottom,0px))}
+
+  #xhair{position:absolute;left:50%;top:50%;width:26px;height:26px;transform:translate(-50%,-50%)}
+  #xhair i{position:absolute;background:rgba(255,236,200,.86);box-shadow:0 0 3px rgba(0,0,0,.8)}
+  #xhair .d{width:3px;height:3px;left:11.5px;top:11.5px;border-radius:50%}
+  #xhair .t{width:2px;height:7px;left:12px;top:0}
+  #xhair .b{width:2px;height:7px;left:12px;bottom:0}
+  #xhair .l{width:7px;height:2px;left:0;top:12px}
+  #xhair .r{width:7px;height:2px;right:0;top:12px}
+
+  .vitals{position:absolute;left:0;bottom:0;display:flex;flex-direction:column;gap:6px;min-width:252px}
+  .hbar{height:17px;background:rgba(10,12,16,.8);border:1px solid var(--line);position:relative;overflow:hidden}
+  .hbar i{position:absolute;inset:0;width:100%;transform-origin:left;background:linear-gradient(90deg,#c43a1e,#ff7a3a);
+    transition:transform .14s}
+  .hbar.sh i{background:linear-gradient(90deg,#1e7ac4,#46d2e6)}
+  .hbar b{position:absolute;right:7px;top:0;line-height:17px;font-size:12.5px;font-weight:600;
+    letter-spacing:.1em;color:#fff;text-shadow:0 1px 2px #000;font-variant-numeric:tabular-nums}
+  .hbar.sh{height:9px}
+  .vrow{display:flex;gap:9px;align-items:center;font-size:13px;color:var(--muted);letter-spacing:.08em}
+  .vrow b{color:var(--text);font-weight:600}
+
+  .weap{position:absolute;right:0;bottom:0;text-align:right;display:flex;flex-direction:column;gap:3px;align-items:flex-end}
+  .weap .wn{font-family:'Saira Condensed',sans-serif;font-size:17px;letter-spacing:.06em;color:var(--text);
+    text-shadow:0 1px 3px #000}
+  .weap .am{font-family:'Saira Condensed',sans-serif;font-size:42px;font-weight:700;line-height:.95;
+    color:var(--amber);text-shadow:0 2px 6px #000;font-variant-numeric:tabular-nums}
+  .weap .am.low{color:var(--bad)}
+  .heat{width:138px;height:5px;background:rgba(10,12,16,.8);border:1px solid var(--line);margin-top:3px}
+  .heat i{display:block;height:100%;width:0;background:linear-gradient(90deg,#d8a830,#e05a2a)}
+  .slots{display:flex;gap:4px;margin-top:6px}
+  .slots div{width:28px;height:22px;border:1px solid var(--line);background:rgba(10,12,16,.75);
+    font-size:12px;color:var(--muted);display:flex;align-items:center;justify-content:center}
+  .slots div.on{border-color:var(--amber);color:var(--amber);background:rgba(255,177,60,.14)}
+
+  .obj{position:absolute;left:0;top:0;max-width:330px;background:rgba(10,12,16,.72);border-left:3px solid var(--amber);
+    padding:9px 13px}
+  .obj .ot{font-size:11.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--amber)}
+  .obj .om{font-family:'Saira Condensed',sans-serif;font-size:19px;letter-spacing:.03em;margin-top:1px}
+  .obj .op{height:4px;background:#1b1e24;margin-top:6px}
+  .obj .op i{display:block;height:100%;width:0;background:var(--amber);transition:width .3s}
+  .obj .os{font-size:13px;color:var(--muted);margin-top:5px}
+
+  .res{position:absolute;right:0;top:0;display:flex;flex-direction:column;gap:3px;align-items:flex-end;
+    background:rgba(10,12,16,.6);padding:8px 11px;border-right:3px solid var(--amber)}
+  .res div{display:flex;gap:9px;align-items:center;font-size:14px;font-variant-numeric:tabular-nums}
+  .res i{width:9px;height:9px;transform:rotate(45deg);display:inline-block}
+  .res .nm{color:var(--muted);font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;min-width:62px;text-align:right}
+  .res b{min-width:40px;text-align:right}
+
+  #prompt{position:absolute;left:50%;top:58%;transform:translateX(-50%);text-align:center;
+    font-size:16.5px;letter-spacing:.06em;text-shadow:0 1px 4px #000;display:none}
+  #prompt kbd{font-family:'Saira Condensed',monospace;background:rgba(255,177,60,.2);border:1px solid var(--amber);
+    padding:1px 8px;color:var(--amber);margin-right:7px}
+
+  #toasts{position:absolute;left:50%;bottom:21%;transform:translateX(-50%);display:flex;flex-direction:column;
+    gap:5px;align-items:center;width:min(520px,86vw)}
+  .toast{background:rgba(10,12,16,.8);border-left:3px solid var(--amber);padding:5px 13px;font-size:14.5px;
+    animation:tin .25s ease-out}
+  @keyframes tin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+  #radio{position:absolute;left:50%;top:11%;transform:translateX(-50%);width:min(680px,90vw);text-align:center}
+  .rline{background:rgba(8,10,14,.84);border:1px solid var(--line);padding:7px 15px;font-size:15.5px;line-height:1.35;
+    animation:tin .3s ease-out}
+  .rline .who{color:var(--amber);font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;display:block;margin-bottom:1px}
+
+  #shout{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);font-family:'Saira Condensed',sans-serif;
+    font-size:38px;font-weight:900;letter-spacing:.05em;color:var(--amber);text-shadow:0 3px 14px #000;
+    opacity:0;transition:opacity .2s;text-align:center;white-space:nowrap}
+
+  #alert{position:absolute;left:50%;top:27%;transform:translateX(-50%);text-align:center;opacity:0;transition:opacity .3s}
+  #alert .big{font-family:'Saira Condensed',sans-serif;font-size:clamp(30px,6vw,56px);font-weight:900;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--bad);text-shadow:0 0 26px rgba(224,60,30,.55)}
+  #alert .small{letter-spacing:.3em;text-transform:uppercase;font-size:13px;color:var(--muted)}
+
+  #extract{position:absolute;left:50%;top:6%;transform:translateX(-50%);text-align:center;display:none}
+  #extract .t{font-family:'Saira Condensed',sans-serif;font-size:46px;font-weight:900;color:var(--bad);
+    font-variant-numeric:tabular-nums;text-shadow:0 2px 10px #000;line-height:1}
+  #extract .l{letter-spacing:.26em;text-transform:uppercase;font-size:12px;color:var(--amber)}
+
+  #boss{position:absolute;left:50%;top:13%;transform:translateX(-50%);width:min(520px,80vw);display:none;text-align:center}
+  #boss .bn{font-family:'Saira Condensed',sans-serif;font-size:19px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--bad);text-shadow:0 1px 4px #000}
+  #boss .bb{height:11px;background:rgba(10,12,16,.85);border:1px solid rgba(224,90,58,.5);margin-top:3px}
+  #boss .bb i{display:block;height:100%;width:100%;transform-origin:left;
+    background:linear-gradient(90deg,#8a1e10,#e05a3a);transition:transform .2s}
+  #boss .bp{display:flex;gap:4px;justify-content:center;margin-top:4px}
+  #boss .bp span{width:26px;height:6px;background:#4a4438;border:1px solid rgba(255,177,60,.3);transform:skewX(-16deg)}
+  #boss .bp span.on{background:var(--amber)}
+
+  #downed{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:9px;
+    background:radial-gradient(ellipse at center,rgba(90,10,0,.08),rgba(60,0,0,.5))}
+  #downed .d1{font-family:'Saira Condensed',sans-serif;font-size:52px;font-weight:900;letter-spacing:.1em;color:var(--bad)}
+  #downed .d2{color:var(--muted);letter-spacing:.14em;text-transform:uppercase;font-size:14px}
+  #downed .rev{width:min(320px,70vw);height:6px;background:#2a1010;border:1px solid rgba(224,90,58,.4);margin-top:8px}
+  #downed .rev i{display:block;height:100%;width:0;background:var(--ok)}
+
+  #dmg{position:absolute;inset:0;opacity:0;pointer-events:none;
+    background:radial-gradient(ellipse at center,transparent 38%,rgba(150,16,0,.62) 100%)}
+  #cold{position:absolute;inset:0;opacity:0;pointer-events:none;
+    background:radial-gradient(ellipse at center,transparent 32%,rgba(120,190,230,.4) 100%)}
+
+  #fps{position:absolute;right:0;bottom:84px;font-size:11.5px;color:#5d5547;letter-spacing:.1em;
+    font-variant-numeric:tabular-nums;text-align:right;line-height:1.5}
+
+  /* ---------------- scanner ---------------- */
+  #scanner{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:15;
+    background:rgba(4,6,9,.86)}
+  #scanner.on{display:flex}
+  #scanner .box{border:1px solid var(--line);background:rgba(8,10,14,.9);padding:12px;display:flex;
+    flex-direction:column;gap:9px;max-width:95vw}
+  #scanner canvas{image-rendering:pixelated;width:min(74vh,92vw);height:min(74vh,92vw);background:#06080c;display:block}
+  #scanner .leg{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);letter-spacing:.06em}
+  #scanner .leg i{width:9px;height:9px;display:inline-block;margin-right:4px;transform:rotate(45deg)}
+
+  /* ---------------- pause & summary ---------------- */
+  #pause .wrap,#summary .wrap{max-width:720px}
+  .sumgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(142px,1fr));gap:11px;margin:18px 0}
+  .sumrow{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,177,60,.12);font-size:16px}
+  .sumrow b{color:var(--amber);font-variant-numeric:tabular-nums}
+  .verdict{font-family:'Saira Condensed',sans-serif;font-size:clamp(38px,8vw,70px);font-weight:900;
+    letter-spacing:.07em;text-transform:uppercase;line-height:1}
+  .verdict.win{color:var(--ok)} .verdict.lose{color:var(--bad)}
+  .xpbar{height:9px;background:#1b1e24;border:1px solid var(--line);margin-top:7px}
+  .xpbar i{display:block;height:100%;background:linear-gradient(90deg,var(--amber-dim),var(--amber))}
+
+  @media (max-width:560px){
+    .vitals{min-width:180px}
+    .weap .am{font-size:32px}
+    .obj{max-width:58vw}
+    .res .nm{min-width:44px}
+  }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<!-- ================= HUD ================= -->
+<div id="hud">
+  <div id="dmg"></div><div id="cold"></div>
+  <div class="hudpad">
+    <div id="xhair"><i class="d"></i><i class="t"></i><i class="b"></i><i class="l"></i><i class="r"></i></div>
+
+    <div class="obj">
+      <div class="ot" id="objType">Mining Expedition</div>
+      <div class="om" id="objText">—</div>
+      <div class="op"><i id="objBar"></i></div>
+      <div class="os" id="objSecond"></div>
+    </div>
+
+    <div class="res">
+      <div><span class="nm">Nitra</span><i style="background:#d4411f"></i><b id="rNitra">0</b></div>
+      <div><span class="nm">Morkite</span><i style="background:#27d6a0"></i><b id="rMorkite">0</b></div>
+      <div><span class="nm">Gold</span><i style="background:#ffc436"></i><b id="rGold">0</b></div>
+      <div><span class="nm">Jewels</span><i style="background:#b43ae0"></i><b id="rCrystal">0</b></div>
+      <div style="margin-top:4px;border-top:1px solid var(--line);padding-top:4px">
+        <span class="nm">Banked</span><i style="background:#8e8575"></i><b id="rBank">0</b></div>
+    </div>
+
+    <div class="vitals">
+      <div class="hbar"><i id="hpFill"></i><b id="hpTxt">110</b></div>
+      <div class="hbar sh"><i id="shFill"></i></div>
+      <div class="vrow">
+        <span>Flares <b id="flareN">8</b></span>
+        <span>Lives <b id="lifeN">3</b></span>
+        <span id="boscoState">Bosco: ready</span>
+        <span id="perkState"></span>
+      </div>
+    </div>
+
+    <div class="weap">
+      <div class="wn" id="wName">Deepcore GK2</div>
+      <div class="am" id="wAmmo">25 / 350</div>
+      <div class="heat" id="heatWrap" hidden><i id="heatFill"></i></div>
+      <div class="slots" id="slots"></div>
+    </div>
+
+    <div id="prompt"><kbd>E</kbd><span id="promptTxt">Use</span></div>
+    <div id="toasts"></div>
+    <div id="radio"></div>
+    <div id="shout"></div>
+    <div id="alert"><div class="big">Swarm</div><div class="small">incoming</div></div>
+    <div id="extract"><div class="l">Drop pod departs in</div><div class="t">3:00</div></div>
+    <div id="boss"><div class="bn">Glyphid Dreadnought</div>
+      <div class="bb"><i id="bossFill"></i></div>
+      <div class="bp" id="bossPlates"></div></div>
+    <div id="fps"></div>
+  </div>
+  <div id="downed">
+    <div class="d1">DOWN</div>
+    <div class="d2">Bosco is on his way</div>
+    <div class="rev"><i id="revFill"></i></div>
+  </div>
+</div>
+
+<!-- ================= scanner ================= -->
+<div id="scanner"><div class="box">
+  <canvas id="mapCv" width="352" height="352"></canvas>
+  <div class="leg">
+    <span><i style="background:#ffb13c"></i>You</span>
+    <span><i style="background:#46d2e6"></i>M.U.L.E.</span>
+    <span><i style="background:#7ae08a"></i>Objective</span>
+    <span><i style="background:#e05a3a"></i>Glyphids</span>
+    <span><i style="background:#b96ad8"></i>Drop pod</span>
+    <span style="margin-left:auto">TAB to close</span>
+  </div>
+</div></div>
+
+<!-- ================= loading ================= -->
+<div id="loading">
+  <div class="lt">Descending</div>
+  <div class="barOuter"><div class="barIn" id="loadBar"></div></div>
+  <div class="ls" id="loadMsg">surveying</div>
+  <div class="tip" id="loadTip"></div>
+</div>
+
+<!-- ================= main menu ================= -->
+<div class="screen on" id="menu"><div class="wrap">
+  <div class="hero">
+    <h1>ROCK &amp; STONE</h1>
+    <div class="tagline">Deep Core Industries &middot; Hazardous Extraction Division</div>
+    <div class="credit">A playable homage to Deep Rock Galactic by Ghost Ship Games.</div>
+  </div>
+  <div class="mainbtns">
+    <button class="btn primary" id="btnDeploy">Deploy</button>
+    <button class="btn" id="btnClasses">Select dwarf</button>
+    <button class="btn" id="btnSettings">Settings</button>
+    <button class="btn" id="btnControls">Controls</button>
+  </div>
+  <div class="rigstats">
+    <div class="stat"><div class="k">Rank</div><div class="v" id="sRank">1</div><div class="tag" id="sRankName">Greenbeard</div></div>
+    <div class="stat"><div class="k">Credits</div><div class="v" id="sCredits">0</div></div>
+    <div class="stat"><div class="k">Missions</div><div class="v" id="sMissions">0</div></div>
+    <div class="stat"><div class="k">Dwarf</div><div class="v" id="sClass" style="font-size:21px">Scout</div></div>
+  </div>
+</div></div>
+
+<!-- ================= mission board ================= -->
+<div class="screen" id="missions"><div class="wrap">
+  <div class="hdr">
+    <h2>Mission board</h2><div class="sub" id="boardSub">pick a contract</div>
+    <div class="spacer"></div>
+    <button class="btn ghost" id="btnReroll">New contracts</button>
+    <button class="btn ghost" id="btnBack1">Back</button>
+  </div>
+  <div class="selector">
+    <span class="tag">Hazard</span>
+    <div class="seg" id="hazSeg"></div>
+    <span class="tag" style="margin-left:14px">Length</span>
+    <div class="seg" id="lenSeg"></div>
+    <div class="spacer"></div>
+    <button class="btn primary" id="btnLaunch" disabled>Launch</button>
+  </div>
+  <div class="grid" id="missionGrid"></div>
+</div></div>
+
+<!-- ================= class select ================= -->
+<div class="screen" id="classes"><div class="wrap">
+  <div class="hdr">
+    <h2>Select dwarf</h2><div class="sub">each one carries a different answer to a cave</div>
+    <div class="spacer"></div><button class="btn ghost" id="btnBack2">Back</button>
+  </div>
+  <div class="grid" id="classGrid"></div>
+
+  <div class="hdr" style="margin-top:34px">
+    <h2 style="font-size:clamp(18px,2.4vw,26px)">Perks</h2>
+    <div class="sub">one active, two passive</div>
+  </div>
+  <div class="tag" style="margin-bottom:8px">Active &mdash; press <kbd style="font-family:'Saira Condensed',monospace;background:var(--steel);border:1px solid var(--line);padding:0 6px;color:var(--amber)">Z</kbd></div>
+  <div class="perkgrid" id="activePerks"></div>
+  <div class="tag" style="margin:16px 0 8px">Passive &mdash; choose two</div>
+  <div class="perkgrid" id="passivePerks"></div>
+</div></div>
+
+<!-- ================= settings ================= -->
+<div class="screen" id="settings"><div class="wrap">
+  <div class="hdr"><h2>Settings</h2><div class="spacer"></div><button class="btn ghost" id="btnBack3">Back</button></div>
+  <div class="setrow"><label for="setSens">Mouse sensitivity</label>
+    <input type="range" id="setSens" min="0.2" max="3" step="0.05"><div class="val" id="vSens">1.00</div></div>
+  <div class="setrow"><label for="setFov">Field of view</label>
+    <input type="range" id="setFov" min="65" max="110" step="1"><div class="val" id="vFov">78</div></div>
+  <div class="setrow"><label for="setShake">Camera shake</label>
+    <input type="range" id="setShake" min="0" max="1.5" step="0.05"><div class="val" id="vShake">1.00</div></div>
+  <div class="setrow"><label for="setSfx">Sound effects</label>
+    <input type="range" id="setSfx" min="0" max="1" step="0.02"><div class="val" id="vSfx">0.80</div></div>
+  <div class="setrow"><label for="setMus">Cave ambience</label>
+    <input type="range" id="setMus" min="0" max="1" step="0.02"><div class="val" id="vMus">0.50</div></div>
+  <div class="setrow"><label for="setInv">Invert vertical look</label>
+    <input type="checkbox" id="setInv" style="width:20px;height:20px;accent-color:var(--amber)"></div>
+  <div class="row" style="margin-top:20px"><button class="btn ghost" id="btnWipe">Erase saved progress</button></div>
+</div></div>
+
+<!-- ================= controls ================= -->
+<div class="screen" id="controls"><div class="wrap">
+  <div class="hdr"><h2>Controls</h2><div class="spacer"></div><button class="btn ghost" id="btnBack4">Back</button></div>
+  <div class="keys">
+    <div><kbd>W A S D</kbd><span>Move</span></div>
+    <div><kbd>Space</kbd><span>Jump</span></div>
+    <div><kbd>Shift</kbd><span>Sprint</span></div>
+    <div><kbd>Ctrl</kbd><span>Crouch</span></div>
+    <div><kbd>LMB</kbd><span>Fire / swing</span></div>
+    <div><kbd>RMB</kbd><span>Alt fire (power attack, detonate, both barrels)</span></div>
+    <div><kbd>1</kbd><span>Primary weapon</span></div>
+    <div><kbd>2</kbd><span>Secondary weapon</span></div>
+    <div><kbd>3</kbd><span>Throwable</span></div>
+    <div><kbd>4</kbd><span>Pickaxe</span></div>
+    <div><kbd>5</kbd><span>Traversal tool</span></div>
+    <div><kbd>6</kbd><span>Support tool</span></div>
+    <div><kbd>R</kbd><span>Reload</span></div>
+    <div><kbd>E</kbd><span>Use / deposit / board / ride zipline</span></div>
+    <div><kbd>F</kbd><span>Throw flare</span></div>
+    <div><kbd>C</kbd><span>Call the M.U.L.E.</span></div>
+    <div><kbd>B</kbd><span>Call resupply (80 nitra)</span></div>
+    <div><kbd>Q</kbd><span>Laser pointer</span></div>
+    <div><kbd>X</kbd><span>Order Bosco to mine the marked seam</span></div>
+    <div><kbd>V</kbd><span>Rock and Stone</span></div>
+    <div><kbd>Tab</kbd><span>Terrain scanner</span></div>
+    <div><kbd>Esc</kbd><span>Pause</span></div>
+  </div>
+  <p style="color:var(--muted);line-height:1.55;margin-top:22px;max-width:62ch">
+    Everything underground can be dug. The pickaxe is slow but free, the Driller's
+    drills are fast, and explosives make their own doors. Nitra pays for resupplies,
+    morkite pays the company, and the only way home is the drop pod.
+  </p>
+</div></div>
+
+<!-- ================= pause ================= -->
+<div class="screen" id="pause"><div class="wrap">
+  <div class="hdr"><h2>Paused</h2><div class="sub" id="pauseSub"></div></div>
+  <div class="row">
+    <button class="btn primary" id="btnResume">Resume</button>
+    <button class="btn" id="btnPauseSettings">Settings</button>
+    <button class="btn" id="btnAbandon">Abandon mission</button>
+  </div>
+</div></div>
+
+<!-- ================= summary ================= -->
+<div class="screen" id="summary"><div class="wrap">
+  <div class="verdict" id="sumVerdict">Mission complete</div>
+  <div class="sub" id="sumSub" style="color:var(--muted);margin-top:4px"></div>
+  <div class="sumgrid" id="sumGrid"></div>
+  <div id="sumRows"></div>
+  <div style="margin-top:18px">
+    <div class="tag">Rank <span id="sumRank"></span></div>
+    <div class="xpbar"><i id="sumXp"></i></div>
+  </div>
+  <div class="row" style="margin-top:26px">
+    <button class="btn primary" id="btnAgain">Back to the rig</button>
+  </div>
+</div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="js/core.js"></script>
+<script src="js/terrain.js"></script>
+<script src="js/biomes.js"></script>
+<script src="js/worldgen.js"></script>
+<script src="js/chunks.js"></script>
+<script src="js/models.js"></script>
+<script src="js/models2.js"></script>
+<script src="js/vmodels.js"></script>
+<script src="js/decor.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/player.js"></script>
+<script src="js/perks.js"></script>
+<script src="js/weapons.js"></script>
+<script src="js/gear.js"></script>
+<script src="js/enemies.js"></script>
+<script src="js/units.js"></script>
+<script src="js/mission.js"></script>
+<script src="js/game.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>
