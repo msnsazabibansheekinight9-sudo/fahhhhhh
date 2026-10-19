@@ -142,6 +142,28 @@ Everything below is optional. The terminal runs fully without any of it.
 
 Keys live in this browser's localStorage and are sent to nobody but the provider they belong to. There is no server behind this terminal.
 
+## Checks
+
+The repo has no build step and no test runner, so the checks live in one file:
+
+```
+node check.js            # full run — parses every module, boots the page, asserts the engines
+node check.js --syntax   # parse only, no browser needed
+```
+
+66 assertions. It parses all 27 modules, confirms `index.html` references each one, boots the real page in headless Chromium and walks all 17 routes asserting none throws, then checks the things that would be easy to get quietly wrong:
+
+- **Amortisation** against hand-checkable values — $300,000 at 6% over 30 years must come to $1,798.65 a month and $347,514.57 of interest; a 0% loan must split evenly.
+- **The debt board cannot contradict itself** — debt per citizen × population must equal the debt, the same for per-taxpayer, and debt-to-GDP must equal the division. No counter may be non-finite.
+- **The state and world boards reconcile** — 51 jurisdictions, state + local = total, all-in = state + federal share, and the US row must equal the federal board exactly.
+- **The council stays honest** — bounded score, a quorum of seats for every instrument type, every directional point citing a real book, and scores that *spread* rather than pinning to one side (a regression that actually happened once).
+- **Realtime parsers** — Binance, Yahoo and FRED payload shapes produce the right price and the right derived change percentage; a negative price is rejected.
+- **A dead feed hands back** — a symbol silent for 40 seconds must be demoted to `sim` and have its provider name cleared. This guards a real bug where the simulation stamped the same timestamp field the staleness check reads.
+- **Paper trading reconciles** — cash after a fill equals cash minus notional minus fee; an unaffordable order is refused.
+- **Nothing goes non-finite** while 300 instruments tick for six seconds, and state survives a reload.
+
+Exits non-zero on the first failure. Verified to actually fail: injecting a 1% error into the payment formula produces `1 failed` and exit 1.
+
 ## Keyboard
 
 `/` search · `D` debt board · `G` state & world clocks · `F` live feeds · `M` markets · `N` news · `A` analyst · `P` portfolio · `S` screener · `C` sources · `Backspace` back · `Esc` close
@@ -169,6 +191,7 @@ js/ai/engine.js     weighting, synthesis, debate, sizing, the question router
 js/ui.js            routing, header, ticker tape, shared components
 js/view-*.js        one file per view
 js/app.js           boot
+check.js            the project's checks — 66 assertions, exits non-zero on failure
 ```
 
 ---
