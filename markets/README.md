@@ -142,6 +142,12 @@ Everything below is optional. The terminal runs fully without any of it.
 
 Keys live in this browser's localStorage and are sent to nobody but the provider they belong to. There is no server behind this terminal.
 
+## Hosting it
+
+`index.html` is the page — open it directly, or serve the folder from any static host. Nothing needs a build.
+
+`artifact.html` is the same page with the document wrapper removed, for publishing as a Claude Artifact. One thing to know before using it: **a published artifact runs in a sandbox that blocks outbound fetch, XHR and WebSocket**, so every live feed is dead there and the terminal falls back to its simulation, badged SIM. The debt board, the state and world clocks, the analyst council, the calculators and paper trading all work normally. For the realtime feeds, serve the folder from anywhere else — GitHub Pages, or `python3 -m http.server` locally.
+
 ## Checks
 
 The repo has no build step and no test runner, so the checks live in one file:
