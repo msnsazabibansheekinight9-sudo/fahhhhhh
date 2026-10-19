@@ -205,6 +205,8 @@ D.format = (v, fmt) => {
 // actually move an allocation decision, condensed into one object.
 D.macro = (t) => {
   const s = D.snapshot(t);
+  // Where macro.js has pulled a measured series, prefer it to the modelled one.
+  const live = (name, fallback) => (M.Macro && M.Macro.series[name] ? M.Macro.series[name].v : fallback);
   return {
     debtToGdp: s.debtToGdp,
     totalDebtToGdp: s.totalDebtToGdp,
@@ -215,9 +217,14 @@ D.macro = (t) => {
     m2Growth: 5.3,
     realWageGap: s.moneyWageGap,                    // money printed vs wages earned since 1913
     foreignShare: s.foreignShare,
-    unemployment: s.unemployed / s.workforce * 100,
-    u6: s.unemployedAct / s.workforce * 100,
-    participation: s.workforce / (s.workforce + s.notInForce) * 100,
+    unemployment: live('unrate', s.unemployed / s.workforce * 100),
+    u6: live('u6', s.unemployedAct / s.workforce * 100),
+    participation: live('participation', s.workforce / (s.workforce + s.notInForce) * 100),
+    cpi: live('cpi', null), coreCpi: live('cpiCore', null),
+    fedFunds: live('fedFunds', null), curve2s10s: live('curve2s10s', null),
+    hySpread: live('hySpread', null), breakeven10: live('breakeven10', null), real10: live('real10', null),
+    mortgage30: live('mortgage30', null),
+    measured: !!(M.Macro && Object.keys(M.Macro.series).length),
     housingToIncome: s.homeNow / s.incomeNow,
     // Fiscal dominance: when interest alone eats a quarter of receipts, the
     // central bank's room to hold rates high is gone. Dalio's late-cycle tell.

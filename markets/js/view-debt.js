@@ -67,13 +67,43 @@ let host, cells = [], tm = { on: false, year: new Date().getFullYear(), speed: 1
 
 function cellNode(id, cls, span) {
   const meta = D.meta(id);
-  const node = el('div', { class: 'cell ' + (cls || 'k') + (span ? '' : ''), style: span ? { gridColumn: 'span ' + span } : null }, [
-    el('div', { class: 'lab' }, [meta ? meta.label : id, meta && meta.live ? el('span', { class: 'live', text: ' · LIVE' }) : null]),
-    el('div', { class: 'val', text: '—' })
+  const lab = el('div', { class: 'lab' }, [meta ? meta.label : id, el('span', { class: 'live' })]);
+  const node = el('div', { class: 'cell ' + (cls || 'k'), style: span ? { gridColumn: 'span ' + span } : null, onclick: () => cellInfo(id) }, [
+    lab, el('div', { class: 'val', text: '—' })
   ]);
+  node.style.cursor = 'pointer';
   node.__id = id;
   cells.push(node);
   return node;
+}
+
+// Clicking a cell says where that specific number came from. The board makes
+// claims about the republic's finances; it should be able to show its working.
+function cellInfo(id) {
+  const meta = D.meta(id);
+  if (!meta) return;
+  const src = M.Macro.sourceOf(id);
+  const c = D.C[id];
+  const t = stampTime();
+  UI.modal(meta.label, [
+    el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' } }, [
+      el('span', { class: 'pill ' + (src ? 'live' : 'sim'), text: src ? 'LIVE ANCHOR' : meta.derived ? 'DERIVED' : 'PROJECTION' }),
+      c ? el('span', { class: 'pill', text: 'growing ' + (c[1] * 100).toFixed(2) + '% a year' }) : null
+    ]),
+    el('div', { style: { font: '700 26px var(--f-mono)', marginBottom: '8px' }, text: D.format(D.snapshot(t)[id], meta.fmt) }),
+    el('p', { class: 'note' }, [
+      meta.derived
+        ? 'This is not stored. It is divided out of the counters above every time the board repaints, which is why the board can never contradict itself on a ratio.'
+        : src
+          ? `Anchored to ${src.src} — ${src.note}. The value shown is that measurement carried forward at ${(c[1] * 100).toFixed(2)}% a year to this instant, because the underlying statistic is published monthly or quarterly and nothing ticks in real time at the source.`
+          : `A published aggregate for ${new Date(D.EPOCH).toISOString().slice(0, 10)}, carried forward at an assumed ${(c ? c[1] * 100 : 0).toFixed(2)}% a year. It is a projection, not a measurement. Connect a FRED key on the Sources page and this counter re-anchors to the measured series.`
+    ]),
+    c ? el('p', { class: 'note', style: { marginTop: '8px' }, text: `At that rate it changes by ${D.format(D.rateAt(id, t), meta.fmt)} every second, ${D.format(D.rateAt(id, t) * 86400, meta.fmt)} a day and ${D.format(D.rateAt(id, t) * 31556952, meta.fmt)} a year.` }) : null,
+    el('div', { style: { marginTop: '11px', display: 'flex', gap: '7px', flexWrap: 'wrap' } }, [
+      el('button', { class: 'btn sm', text: 'Where the data comes from', onclick: () => { UI.closeModal(); UI.go('tools', 'feeds'); } }),
+      !src ? el('button', { class: 'btn sm', text: 'Connect a FRED key', onclick: () => { UI.closeModal(); UI.go('sources'); } }) : null
+    ])
+  ]);
 }
 
 function gdpHist(sec) {
@@ -96,10 +126,26 @@ function build(node) {
   const yearOut = el('span', { class: 'lab', id: 'tmYear' });
   const slider = el('input', { type: 'range', min: 1980, max: 2045, step: 1, value: new Date().getFullYear(), oninput: e => { tm.on = true; tm.year = +e.target.value; M.setText(yearOut, 'Viewing ' + tm.year); paint(); } });
   wrap.appendChild(el('div', { class: 'db-tools' }, [
+    el('button', { class: 'btn sm', text: 'State Debt Clocks', onclick: () => UI.go('geo', 'states') }),
+    el('button', { class: 'btn sm', text: 'World Debt Clocks', onclick: () => UI.go('geo', 'world') }),
     el('span', { class: 'lab', text: 'Time machine' }), slider, yearOut,
     el('button', { class: 'btn sm', text: 'Now', onclick: () => { tm.on = false; slider.value = new Date().getFullYear(); M.setText(yearOut, ''); paint(); } }),
-    el('button', { class: 'btn sm', text: 'Refresh live Treasury figure', onclick: () => { M.Providers.refresh(); M.toast('Asking the Treasury API for Debt to the Penny…'); } }),
-    el('button', { class: 'btn sm', text: 'What this means for markets', onclick: explain })
+    el('button', { class: 'btn sm', text: 'Refresh live data', onclick: () => { M.Macro.refresh(); M.RT.refresh(); M.toast('Re-pulling the Treasury figure and every feed…'); } }),
+    el('button', { class: 'btn sm', text: 'What this means for markets', onclick: explain }),
+    el('button', { class: 'btn sm', text: 'Secret Window', onclick: secretWindow })
+  ]));
+
+  // The bottom shelf from the original board, as working pages.
+  wrap.appendChild(el('div', { class: 'db-tools', id: 'dbShelf' }, [
+    el('button', { class: 'btn sm', text: 'Mortgage & Loan Calculator', onclick: () => UI.go('tools', 'mortgage') }),
+    el('button', { class: 'btn sm', text: 'Gold Supply / Demand', onclick: () => UI.go('tools', 'gold') }),
+    el('button', { class: 'btn sm', text: 'Gold & Precious Metals', onclick: () => UI.go('tools', 'metals') }),
+    el('button', { class: 'btn sm', text: 'Home Sales', onclick: () => UI.go('tools', 'homes') }),
+    el('button', { class: 'btn sm', text: 'Auto Sales', onclick: () => UI.go('tools', 'autos') }),
+    el('button', { class: 'btn sm', text: 'Energy Output', onclick: () => UI.go('tools', 'energy') }),
+    el('button', { class: 'btn sm', text: 'Live Feeds', onclick: () => UI.go('tools', 'feeds') }),
+    el('button', { class: 'btn sm', text: 'Sources', onclick: () => UI.go('sources') }),
+    el('button', { class: 'btn sm', text: 'About', onclick: () => UI.go('tools', 'about') })
   ]));
 
   wrap.appendChild(el('div', { class: 'db-note' }, [
@@ -137,13 +183,21 @@ function paint() {
     // No flash here: every counter changes on every pass, so flashing them
     // would leave the whole board strobing instead of drawing the eye.
     M.setText(node.querySelector('.val'), txt);
+    const anchored = M.Macro.isLive(id);
+    if (node.__anchored !== anchored) {
+      node.__anchored = anchored;
+      node.classList.toggle('live-anchor', anchored);
+      M.setText(node.querySelector('.lab .live'), anchored ? ' · LIVE' : '');
+    }
     lastVals[id] = v;
   }
   const stamp = M.$('#dbStamp');
   if (stamp) {
     const a = D.anchor.natDebt;
-    M.setText(stamp, (tm.on ? 'Projected to mid-' + tm.year : 'Live projection · ' + M.fmt.date(t) + ' ' + M.fmt.time(t))
+    const n = M.Macro.liveCount();
+    M.setText(stamp, (tm.on ? 'Projected to mid-' + tm.year : 'Live · ' + M.fmt.date(t) + ' ' + M.fmt.time(t))
       + ' · ' + (a ? 'federal debt anchored to Treasury ' + new Date(a.t).toISOString().slice(0, 10) : 'federal debt on the published snapshot of ' + new Date(D.EPOCH).toISOString().slice(0, 10))
+      + ' · ' + (n ? n + ' counters on measured data' : 'all other counters projected')
       + ' · debt rising ' + M.fmt.usd(D.rateAt('natDebt', t)) + ' a second');
   }
 }
@@ -178,4 +232,62 @@ UI.register('debt', {
   mount: build,
   update: M.throttle(paint, 320)
 });
+
+// The original board has a "secret window". This is ours: the arithmetic the
+// board implies but never prints — where the trajectory goes, and what each
+// of the three ways out would actually cost.
+function secretWindow() {
+  const t = stampTime();
+  const s0 = D.snapshot(t), m = D.macro(t);
+  const yrs = [5, 10, 20, 30];
+  const rows = yrs.map(y => {
+    const at = t + y * 365.2425 * 86400000;
+    const f = D.snapshot(at);
+    return { y, debt: f.natDebt, gdp: f.gdp, ratio: f.debtToGdp, interest: f.netInterest, share: f.interestShare, perCitizen: f.debtPerCitizen };
+  });
+  // What closing the primary gap would take, three ways.
+  const gap = s0.fedSpending - s0.fedRevenue;
+  const taxRise = gap / s0.fedRevenue * 100;
+  const spendCut = gap / s0.fedSpending * 100;
+  const inflateYears = Math.log(s0.debtToGdp / 60) / 0.05;
+  const dl = el('dl', { class: 'kv' });
+  const add = (k, v, cls) => { dl.appendChild(el('dt', { text: k })); dl.appendChild(el('dd', { class: cls || '', text: v })); };
+  add('Primary gap to close', M.fmt.bigUsd(gap), 'dn');
+  add('Raise every federal tax by', taxRise.toFixed(1) + '%', 'dn');
+  add('Or cut every federal dollar by', spendCut.toFixed(1) + '%', 'dn');
+  add('Or inflate at 5% a year for', inflateYears > 0 ? inflateYears.toFixed(0) + ' years' : 'already below the target', 'dn');
+  add('Interest already taking', m.interestShare.toFixed(1) + '% of receipts', m.interestShare > 18 ? 'dn' : '');
+  add('Entitlements plus interest', m.entitlementShare.toFixed(1) + '% of receipts', m.entitlementShare > 80 ? 'dn' : '');
+  add('Every citizen owes', M.fmt.usd(s0.debtPerCitizen), 'dn');
+  add('Every taxpayer owes', M.fmt.usd(s0.debtPerTaxpayer), 'dn');
+  add('Debt added per second', M.fmt.usd(D.rateAt('natDebt', t)), 'dn');
+  add('Debt added per day', M.fmt.usd(D.rateAt('natDebt', t) * 86400), 'dn');
+
+  const table = UI.table([
+    { key: 'y', label: 'Years out', val: r => '+' + r.y },
+    { key: 'debt', label: 'Federal debt', r: true, val: r => r.debt, cell: r => el('span', { style: { fontFamily: 'var(--f-mono)', color: '#b01f10' }, text: M.fmt.cap(r.debt) }) },
+    { key: 'gdp', label: 'GDP', r: true, val: r => r.gdp, cell: r => el('span', { style: { fontFamily: 'var(--f-mono)', color: '#166b2c' }, text: M.fmt.cap(r.gdp) }) },
+    { key: 'ratio', label: 'Debt / GDP', r: true, val: r => r.ratio, cell: r => el('span', { style: { fontFamily: 'var(--f-mono)', color: '#b01f10' }, text: r.ratio.toFixed(0) + '%' }) },
+    { key: 'interest', label: 'Net interest', r: true, val: r => r.interest, cell: r => el('span', { style: { fontFamily: 'var(--f-mono)' }, text: M.fmt.cap(r.interest) }) },
+    { key: 'share', label: 'of receipts', r: true, val: r => r.share, cell: r => el('span', { style: { fontFamily: 'var(--f-mono)', color: r.share > 30 ? '#b01f10' : '#2a2e34' }, text: r.share.toFixed(0) + '%' }) },
+    { key: 'perCitizen', label: 'Per citizen', r: true, val: r => r.perCitizen, cell: r => el('span', { style: { fontFamily: 'var(--f-mono)' }, text: M.fmt.usd(r.perCitizen) }) }
+  ], rows, { sort: null });
+
+  UI.modal('Secret Window', [
+    el('p', { class: 'note' }, ['Nothing hidden — just the arithmetic the board implies and never prints. These are the board\'s own growth rates extended forward, not a forecast: they say where the current trend goes if nothing changes, which is precisely the assumption that never holds. The value of the exercise is seeing which line breaks first.']),
+    el('h4', { style: { margin: '14px 0 6px', fontSize: '13px' }, text: 'If the current rates simply continue' }),
+    el('div', { style: { background: '#fff', borderRadius: '4px', overflow: 'hidden' } }, [table]),
+    el('h4', { style: { margin: '14px 0 6px', fontSize: '13px' }, text: 'What closing the gap would take' }),
+    dl,
+    el('div', { class: 'warn', style: { marginTop: '12px' } }, [
+      rows[1].share > 30
+        ? `The line that breaks first is interest. On this trend it reaches ${rows[1].share.toFixed(0)}% of federal receipts within ten years, which is past the point where the budget has discretionary room at all. Historically a state in that position does not choose between the three options above — it takes the third one, because it is the only one that does not require a vote.`
+        : `Interest reaches ${rows[1].share.toFixed(0)}% of receipts within ten years on this trend. That is high but not yet the level at which the fiscal position dictates monetary policy.`
+    ]),
+    el('div', { style: { marginTop: '11px', display: 'flex', gap: '7px', flexWrap: 'wrap' } }, [
+      el('button', { class: 'btn sm', text: 'Ask the council what to own', onclick: () => { UI.closeModal(); UI.go('ai', 'ASK:given the debt trajectory and interest burden how should I be positioned'); } }),
+      el('button', { class: 'btn sm', text: 'World comparison', onclick: () => { UI.closeModal(); UI.go('geo', 'world'); } })
+    ])
+  ]);
+}
 })();

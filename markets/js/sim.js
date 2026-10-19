@@ -201,7 +201,7 @@ let acc = 0;
 const BOOK_LEVELS = 12;
 
 function tickOne(inst, dt, sess) {
-  if (inst.src === 'live') return;                               // a real feed owns this symbol
+  if (M.RT && M.RT.owned(inst)) return;                          // a real feed owns this symbol right now
   const f = inst.f || {}, beta = f.beta == null ? 1 : f.beta;
   const sb = sectorBeta[inst.sector] == null ? 1 : sectorBeta[inst.sector];
   const reg = REGIMES[S.regime];
@@ -233,7 +233,7 @@ function tickOne(inst, dt, sess) {
   inst.bid = inst.px - inst.spread / 2; inst.ask = inst.px + inst.spread / 2;
   const addVol = Math.round((f.mcap ? Math.sqrt(f.mcap) * .00035 : 420) * sess.mult * (0.4 + Math.random() * 1.6) * dt * 60);
   inst.vol += addVol;
-  inst.last = Date.now();
+  inst.simLast = Date.now();            // never inst.last: that belongs to the realtime layer
   if (inst.f && inst.f.eps > 0) { inst.f.pe = inst.px / inst.f.eps; inst.f.mcap = inst.px * inst.f.shares; }
   return addVol;
 }

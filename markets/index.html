@@ -146,7 +146,7 @@ tbody tr.click{cursor:pointer}
 #modal .box{background:var(--panel);border:1px solid var(--line2);border-radius:9px;max-width:620px;width:100%;max-height:86vh;overflow-y:auto;box-shadow:0 24px 70px rgba(0,0,0,.7)}
 
 /* ---------------------------------------------------------------- debt board */
-#v-debt{background:#efeadd;color:#20242a}
+#v-debt,#v-geo,#v-tools{background:#efeadd;color:#20242a}
 .db{padding:10px;max-width:1860px;margin:0 auto;font-family:var(--f-cond)}
 .db-top{display:flex;align-items:center;gap:10px;justify-content:center;padding:6px 0 10px;flex-wrap:wrap}
 .db-title{font:700 clamp(22px,3.4vw,38px)/1 var(--f-cond);letter-spacing:.02em;color:#17421f;text-align:center}
@@ -154,22 +154,22 @@ tbody tr.click{cursor:pointer}
 .db-sub{font:500 11px var(--f-mono);color:#6a6456;text-align:center;width:100%}
 .db-row{display:grid;gap:7px;margin-bottom:9px}
 .db-sec{border:2px solid #cfc6b0;border-radius:6px;padding:8px;background:#f7f3e9;position:relative}
-#v-debt .db-sec>h4{margin:0 0 7px;font:600 10px var(--f-mono);letter-spacing:.13em;text-transform:uppercase;color:#7a6f58}
+.db-sec>h4{margin:0 0 7px;font:600 10px var(--f-mono);letter-spacing:.13em;text-transform:uppercase;color:#7a6f58}
 .db-cells{display:grid;gap:6px}
-#v-debt .cell{background:#fff;border:2px solid #b9b09a;border-radius:5px;padding:3px 7px 5px;min-width:0}
-#v-debt .cell .lab{font:600 9px/1.25 var(--f-mono);letter-spacing:.055em;text-transform:uppercase;color:#6d6758}
-#v-debt .cell .val{font:700 clamp(13px,1.35vw,20px)/1.12 var(--f-mono);font-variant-numeric:tabular-nums;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#v-debt .cell{text-align:left}
-#v-debt .cell.r{border-color:#c0392b} #v-debt .cell.r .val{color:#b01f10}
-#v-debt .cell.g{border-color:#1e7a36} #v-debt .cell.g .val{color:#166b2c}
-#v-debt .cell.b{border-color:#1f5f9e} #v-debt .cell.b .val{color:#17528c}
-#v-debt .cell.y{border-color:#c88a09} #v-debt .cell.y .val{color:#9a6a04}
-#v-debt .cell.p{border-color:#7a3a9e} #v-debt .cell.p .val{color:#6a2e8c}
-#v-debt .cell.k{border-color:#9b9280} #v-debt .cell.k .val{color:#2a2e34}
-#v-debt .cell.n{border-color:#9b9280} #v-debt .cell.n .val{color:#2a2e34}
-#v-debt .cell .lab .live{color:#166b2c;font-weight:700}
-#v-debt .cell.big .val{font-size:clamp(17px,2.1vw,30px)}
-#v-debt .cell.sm .val{font-size:clamp(11px,1.1vw,15px)}
+.db .cell{background:#fff;border:2px solid #b9b09a;border-radius:5px;padding:3px 7px 5px;min-width:0}
+.db .cell .lab{font:600 9px/1.25 var(--f-mono);letter-spacing:.055em;text-transform:uppercase;color:#6d6758}
+.db .cell .val{font:700 clamp(13px,1.35vw,20px)/1.12 var(--f-mono);font-variant-numeric:tabular-nums;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.db .cell{text-align:left}
+.db .cell.r{border-color:#c0392b} .db .cell.r .val{color:#b01f10}
+.db .cell.g{border-color:#1e7a36} .db .cell.g .val{color:#166b2c}
+.db .cell.b{border-color:#1f5f9e} .db .cell.b .val{color:#17528c}
+.db .cell.y{border-color:#c88a09} .db .cell.y .val{color:#9a6a04}
+.db .cell.p{border-color:#7a3a9e} .db .cell.p .val{color:#6a2e8c}
+.db .cell.k{border-color:#9b9280} .db .cell.k .val{color:#2a2e34}
+.db .cell.n{border-color:#9b9280} .db .cell.n .val{color:#2a2e34}
+.db .cell .lab .live{color:#166b2c;font-weight:700}
+.db .cell.big .val{font-size:clamp(17px,2.1vw,30px)}
+.db .cell.sm .val{font-size:clamp(11px,1.1vw,15px)}
 .db-pair{display:grid;grid-template-columns:1fr;gap:3px}
 .db-pair .cell:last-child{opacity:.72}
 .db-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center;padding:6px;background:#e4ddcc;border:2px solid #cfc6b0;border-radius:6px;margin-bottom:9px}
@@ -180,6 +180,22 @@ tbody tr.click{cursor:pointer}
 .db-tools .lab{font:600 9.5px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:#6d6758}
 .db-note{font-size:11.5px;color:#5f594a;background:#fdf8ec;border:1px solid #d8cfb8;border-radius:5px;padding:8px 10px;line-height:1.55;margin-bottom:9px}
 .db-note b{color:#8a1515}
+
+/* tables on the light board */
+#v-geo table,#v-tools table{background:#fff}
+#v-geo th,#v-tools th{background:#efeadd;color:#6d6758;border-bottom:2px solid #cfc6b0;font-size:9.5px}
+#v-geo th:hover:not(.nosort),#v-tools th:hover:not(.nosort){color:#20242a}
+#v-geo td,#v-tools td{color:#2a2e34;border-bottom:1px solid #efe9da}
+#v-geo tbody tr:hover,#v-tools tbody tr:hover{background:#f7f3e9}
+#v-geo .tag,#v-tools .tag{background:#e4ddcc;color:#5f594a}
+#v-geo .empty,#v-tools .empty{color:#6d6758}
+#v-geo .pill,#v-tools .pill{border-color:#b9b09a;color:#6d6758}
+#v-geo .pill.live,#v-tools .pill.live{color:#166b2c;border-color:#1e7a36;background:rgba(30,122,54,.08)}
+#v-geo .pill.sim,#v-tools .pill.sim{color:#9a6a04;border-color:#c88a09;background:rgba(200,138,9,.08)}
+#v-geo .pill.err,#v-tools .pill.err{color:#b01f10;border-color:#c0392b}
+#v-tools .db-sec input{font-size:13px}
+.db .cell.live-anchor{box-shadow:inset 0 0 0 1px rgba(22,107,44,.45)}
+.db .cell .lab .live{color:#166b2c;font-weight:700}
 
 /* ---------------------------------------------------------------- markets */
 .cols{display:grid;gap:12px}
@@ -295,7 +311,11 @@ tbody tr.click{cursor:pointer}
 <script src="js/universe.js"></script>
 <script src="js/ta.js"></script>
 <script src="js/sim.js"></script>
+<script src="js/realtime.js"></script>
 <script src="js/providers.js"></script>
+<script src="js/macro.js"></script>
+<script src="js/debt-geo.js"></script>
+<script src="js/extras.js"></script>
 <script src="js/news.js"></script>
 <script src="js/portfolio.js"></script>
 <script src="js/chart.js"></script>
@@ -304,6 +324,8 @@ tbody tr.click{cursor:pointer}
 <script src="js/ai/engine.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/view-debt.js"></script>
+<script src="js/view-geo.js"></script>
+<script src="js/view-tools.js"></script>
 <script src="js/view-markets.js"></script>
 <script src="js/view-symbol.js"></script>
 <script src="js/view-news.js"></script>

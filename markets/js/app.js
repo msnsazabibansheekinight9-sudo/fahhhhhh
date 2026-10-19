@@ -10,6 +10,8 @@ function boot() {
   M.Portfolio.start();
   M.News.start();
   M.Providers.start();
+  M.RT.start();
+  M.Macro.start();
   M.UI.start();
 
   const [id, arg] = (location.hash || '').replace('#', '').split('/');
@@ -18,7 +20,8 @@ function boot() {
   // One keyboard layer for the whole terminal.
   document.addEventListener('keydown', e => {
     if (/input|textarea|select/i.test(document.activeElement.tagName)) return;
-    const go = { d: 'debt', m: 'markets', n: 'news', a: 'ai', p: 'portfolio', s: 'screener', c: 'sources' }[e.key.toLowerCase()];
+    const go = { d: 'debt', m: 'markets', n: 'news', a: 'ai', p: 'portfolio', s: 'screener', c: 'sources', g: 'geo', f: 'tools' }[e.key.toLowerCase()];
+    if (e.key.toLowerCase() === 'f' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); M.UI.go('tools', 'feeds'); return; }
     if (go && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); M.UI.go(go); }
     if (e.key === 'Backspace') { e.preventDefault(); M.UI.back(); }
   });

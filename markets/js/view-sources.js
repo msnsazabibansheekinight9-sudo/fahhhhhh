@@ -8,7 +8,10 @@
 const el = M.el, UI = M.UI;
 
 const PROVIDERS = [
-  { key: 'finnhub', name: 'Finnhub', what: 'US equity quotes, real trades over a websocket, company fundamentals and a general news feed.', free: 'Free tier, 60 calls a minute. No card.', url: 'https://finnhub.io/register', gives: ['Live stock prices', 'Live fundamentals', 'Live news'] },
+  { key: 'fred', name: 'FRED — Federal Reserve Bank of St. Louis', what: 'The single highest-value key here. It re-anchors most of the debt board to measured series and replaces the whole simulated Treasury curve with real daily yields, plus CPI, payrolls, credit spreads and the mortgage rate the council reads.', free: 'Free key, instant, no card.', url: 'https://fredaccount.stlouisfed.org/apikeys', gives: ['Live debt board', 'Real yield curve', 'Real macro'] },
+  { key: 'alpaca', name: 'Alpaca — key', what: 'Streams real IEX trades for US equities over a websocket on the free plan. Needs the secret below as well.', free: 'Free paper account. No card.', url: 'https://alpaca.markets/', gives: ['Streaming US stocks'] },
+  { key: 'alpacaSecret', name: 'Alpaca — secret', what: 'The second half of the Alpaca credential. Both halves are needed before the stream will authenticate.', free: 'Issued with the key above.', url: '', gives: ['Streaming US stocks'] },
+  { key: 'finnhub', name: 'Finnhub', what: 'Streams real US equity trades over a websocket, and supplies company fundamentals and a general news feed.', free: 'Free tier, 60 calls a minute. No card.', url: 'https://finnhub.io/register', gives: ['Streaming US stocks', 'Live fundamentals', 'Live news'] },
   { key: 'twelvedata', name: 'Twelve Data', what: 'Quotes and historical bars across equities, FX and crypto.', free: 'Free tier, 800 calls a day.', url: 'https://twelvedata.com/pricing', gives: ['Live stock prices'] },
   { key: 'alphavantage', name: 'Alpha Vantage', what: 'The company Overview endpoint — real P/E, margins, returns on capital, book value.', free: 'Free key, 25 calls a day, so it is pulled only when you ask on a symbol page.', url: 'https://www.alphavantage.co/support/#api-key', gives: ['Live fundamentals'] },
   { key: 'marketaux', name: 'Marketaux', what: 'Market news already tagged by ticker and sentiment.', free: 'Free tier, 100 requests a day.', url: 'https://www.marketaux.com', gives: ['Live news'] },
@@ -24,6 +27,37 @@ function statusRow(s) {
     ]),
     el('span', { class: 'pill ' + cls, text: s.status === 'live' ? 'LIVE' : s.status === 'error' ? 'FAILED' : s.status === 'idle' ? 'READY' : 'OFF' })
   ]);
+}
+
+function coverageCard() {
+  const body = el('div', { class: 'cbody' });
+  const stat = (k, v, cls) => el('div', {}, [
+    el('div', { style: { font: '500 9.5px var(--f-mono)', letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--dim)' }, text: k }),
+    el('div', { class: 'num ' + (cls || ''), style: { font: '600 19px var(--f-mono)', marginTop: '2px' }, text: v })
+  ]);
+  const render = () => {
+    M.clear(body);
+    const rt = M.RT.summary(), anchored = M.Macro.liveCount();
+    const pct = rt.total ? rt.live / rt.total * 100 : 0;
+    body.appendChild(el('div', { style: { display: 'grid', gap: '10px', gridTemplateColumns: 'repeat(auto-fit,minmax(118px,1fr))' } }, [
+      stat('Instruments live', rt.live + ' / ' + rt.total, rt.live ? 'up' : 'dn'),
+      stat('Coverage', pct.toFixed(0) + '%', pct > 50 ? 'up' : pct ? '' : 'dn'),
+      stat('Open streams', String(rt.streams), rt.streams ? 'up' : 'dn'),
+      stat('Ticks a second', rt.tickRate.toFixed(1), rt.tickRate ? 'up' : ''),
+      stat('Debt counters live', String(anchored), anchored ? 'up' : 'dn')
+    ]));
+    body.appendChild(el('p', { class: 'note', style: { marginTop: '10px' } }, [
+      rt.live
+        ? 'Pricing right now: ' + Object.entries(rt.byProv).map(([k, v]) => k + ' (' + v + ')').join(', ') + '. Everything else is on the simulation and badged SIM.'
+        : 'Nothing is connected yet. Crypto needs no key at all — if it is not connecting, the exchange is unreachable from this network rather than unconfigured. The single key that changes the most is FRED, below.'
+    ]));
+    body.appendChild(el('button', { class: 'btn', style: { marginTop: '9px' }, text: 'Open the live feed panel', onclick: () => UI.go('tools', 'feeds') }));
+  };
+  render();
+  M.on('rt:status', M.throttle(() => { if (UI.current === 'sources') render(); }, 2000));
+  M.on('macro:live', () => { if (UI.current === 'sources') render(); });
+  setInterval(() => { if (UI.current === 'sources') render(); }, 6000);
+  return UI.card('Live coverage', body, el('button', { class: 'btn sm', text: 'Reconnect all', onclick: () => { M.RT.refresh(); M.Macro.refresh(); M.toast('Reconnecting…'); } }));
 }
 
 function statusCard() {
@@ -88,9 +122,10 @@ function explainCard() {
   const body = el('div', { class: 'cbody' });
   const p = (h, t) => { body.appendChild(el('h4', { style: { margin: '12px 0 4px', fontSize: '13px' }, text: h })); body.appendChild(el('p', { class: 'note', style: { margin: 0 }, text: t })); };
   body.appendChild(el('p', { class: 'note', style: { margin: 0 } }, ['This page exists because the easiest way to build something like this is to make up the numbers and never say so. Here is exactly what is real.']));
-  p('Connects with no key at all', 'The US Treasury’s Debt to the Penny API re-anchors the national debt counter on the debt board. Coinbase, Binance and CoinGecko supply crypto spot — Binance’s websocket is genuinely tick-by-tick. The ECB reference fix supplies FX, once a day. If any of those fail in your browser, the status list above says so rather than quietly falling back.');
-  p('Needs a free key', 'US equity prices and fundamentals, and real news headlines. Without a key, stock prices come from the terminal’s own simulation and fundamentals are modelled from sector medians. Both are badged SIM everywhere they appear, including inside the analyst council’s verdict.');
-  p('Is always simulated', 'The depth ladder and the time-and-sales tape: real level-2 data is a paid, licensed product and no free tier provides it. Treasury yields, futures and index levels move on the simulation unless you connect a provider that covers them. The economic calendar shows real release cadences with generated outcomes.');
+  p('Connects with no key at all', 'Binance, Coinbase and Kraken all stream crypto trades straight into the browser — tick by tick, not polled. The US Treasury’s Debt to the Penny API re-anchors the national debt counter and, from two consecutive days, sets its real observed growth rate. The ECB reference fix supplies FX once a day. Yahoo and Stooq are attempted for equities without a key; whether your browser is allowed to read them varies, and the feed panel says which.');
+  p('Needs a free key', 'FRED is the one that changes the most: it re-anchors most of the debt board to measured series and replaces the entire simulated Treasury curve with real daily yields. Finnhub or Alpaca streams real US equity trades. Alpha Vantage supplies real fundamentals. Marketaux supplies real headlines. Each is free and none needs a card.');
+  p('Is always simulated', 'The depth ladder and the time-and-sales tape, unless a stream is supplying real prints: level-2 data is a licensed product with no free tier. Futures and index levels move on the simulation unless a provider covers them. The economic calendar shows real release cadences with generated outcomes.');
+  p('What happens when a feed dies', 'A streamed symbol that stops printing for 25 seconds, or a polled one that goes three minutes without an update, is marked stale and visibly handed back to the simulation. Nothing freezes on a dead price while still claiming to be live.');
   p('Is never simulated', 'The analyst council itself. Every test it runs — Graham’s criteria, Piotroski’s nine, the Altman Z, the Beneish flags, CAN SLIM, the magic formula, the DCF and reverse DCF, Kelly sizing — is real arithmetic on whatever numbers it is given. Connect real fundamentals and the same engine produces a real analysis.');
   p('What this is not', 'It is not a brokerage, it is not advice, and no order placed here reaches a market. It is a terminal for learning how the pieces fit together, and an engine you can point at real data.');
   return UI.card('What is real and what is not', body);
@@ -101,7 +136,7 @@ UI.register('sources', {
   mount(node) {
     const wrap = el('div', { class: 'wrap' });
     const grid = el('div', { class: 'cols c2' });
-    grid.appendChild(el('div', { class: 'grid' }, [statusCard(), explainCard()]));
+    grid.appendChild(el('div', { class: 'grid' }, [coverageCard(), statusCard(), explainCard()]));
     grid.appendChild(el('div', { class: 'grid' }, [keysCard(), rssCard()]));
     wrap.appendChild(grid);
     node.appendChild(wrap);

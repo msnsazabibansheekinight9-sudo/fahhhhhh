@@ -106,7 +106,21 @@ UI.newsModal = (n) => {
   ]);
 };
 
-UI.srcBadge = (inst) => el('span', { class: 'pill ' + (inst.src === 'live' ? 'live' : 'sim'), text: inst.src === 'live' ? 'LIVE · ' + (inst.srcName || '') : 'SIM', title: inst.src === 'live' ? 'Real quote from ' + inst.srcName : 'Simulated price — no provider connected for this instrument' });
+UI.srcBadge = (inst) => {
+  const liveNow = M.RT.owned(inst);
+  const age = M.RT.ageOf(inst);
+  const label = !liveNow ? 'SIM'
+    : inst.srcKind === 'tick' ? 'LIVE · ' + inst.srcName
+    : inst.srcDelay >= 1440 ? 'DAILY · ' + inst.srcName
+    : inst.srcDelay ? 'DELAYED ' + inst.srcDelay + 'm · ' + inst.srcName
+    : 'LIVE · ' + inst.srcName;
+  return el('span', {
+    class: 'pill ' + (liveNow ? 'live' : 'sim'), text: label,
+    title: liveNow
+      ? `Priced by ${inst.srcName} ${(age / 1000).toFixed(1)}s ago, ${inst.srcKind === 'tick' ? 'streamed on every print' : 'polled'}.`
+      : 'Simulated price — no provider is covering this instrument right now.'
+  });
+};
 
 UI.modal = (title, kids) => {
   UI.closeModal();
@@ -273,13 +287,18 @@ function paintFoot() {
   const f = $('#foot'); M.clear(f);
   const sess = M.Sim.sess || M.Sim.session();
   const reg = M.Sim.regimeInfo();
-  const live = M.sources.all().filter(s => s.status === 'live');
-  const add = (t, cls) => f.appendChild(el('span', { class: cls || '', text: t }));
+  const rt = M.RT.summary();
+  const add = (t, cls, click) => { const n = el('span', { class: cls || '', text: t }); if (click) { n.style.cursor = 'pointer'; n.onclick = click; } f.appendChild(n); };
   add(sess.open ? '● ' + sess.name : '○ ' + sess.name, sess.open ? 'up' : 'dim');
   add('│', 'sep');
   add('Regime: ' + reg.name, reg.tone === 'g' ? 'up' : reg.tone === 'r' ? 'dn' : '');
   add('│', 'sep');
-  add(live.length ? live.length + ' live feed' + (live.length > 1 ? 's' : '') + ': ' + live.map(s => s.id).join(', ') : 'No live feed connected — every number on this screen is simulated or projected', live.length ? 'up' : 'dn');
+  add(rt.live
+      ? `● LIVE ${rt.live}/${rt.total} · ${rt.streams} stream${rt.streams === 1 ? '' : 's'} · ${rt.tickRate.toFixed(1)} ticks/s · ${Object.keys(rt.byProv).join(', ')}`
+      : '○ No live feed — every price is simulated',
+    rt.live ? 'up' : 'dn', () => UI.go('tools', 'feeds'));
+  add('│', 'sep');
+  add((M.Macro.liveCount() ? M.Macro.liveCount() + ' debt counters live' : 'Debt board on projection'), M.Macro.liveCount() ? 'up' : 'dim', () => UI.go('tools', 'feeds'));
   add('│', 'sep');
   add(U.count() + ' instruments');
   add('│', 'sep');
@@ -293,6 +312,11 @@ UI.start = () => {
   headerStats(); buildTape(); wireSearch(); paintFoot();
   M.on('tick', () => { if (document.hidden) return; paintHeader(); paintTape(); const v = UI.views[UI.current]; if (v && v.update) { try { v.update(); } catch (e) {} } });
   M.on('sources', M.throttle(paintFoot, 1500));
+  M.on('rt:status', M.throttle(paintFoot, 2000));
+  M.on('macro:live', M.throttle(paintFoot, 1500));
+  // A streamed print should repaint the thing it priced straight away rather
+  // than waiting for the next simulation frame.
+  M.on('rt:quote', M.throttle(() => { if (document.hidden) return; paintHeader(); paintTape(); const v = UI.views[UI.current]; if (v && v.update) { try { v.update(); } catch (e) {} } }, 220));
   M.on('regime', paintFoot);
   M.on('news', M.throttle(drawNav, 3000));
   setInterval(paintFoot, 20000);
