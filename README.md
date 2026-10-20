@@ -3,6 +3,7 @@
 > Also in this repo: **[Ironclad](grimdark/)**, a procedural grimdark sci-fi FPS — see `grimdark/README.md`.
 > And **[Gridlock: Legends of Motorsport](racing/)**, a racing game with 18 disciplines, 566 cars and 270 tracks — see `racing/README.md`.
 > And **[Ledger Terminal](markets/)**, a realtime multi-asset terminal with a live national-debt board, state and world debt clocks, and an analyst council that reasons from 132 books on investing — see `markets/README.md`.
+> And **[Skyframe FPV](skyframe/)**, a browser FPV drone simulator with ten procedural scenic worlds, rate-mode physics and gate racing — see `skyframe/README.md`.
 
 A browser firearms simulator built with Three.js (r128). Everything is procedural: weapon models, textures, soldiers, maps and audio.
 
